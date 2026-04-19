@@ -1,0 +1,249 @@
+import asyncio
+import logging
+from datetime import date, time, timedelta
+from uuid import UUID
+
+from aiogram import F, Router
+from aiogram.types import CallbackQuery
+
+from app.database import SessionLocal
+from app.models import Business, Service, User
+from app.schemas.booking import BookingCreatePublic
+from app.services import booking_service
+from app.services.notification_service import send_telegram_message
+from app.utils.slots import get_available_slots, next_working_dates
+from bot.keyboards.inline import confirm_kb, dates_kb, services_kb, times_kb
+
+logger = logging.getLogger("bot.booking")
+router = Router()
+
+
+def _format_uz_date(d: date) -> str:
+    months = {
+        1: "yan",
+        2: "fev",
+        3: "mar",
+        4: "apr",
+        5: "may",
+        6: "iyn",
+        7: "iyl",
+        8: "avg",
+        9: "sen",
+        10: "okt",
+        11: "noy",
+        12: "dek",
+    }
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    if d == today:
+        prefix = "Bugun"
+    elif d == tomorrow:
+        prefix = "Ertaga"
+    else:
+        prefix = d.strftime("%d")
+    return f"{prefix}, {d.day}-{months[d.month]}"
+
+
+@router.callback_query(F.data.startswith("book:"))
+async def book_start(cb: CallbackQuery):
+    slug = cb.data.split(":", 1)[1]
+    db = SessionLocal()
+    try:
+        b = db.query(Business).filter(Business.slug == slug).first()
+        if not b:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        services = (
+            db.query(Service)
+            .filter(Service.business_id == b.id, Service.is_active.is_(True))
+            .order_by(Service.order.asc())
+            .all()
+        )
+        items = []
+        for s in services:
+            label = f"{s.name} — {s.price:,} so'm — {s.duration_minutes} daq".replace(",", " ")
+            items.append((str(s.id), label))
+        await cb.message.edit_text("Xizmatni tanlang:", reply_markup=services_kb(slug, items))
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("svc:"))
+async def pick_service(cb: CallbackQuery):
+    _, sid = cb.data.split(":", 1)
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        days = next_working_dates(db, b.id, 7)
+        items = [(d.isoformat(), _format_uz_date(d)) for d in days]
+        await cb.message.edit_text("Sanani tanlang:", reply_markup=dates_kb(b.slug, sid, items))
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("day:"))
+async def pick_day(cb: CallbackQuery):
+    _, sid, d_iso = cb.data.split(":", 2)
+    d = date.fromisoformat(d_iso)
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        slots = get_available_slots(b.id, d, service.duration_minutes, db)
+        times = [t.strftime("%H:%M") for t in slots]
+        if not times:
+            await cb.answer("Bo'sh vaqt yo'q", show_alert=True)
+            return
+        await cb.message.edit_text("Vaqtni tanlang:", reply_markup=times_kb(b.slug, sid, d_iso, times))
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("time:"))
+async def pick_time(cb: CallbackQuery):
+    _, sid, d_iso, t_str = cb.data.split(":", 3)
+    d = date.fromisoformat(d_iso)
+    h, m = t_str.split(":")
+    t = time(int(h), int(m))
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        text = (
+            f"Yozilishni tasdiqlaysizmi?\n\n"
+            f"📋 {service.name}\n"
+            f"📅 {_format_uz_date(d)}, {t_str}\n"
+            f"💰 {service.price:,} so'm".replace(",", " ")
+        )
+        await cb.message.edit_text(text, reply_markup=confirm_kb(b.slug, sid, d_iso, t_str))
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("confirm:"))
+async def confirm_booking(cb: CallbackQuery):
+    logger.info("confirm_booking: cb.data=%s from_user=%s", cb.data, cb.from_user.id if cb.from_user else None)
+    _, sid, d_iso, t_str = cb.data.split(":", 3)
+    d = date.fromisoformat(d_iso)
+    h, m = t_str.split(":")
+    t = time(int(h), int(m))
+
+    def _work():
+        db = SessionLocal()
+        try:
+            service = db.query(Service).filter(Service.id == UUID(sid)).first()
+            b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+            if not b or not service:
+                return None, "Biznes topilmadi"
+            payload = BookingCreatePublic(
+                business_id=b.id,
+                service_id=UUID(sid),
+                client_telegram_id=cb.from_user.id,
+                client_first_name=cb.from_user.first_name or "",
+                client_last_name=cb.from_user.last_name or "",
+                client_phone="",
+                date=d,
+                start_time=t,
+            )
+            booking = booking_service.create_booking(db, payload)
+            db.commit()
+
+            owner = db.query(User).filter(User.id == b.owner_id).first()
+            owner_tg = None
+            if owner and owner.telegram_id:
+                try:
+                    owner_tg = int(owner.telegram_id)
+                except (TypeError, ValueError):
+                    owner_tg = None
+
+            info = {
+                "service_name": service.name,
+                "service_price": int(service.price),
+                "business_name": b.name,
+                "status": str(booking.status),
+                "owner_telegram_id": owner_tg,
+            }
+            return info, None
+        except Exception as e:
+            db.rollback()
+            logger.exception("confirm_booking failed")
+            return None, str(e)
+        finally:
+            db.close()
+
+    info, err = await asyncio.to_thread(_work)
+    if info is None:
+        raw = str(err or "")
+        low = raw.lower()
+        if "subscription" in low:
+            msg = "❌ Bu biznes obunasi tugagan. Iltimos, keyinroq urinib ko'ring."
+        elif "no longer available" in low or "slot" in low:
+            msg = "⏰ Bu vaqt allaqachon band. Iltimos, boshqa vaqt tanlang."
+        elif "service not found" in low:
+            msg = "❌ Xizmat topilmadi yoki o'chirilgan."
+        elif "business not found" in low:
+            msg = "❌ Biznes topilmadi."
+        else:
+            msg = f"❌ Xatolik: {raw}" if raw else "❌ Kutilmagan xatolik."
+        await cb.answer(msg, show_alert=True)
+        return
+
+    # Message to client
+    is_confirmed = info["status"].endswith("CONFIRMED")
+    status_line = (
+        "✅ Yozildingiz!"
+        if is_confirmed
+        else "⏳ So'rov yuborildi — biznes egasi tasdiqlashini kuting."
+    )
+    await cb.message.edit_text(
+        f"{status_line}\n\n"
+        f"📋 {info['service_name']}\n"
+        f"📅 {_format_uz_date(d)} soat {t_str} da\n"
+        f"📍 {info['business_name']}\n\n"
+        "🔔 1 soat oldin eslatma yuboramiz"
+    )
+    try:
+        await cb.answer("✅ Yozildingiz")
+    except Exception:
+        pass
+
+    # Notify owner
+    owner_tg_id = info["owner_telegram_id"]
+    if owner_tg_id:
+        if cb.from_user.first_name or cb.from_user.last_name:
+            client_name = f"{cb.from_user.first_name or ''} {cb.from_user.last_name or ''}".strip()
+        elif cb.from_user.username:
+            client_name = f"@{cb.from_user.username}"
+        else:
+            client_name = "Mijoz"
+        suffix = "kutilmoqda (tasdiqlang)" if not is_confirmed else "tasdiqlangan"
+        price_fmt = f"{info['service_price']:,}".replace(",", " ") + " so'm"
+        try:
+            await asyncio.to_thread(
+                send_telegram_message,
+                owner_tg_id,
+                (
+                    f"🆕 <b>Yangi yozilish</b>\n\n"
+                    f"👤 {client_name}\n"
+                    f"📋 {info['service_name']}\n"
+                    f"📅 {_format_uz_date(d)} · {t_str}\n"
+                    f"💰 {price_fmt}\n\n"
+                    f"Holati: {suffix}"
+                ),
+            )
+        except Exception:
+            logger.exception("owner notify failed")

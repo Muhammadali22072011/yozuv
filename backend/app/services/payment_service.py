@@ -1,0 +1,264 @@
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.models import (
+    Business,
+    PaymentProvider,
+    PaymentRecordStatus,
+    PaymentTransaction,
+    Subscription,
+    SubscriptionPlan,
+    SubscriptionStatus,
+    User,
+)
+from app.services.notification_service import send_telegram_message
+
+settings = get_settings()
+
+MONTHLY_AMOUNT_UZS = 187_500
+YEARLY_AMOUNT_UZS = 1_875_000
+
+
+def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan, amount_paid: int) -> Subscription:
+    now = datetime.now(timezone.utc)
+    if plan == SubscriptionPlan.MONTHLY:
+        expires = now + timedelta(days=30)
+    elif plan == SubscriptionPlan.YEARLY:
+        expires = now + timedelta(days=365)
+    else:
+        expires = now + timedelta(days=14)
+
+    # Lock the business row to serialize concurrent activations (e.g. webhook retries).
+    db.query(Business).filter(Business.id == business_id).with_for_update().first()
+
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.business_id == business_id, Subscription.status == SubscriptionStatus.ACTIVE)
+        .order_by(Subscription.expires_at.desc())
+        .with_for_update()
+        .first()
+    )
+    if sub:
+        sub.status = SubscriptionStatus.EXPIRED
+
+    new_sub = Subscription(
+        business_id=business_id,
+        plan=plan,
+        status=SubscriptionStatus.ACTIVE,
+        starts_at=now,
+        expires_at=expires,
+        amount_paid=amount_paid,
+    )
+    db.add(new_sub)
+    db.flush()
+    return new_sub
+
+
+def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
+    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    tx = PaymentTransaction(
+        business_id=business_id,
+        provider=PaymentProvider.PAYME,
+        amount=amount,
+        status=PaymentRecordStatus.PENDING,
+        plan=plan.value,
+    )
+    db.add(tx)
+    db.flush()
+
+    if not settings.payme_merchant_id or not settings.payme_secret_key:
+        return tx, ""
+
+    try:
+        from paytechuz.gateways.payme import PaymeGateway
+
+        payme = PaymeGateway(
+            payme_id=settings.payme_merchant_id,
+            payme_key=settings.payme_secret_key,
+            is_test_mode=True,
+        )
+        link = payme.create_payment(
+            id=str(tx.id),
+            amount=amount,
+            return_url=settings.public_app_url + "/dashboard/settings",
+            account_field_name="id",
+        )
+        return tx, link
+    except Exception:
+        return tx, ""
+
+
+def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
+    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    tx = PaymentTransaction(
+        business_id=business_id,
+        provider=PaymentProvider.CLICK,
+        amount=amount,
+        status=PaymentRecordStatus.PENDING,
+        plan=plan.value,
+    )
+    db.add(tx)
+    db.flush()
+
+    if not all(
+        [
+            settings.click_service_id,
+            settings.click_merchant_id,
+            settings.click_merchant_user_id,
+            settings.click_secret_key,
+        ]
+    ):
+        return tx, ""
+
+    try:
+        from paytechuz.gateways.click import ClickGateway
+
+        click = ClickGateway(
+            service_id=settings.click_service_id,
+            merchant_id=settings.click_merchant_id,
+            merchant_user_id=settings.click_merchant_user_id,
+            secret_key=settings.click_secret_key,
+            is_test_mode=True,
+        )
+        link = click.create_payment(
+            id=str(tx.id),
+            amount=amount,
+            description="Yozuv subscription",
+            return_url=settings.public_app_url + "/dashboard/settings",
+        )
+        return tx, link
+    except Exception:
+        return tx, ""
+
+
+def create_card_payment(
+    db: Session, business_id: UUID, plan: SubscriptionPlan
+) -> PaymentTransaction:
+    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    tx = PaymentTransaction(
+        business_id=business_id,
+        provider=PaymentProvider.CARD,
+        amount=amount,
+        status=PaymentRecordStatus.PENDING,
+        plan=plan.value,
+    )
+    db.add(tx)
+    db.flush()
+    return tx
+
+
+def approve_card_payment(
+    db: Session, tx_id: UUID, admin_telegram_id: str
+) -> PaymentTransaction:
+    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
+    if not tx:
+        raise ValueError("Transaction not found")
+    if tx.provider != PaymentProvider.CARD:
+        raise ValueError("Only card payments can be approved manually")
+    if tx.status == PaymentRecordStatus.COMPLETED:
+        return tx
+    if tx.status not in (
+        PaymentRecordStatus.AWAITING_APPROVAL,
+        PaymentRecordStatus.PENDING,
+    ):
+        raise ValueError(f"Cannot approve transaction in status '{tx.status}'")
+
+    tx.reviewed_by = admin_telegram_id
+    tx.reviewed_at = datetime.now(timezone.utc)
+    complete_transaction_and_notify(db, tx)
+    return tx
+
+
+def reject_card_payment(
+    db: Session, tx_id: UUID, admin_telegram_id: str, reason: str = ""
+) -> PaymentTransaction:
+    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
+    if not tx:
+        raise ValueError("Transaction not found")
+    if tx.provider != PaymentProvider.CARD:
+        raise ValueError("Only card payments can be rejected manually")
+    if tx.status == PaymentRecordStatus.COMPLETED:
+        raise ValueError("Transaction already completed")
+
+    tx.status = PaymentRecordStatus.REJECTED
+    tx.reviewed_by = admin_telegram_id
+    tx.reviewed_at = datetime.now(timezone.utc)
+
+    business = db.query(Business).filter(Business.id == tx.business_id).first()
+    owner = db.query(User).filter(User.id == business.owner_id).first() if business else None
+    if owner and owner.telegram_id:
+        msg = "❌ To'lovingiz tasdiqlanmadi."
+        if reason:
+            msg += f"\nSabab: {reason}"
+        try:
+            send_telegram_message(int(owner.telegram_id), msg)
+        except Exception:
+            pass
+    db.flush()
+    return tx
+
+
+def complete_transaction_and_notify(db: Session, tx: PaymentTransaction) -> None:
+    tx.status = PaymentRecordStatus.COMPLETED
+    if tx.plan == "YEARLY":
+        plan = SubscriptionPlan.YEARLY
+    else:
+        plan = SubscriptionPlan.MONTHLY
+    activate_subscription(db, tx.business_id, plan, tx.amount)
+
+    business = db.query(Business).filter(Business.id == tx.business_id).first()
+    owner = db.query(User).filter(User.id == business.owner_id).first() if business else None
+    if owner:
+        msg = (
+            "✅ To'lov qabul qilindi. Obunangiz 30 kunga faollashtirildi."
+            if plan == SubscriptionPlan.MONTHLY
+            else "✅ To'lov qabul qilindi. Yillik obuna faollashtirildi."
+        )
+        send_telegram_message(int(owner.telegram_id), msg)
+
+
+def refund_transaction(db: Session, tx_id: UUID, business_id: UUID) -> PaymentTransaction:
+    """
+    Mark a completed transaction as REFUNDED and cancel the linked subscription.
+    Raises ValueError if transaction is not found, belongs to another business,
+    or is not in COMPLETED state.
+    """
+    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
+    if not tx:
+        raise ValueError("Transaction not found")
+    if tx.business_id != business_id:
+        raise ValueError("Transaction does not belong to this business")
+    if tx.status != PaymentRecordStatus.COMPLETED:
+        raise ValueError(f"Cannot refund a transaction with status '{tx.status}'")
+
+    tx.status = PaymentRecordStatus.REFUNDED
+
+    # Cancel the currently active subscription for this business
+    now = datetime.now(timezone.utc)
+    active_sub = (
+        db.query(Subscription)
+        .filter(
+            Subscription.business_id == business_id,
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.expires_at > now,
+        )
+        .order_by(Subscription.expires_at.desc())
+        .first()
+    )
+    if active_sub:
+        active_sub.status = SubscriptionStatus.CANCELLED
+
+    # Notify owner
+    business = db.query(Business).filter(Business.id == business_id).first()
+    owner = db.query(User).filter(User.id == business.owner_id).first() if business else None
+    if owner:
+        send_telegram_message(
+            int(owner.telegram_id),
+            f"♻️ To'lovingiz ({tx.amount:,} so'm) qaytarildi. Obunangiz bekor qilindi.",
+        )
+
+    db.flush()
+    return tx

@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yozuv — Broshyura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAFAF7;
+    --ink:#080808;
+    --blue:#005AFF;
+    --cream:#F2EFE8;
+    --gray:#6B6B6B;
+    --serif:'Instrument Serif', Georgia, serif;
+    --sans:'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  html,body{
+    background:#e5e5e5;
+    font-family:var(--sans);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  body{
+    padding:32px 16px 64px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:28px;
+  }
+
+  .controls{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    margin-bottom:4px;
+  }
+
+  .btn{
+    background:var(--ink);
+    color:#fff;
+    padding:12px 22px;
+    border:none;
+    border-radius:10px;
+    font-family:var(--sans);
+    font-size:14px;
+    font-weight:500;
+    cursor:pointer;
+    letter-spacing:0.01em;
+  }
+  .btn:hover{opacity:0.88}
+
+  .btn-light{
+    background:#fff;
+    color:var(--ink);
+    border:1px solid rgba(0,0,0,0.12);
+  }
+
+  .label{
+    font-size:10px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--gray);
+    margin-bottom:6px;
+    font-weight:500;
+  }
+
+  .sheet{
+    width:297mm;
+    height:210mm;
+    background:#fff;
+    display:grid;
+    grid-template-columns:repeat(3,99mm);
+    box-shadow:0 20px 60px rgba(0,0,0,0.14);
+    position:relative;
+    overflow:hidden;
+  }
+
+  /* fold lines — экран only */
+  .sheet::before,
+  .sheet::after{
+    content:'';
+    position:absolute;
+    top:0;bottom:0;
+    width:0;
+    border-left:1px dashed rgba(0,0,0,0.22);
+    z-index:50;
+    pointer-events:none;
+  }
+  .sheet::before{left:99mm}
+  .sheet::after{left:198mm}
+
+  .panel{
+    width:99mm;
+    height:210mm;
+    padding:12mm;
+    overflow:hidden;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .p-dark{background:#080808;color:#fff}
+  .p-light{background:#FAFAF7;color:var(--ink)}
+  .p-blue{background:#005AFF;color:#fff}
+  .p-cream{background:#F2EFE8;color:var(--ink)}
+
+  /* ───────── logo ───────── */
+  .logo{
+    display:flex;align-items:center;gap:8px;
+  }
+  .logo-icon{
+    width:30px;height:30px;
+    background:var(--blue);
+    border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .logo-icon svg{width:18px;height:18px;display:block}
+  .logo-name{
+    font-family:var(--serif);
+    font-size:26px;
+    line-height:1;
+    letter-spacing:-0.01em;
+  }
+  .logo-sm .logo-icon{width:22px;height:22px;border-radius:5px}
+  .logo-sm .logo-icon svg{width:13px;height:13px}
+  .logo-sm .logo-name{font-size:18px}
+
+  /* ───────── PANEL 1 — cover front ───────── */
+  .cover{
+    justify-content:space-between;
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(0,90,255,0.14), transparent 60%),
+      #080808;
+  }
+  .cover .logo-name{color:#fff}
+  .cover-hero{
+    margin-top:14mm;
+    text-align:center;
+  }
+  .cover-hero h1{
+    font-family:var(--serif);
+    font-style:italic;
+    font-size:28px;
+    line-height:1.12;
+    color:#fff;
+    font-weight:400;
+    letter-spacing:-0.01em;
+  }
+  .cover-hero p{
+    margin-top:6px;
+    font-size:11px;
+    color:rgba(255,255,255,0.48);
+    letter-spacing:0.02em;
+  }
+
+  .qr-card{
+    background:#fff;
+    border-radius:10px;
+    padding:6mm 6mm 5mm;
+    box-shadow:0 12px 40px rgba(0,0,0,0.35);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:5mm;
+  }
+  .qr-card .qr{
+    width:56mm;
+    height:56mm;
+    display:block;
+  }
+  .qr-card .qr svg{width:100%;height:100%;display:block}
+  .qr-cap{
+    text-align:center;
+  }
+  .qr-cap .t1{
+    font-size:11px;
+    color:var(--ink);
+    font-weight:500;
+  }
+  .qr-cap .t2{
+    margin-top:2px;
+    font-size:10px;
+    color:var(--gray);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:0.01em;
+  }
+
+  .cover-banner{
+    margin:0 -12mm -12mm;
+    padding:5mm 12mm;
+    background:var(--blue);
+    color:#fff;
+    font-size:11px;
+    font-weight:500;
+    text-align:center;
+    letter-spacing:0.02em;
+  }
+
+  /* ───────── PANEL 2 — how it works ───────── */
+  .section-h{
+    font-family:var(--serif);
+    font-size:22px;
+    line-height:1.1;
+    letter-spacing:-0.01em;
+    font-weight:400;
+  }
+  .section-sub{
+    font-size:11px;
+    color:var(--gray);
+    margin-top:2mm;
+  }
+
+  .steps{
+    margin-top:7mm;
+    display:flex;
+    flex-direction:column;
+    gap:5mm;
+  }
+  .step{
+    padding-top:4mm;
+    border-top:1px solid rgba(0,0,0,0.1);
+  }
+  .step:first-child{border-top:none;padding-top:0}
+  .step-num{
+    font-family:var(--sans);
+    font-size:11px;
+    font-weight:600;
+    color:var(--blue);
+    letter-spacing:0.08em;
+    margin-bottom:2mm;
+  }
+  .step-row{
+    display:flex;gap:7px;align-items:baseline;
+  }
+  .step-ico{
+    font-size:14px;line-height:1;flex-shrink:0;
+  }
+  .step-h{
+    font-family:var(--serif);
+    font-size:15px;
+    line-height:1.2;
+    font-weight:400;
+  }
+  .step-p{
+    margin-top:2mm;
+    font-size:11px;
+    color:var(--gray);
+    line-height:1.45;
+  }
+
+  /* ───────── PANEL 3 — features (blue) ───────── */
+  .feat-h{
+    font-family:var(--serif);
+    font-style:italic;
+    font-size:22px;
+    color:#fff;
+    font-weight:400;
+    line-height:1.1;
+  }
+  .feat-sub{
+    margin-top:1.5mm;
+    font-size:11px;
+    color:rgba(255,255,255,0.6);
+  }
+  .feats{
+    margin-top:6mm;
+    display:flex;
+    flex-direction:column;
+    gap:3mm;
+  }
+  .feat{
+    background:#fff;
+    border-radius:8px;
+    padding:4mm 4.5mm;
+  }
+  .feat-head{
+    display:flex;align-items:center;gap:7px;
+  }
+  .feat-ico{font-size:14px;line-height:1}
+  .feat-name{
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink);
+    letter-spacing:-0.005em;
+  }
+  .feat-desc{
+    margin-top:1.5mm;
+    font-size:10.5px;
+    color:var(--gray);
+    line-height:1.4;
+  }
+
+  /* ───────── PANEL 4 — back cover (cream) ───────── */
+  .price-block{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:6mm 0;
+  }
+  .price{
+    font-family:var(--serif);
+    font-size:56px;
+    line-height:1;
+    letter-spacing:-0.02em;
+    color:var(--ink);
+    font-weight:400;
+  }
+  .price .per{
+    font-size:22px;
+    color:var(--gray);
+    font-style:italic;
+  }
+  .price-sub{
+    margin-top:3mm;
+    font-size:13px;
+    color:var(--gray);
+  }
+  .price-list{
+    margin-top:7mm;
+    display:flex;
+    flex-direction:column;
+    gap:2.5mm;
+    width:100%;
+    text-align:left;
+    padding:0 2mm;
+  }
+  .pl-item{
+    display:flex;align-items:center;gap:7px;
+    font-size:11.5px;
+    color:var(--ink);
+  }
+  .pl-check{
+    width:14px;height:14px;
+    border-radius:50%;
+    background:var(--blue);
+    display:inline-flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .pl-check svg{width:8px;height:8px}
+
+  .cta-wrap{
+    text-align:center;
+  }
+  .cta-label{
+    font-size:11px;
+    color:var(--gray);
+    margin-bottom:3mm;
+  }
+  .cta-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    background:var(--blue);
+    color:#fff;
+    padding:4mm 7mm;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:0.01em;
+  }
+
+  /* ───────── PANEL 5 — categories ───────── */
+  .cats{
+    margin-top:6mm;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:3mm;
+  }
+  .cat{
+    background:var(--cream);
+    border-radius:8px;
+    padding:4mm 4mm;
+    display:flex;align-items:center;gap:7px;
+    font-size:11.5px;
+    color:var(--ink);
+    font-weight:500;
+  }
+  .cat-ico{font-size:14px;line-height:1}
+
+  .quote{
+    margin-top:auto;
+    padding:4mm 4mm 4mm 5mm;
+    border-left:3px solid var(--blue);
+    background:#fff;
+    border-radius:0 8px 8px 0;
+  }
+  .quote p{
+    font-family:var(--serif);
+    font-style:italic;
+    font-size:13px;
+    line-height:1.35;
+    color:var(--ink);
+  }
+  .quote footer{
+    margin-top:2.5mm;
+    font-size:10.5px;
+    color:var(--gray);
+    font-style:normal;
+  }
+
+  /* ───────── PANEL 6 — contact (dark) ───────── */
+  .contact-h{
+    font-family:var(--serif);
+    font-size:22px;
+    color:#fff;
+    line-height:1.1;
+    font-weight:400;
+  }
+  .contact-list{
+    margin-top:6mm;
+    display:flex;
+    flex-direction:column;
+    gap:4mm;
+  }
+  .contact-row{
+    display:flex;align-items:center;gap:10px;
+    font-size:12px;
+    color:#fff;
+  }
+  .contact-ico{
+    width:28px;height:28px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.08);
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;
+    flex-shrink:0;
+  }
+  .contact-ico svg{width:14px;height:14px}
+
+  .divider{
+    margin:8mm 0;
+    height:1px;
+    background:rgba(255,255,255,0.12);
+  }
+
+  .mini-qr{
+    display:flex;gap:4mm;align-items:center;
+  }
+  .mini-qr .qr{
+    width:24mm;height:24mm;
+    background:#fff;
+    border-radius:6px;
+    padding:2mm;
+    flex-shrink:0;
+  }
+  .mini-qr .qr svg{width:100%;height:100%;display:block}
+  .mini-qr-txt{
+    font-size:11px;
+    color:rgba(255,255,255,0.8);
+    line-height:1.35;
+  }
+  .mini-qr-txt b{color:#fff;font-weight:600}
+
+  .foot{
+    margin-top:auto;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding-top:5mm;
+    border-top:1px solid rgba(255,255,255,0.1);
+  }
+  .foot .logo-name{color:#fff}
+  .foot small{
+    font-size:10px;
+    color:rgba(255,255,255,0.45);
+  }
+
+  /* ───────── print ───────── */
+  @media print{
+    html,body{background:#fff;padding:0;margin:0}
+    body{gap:0;padding:0}
+    .controls,.label,.screen-only{display:none !important}
+    .sheet{
+      box-shadow:none;
+      page-break-after:always;
+      margin:0;
+    }
+    .sheet::before,.sheet::after{display:none}
+    .sheet:last-child{page-break-after:auto}
+  }
+
+  @page{
+    size:A4 landscape;
+    margin:0;
+  }
+
+  @media (max-width: 1280px){
+    .sheet{transform:scale(0.85);transform-origin:top center}
+  }
+  @media (max-width: 1080px){
+    .sheet{transform:scale(0.7);transform-origin:top center}
+  }
+  @media (max-width: 880px){
+    .sheet{transform:scale(0.55);transform-origin:top center}
+  }
+  @media (max-width: 680px){
+    .sheet{transform:scale(0.42);transform-origin:top center}
+  }
+</style>
+</head>
+<body>
+
+<div class="controls screen-only">
+  <button class="btn" onclick="window.print()">🖨 Printerga chiqarish</button>
+  <a href="#back" class="btn btn-light">Orqa tomonga o'tish ↓</a>
+</div>
+
+<!-- ───────────────── FRONT ───────────────── -->
+<div>
+  <div class="label screen-only">Lice · Front — Panel 3 | Panel 2 | Panel 1</div>
+  <div class="sheet" id="front">
+
+    <!-- PANEL 3 — features (blue, inside left) -->
+    <div class="panel p-blue">
+      <div class="logo">
+        <span class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="1.7"/>
+            <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="1.7"/>
+            <line x1="8" y1="3.5" x2="8" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+            <line x1="16" y1="3.5" x2="16" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+            <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </span>
+        <span class="logo-name" style="color:#fff">Yozuv</span>
+      </div>
+
+      <div style="margin-top:9mm">
+        <h2 class="feat-h">Imkoniyatlar</h2>
+        <p class="feat-sub">Biznesingiz uchun kerakli barcha vositalar</p>
+      </div>
+
+      <div class="feats">
+        <div class="feat">
+          <div class="feat-head"><span class="feat-ico">📅</span><span class="feat-name">Aqlli yozilish</span></div>
+          <div class="feat-desc">Mijoz xizmat va vaqt tanlaydi</div>
+        </div>
+        <div class="feat">
+          <div class="feat-head"><span class="feat-ico">🔔</span><span class="feat-name">Tasdiqlash / Rad etish</span></div>
+          <div class="feat-desc">Bir tugma bilan boshqarish</div>
+        </div>
+        <div class="feat">
+          <div class="feat-head"><span class="feat-ico">💳</span><span class="feat-name">Payme / Click to'lov</span></div>
+          <div class="feat-desc">To'g'ridan-to'g'ri Telegramda</div>
+        </div>
+        <div class="feat">
+          <div class="feat-head"><span class="feat-ico">📊</span><span class="feat-name">Analitika</span></div>
+          <div class="feat-desc">Daromad va yozilishlar statistikasi</div>
+        </div>
+        <div class="feat">
+          <div class="feat-head"><span class="feat-ico">📄</span><span class="feat-name">QR-broshyura</span></div>
+          <div class="feat-desc">Avtomatik PDF va QR-kod</div>
+        </div>
+        <div class="feat">
+          <div class="feat-head"><span class="feat-ico">🌐</span><span class="feat-name">Katalog</span></div>
+          <div class="feat-desc">Mijozlar biznesingizni topadi</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 2 — how it works (light, inside center) -->
+    <div class="panel p-light">
+      <div>
+        <h2 class="section-h">Qanday ishlaydi?</h2>
+        <p class="section-sub">To'rt qadamda ishga tushirish</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-row"><span class="step-ico">📱</span><span class="step-h">Ro'yxatdan o'ting</span></div>
+          <div class="step-p">Biznes nomi, kategoriya va xizmatlarni kiriting. Shablonlardan foydalaning.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-row"><span class="step-ico">🔗</span><span class="step-h">Havola oling</span></div>
+          <div class="step-p">Tizim Telegram-botingizni va QR-kodingizni avtomatik yaratadi.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-row"><span class="step-ico">📄</span><span class="step-h">Chop eting</span></div>
+          <div class="step-p">Ushbu broshyurani chop etib do'koningizga ilib qo'ying. Mijozlar skanerlaydi.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">04</div>
+          <div class="step-row"><span class="step-ico">✅</span><span class="step-h">Tayyor!</span></div>
+          <div class="step-p">Mijozlar o'zlari yoziladi. Siz faqat tasdiqlaysiz yoki rad etasiz.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 1 — COVER (dark, outside right) -->
+    <div class="panel p-dark cover">
+      <div class="logo">
+        <span class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="1.7"/>
+            <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="1.7"/>
+            <line x1="8" y1="3.5" x2="8" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+            <line x1="16" y1="3.5" x2="16" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+            <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </span>
+        <span class="logo-name">Yozuv</span>
+      </div>
+
+      <div class="cover-hero">
+        <h1>Mijozlar yozilishi —<br>endi oson</h1>
+        <p>Telegram orqali — kod kerak emas</p>
+      </div>
+
+      <div class="qr-card">
+        <div class="qr" data-qr="https://t.me/YozuvBot" data-qr-size="33"></div>
+        <div class="qr-cap">
+          <div class="t1">Yozilish uchun skaner qiling</div>
+          <div class="t2">t.me/YozuvBot</div>
+        </div>
+      </div>
+
+      <div class="cover-banner">3 kun bepul · Karta shart emas</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ───────────────── BACK ───────────────── -->
+<div id="back">
+  <div class="label screen-only">Orqa · Back — Panel 4 | Panel 5 | Panel 6</div>
+  <div class="sheet">
+
+    <!-- PANEL 4 — back cover (cream, outside left) -->
+    <div class="panel p-cream">
+      <div class="logo">
+        <span class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="1.7"/>
+            <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="1.7"/>
+            <line x1="8" y1="3.5" x2="8" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+            <line x1="16" y1="3.5" x2="16" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+            <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </span>
+        <span class="logo-name" style="color:var(--ink)">Yozuv</span>
+      </div>
+
+      <div class="price-block">
+        <div class="price">$15<span class="per"> / oy</span></div>
+        <div class="price-sub">Barcha imkoniyatlar — cheksiz</div>
+
+        <div class="price-list">
+          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Cheksiz yozilishlar</div>
+          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Payme / Click to'lov</div>
+          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Analitika va hisobotlar</div>
+          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>PDF broshyura va QR-kod</div>
+          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Mijozlar bazasi</div>
+          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Texnik yordam</div>
+        </div>
+      </div>
+
+      <div class="cta-wrap">
+        <div class="cta-label">3 kun bepul sinab ko'ring</div>
+        <a class="cta-btn" href="https://yozuv.uz">yozuv.uz da boshlash →</a>
+      </div>
+    </div>
+
+    <!-- PANEL 5 — categories (light, inside center back) -->
+    <div class="panel p-light">
+      <div>
+        <h2 class="section-h">Qaysi bizneslar uchun?</h2>
+        <p class="section-sub">Kichik va o'rta biznes uchun mo'ljallangan</p>
+      </div>
+
+      <div class="cats">
+        <div class="cat"><span class="cat-ico">💇</span>Sartarosh</div>
+        <div class="cat"><span class="cat-ico">💆</span>Massaj / Spa</div>
+        <div class="cat"><span class="cat-ico">🦷</span>Stomatolog</div>
+        <div class="cat"><span class="cat-ico">📚</span>Repetitor</div>
+        <div class="cat"><span class="cat-ico">📸</span>Fotograf</div>
+        <div class="cat"><span class="cat-ico">🏋</span>Fitnes</div>
+        <div class="cat"><span class="cat-ico">⚕️</span>Shifokor</div>
+        <div class="cat"><span class="cat-ico">📦</span>Boshqalar</div>
+      </div>
+
+      <div class="quote">
+        <p>"Har kuni 5-10 ta yozilish avtomatik keladi."</p>
+        <footer>— Akbar, Barber Akbar egasi</footer>
+      </div>
+    </div>
+
+    <!-- PANEL 6 — contact (dark, inside right back) -->
+    <div class="panel p-dark">
+      <div>
+        <h2 class="contact-h">Bog'lanish</h2>
+        <p class="feat-sub" style="margin-top:2mm">Savollar va tijorat takliflari</p>
+      </div>
+
+      <div class="contact-list">
+        <div class="contact-row">
+          <span class="contact-ico">
+            <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#fff" stroke-width="1.2"/><path d="M1.5 8 H14.5 M8 1.5 C10 4 10 12 8 14.5 C6 12 6 4 8 1.5" stroke="#fff" stroke-width="1.1" fill="none"/></svg>
+          </span>
+          yozuv.uz
+        </div>
+        <div class="contact-row">
+          <span class="contact-ico">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M14 2.5 L1.5 7.5 L6 9.5 L8 13.5 L14 2.5 Z M6 9.5 L10 6" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>
+          </span>
+          @YozuvBot
+        </div>
+        <div class="contact-row">
+          <span class="contact-ico">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="#fff" stroke-width="1.2"/><path d="M2 4 L8 9 L14 4" stroke="#fff" stroke-width="1.2" fill="none"/></svg>
+          </span>
+          hello@yozuv.uz
+        </div>
+        <div class="contact-row">
+          <span class="contact-ico">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M8 14 C4 10 2 7 2 5 A4 4 0 0 1 8 2 A4 4 0 0 1 14 5 C14 7 12 10 8 14 Z" stroke="#fff" stroke-width="1.2" fill="none"/><circle cx="8" cy="5.5" r="1.5" stroke="#fff" stroke-width="1.1"/></svg>
+          </span>
+          Toshkent, O'zbekiston
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="mini-qr">
+        <div class="qr" data-qr="https://t.me/YozuvSupport" data-qr-size="25"></div>
+        <div class="mini-qr-txt">
+          <b>Savollar uchun yozing</b><br>
+          Skaner qiling yoki<br>
+          @YozuvSupport
+        </div>
+      </div>
+
+      <div class="foot">
+        <div class="logo logo-sm">
+          <span class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="2"/>
+              <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="2"/>
+              <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </span>
+          <span class="logo-name">Yozuv</span>
+        </div>
+        <small>© 2026 Yozuv</small>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* Realistic QR pattern generator (visual, deterministic from seed).
+   Renders inline SVG into every [data-qr] element. */
+(function(){
+  function genSvg(seedStr, size){
+    size = size || 33;
+    var grid = [];
+    for (var i=0;i<size;i++){ grid.push(new Array(size).fill(0)); }
+
+    // seeded PRNG
+    var seed = 2166136261 >>> 0;
+    for (var i=0;i<seedStr.length;i++){
+      seed ^= seedStr.charCodeAt(i);
+      seed = Math.imul(seed, 16777619) >>> 0;
+    }
+    function rnd(){
+      seed ^= seed << 13; seed >>>= 0;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5; seed >>>= 0;
+      return (seed >>> 0) / 4294967295;
+    }
+
+    // fill random data
+    for (var y=0;y<size;y++)
+      for (var x=0;x<size;x++)
+        grid[y][x] = rnd() > 0.5 ? 1 : 0;
+
+    // finder patterns
+    function placeFinder(cx, cy){
+      for (var y=-1;y<=7;y++){
+        for (var x=-1;x<=7;x++){
+          var gx = cx+x, gy = cy+y;
+          if (gx<0||gy<0||gx>=size||gy>=size) continue;
+          if (x===-1||y===-1||x===7||y===7){ grid[gy][gx]=0; continue; }
+          var v = 0;
+          if (x===0||x===6||y===0||y===6) v=1;
+          else if (x>=2&&x<=4&&y>=2&&y<=4) v=1;
+          grid[gy][gx]=v;
+        }
+      }
+    }
+    placeFinder(0,0);
+    placeFinder(size-7,0);
+    placeFinder(0,size-7);
+
+    // timing patterns
+    for (var i=8;i<size-8;i++){
+      grid[6][i] = i%2===0 ? 1 : 0;
+      grid[i][6] = i%2===0 ? 1 : 0;
+    }
+
+    // alignment pattern 5x5 near bottom-right
+    var ax = size-9, ay = size-9;
+    for (var y=0;y<5;y++){
+      for (var x=0;x<5;x++){
+        var v=0;
+        if (x===0||x===4||y===0||y===4) v=1;
+        else if (x===2&&y===2) v=1;
+        grid[ay+y][ax+x]=v;
+      }
+    }
+
+    // format info strips (sprinkled around finders — more authentic look)
+    for (var i=0;i<9;i++){
+      if (i===6) continue;
+      grid[8][i] = rnd()>0.5?1:0;
+      grid[i][8] = rnd()>0.5?1:0;
+    }
+    for (var i=0;i<8;i++){
+      grid[size-1-i][8] = rnd()>0.5?1:0;
+      grid[8][size-1-i] = rnd()>0.5?1:0;
+    }
+    // dark module
+    grid[size-8][8] = 1;
+
+    // build svg rects
+    var cell = 100/size;
+    var rects = '';
+    for (var y=0;y<size;y++){
+      var runStart=-1;
+      for (var x=0;x<=size;x++){
+        var v = x<size ? grid[y][x] : 0;
+        if (v && runStart<0) runStart = x;
+        if ((!v || x===size) && runStart>=0){
+          var w = (x-runStart)*cell;
+          rects += '<rect x="'+(runStart*cell).toFixed(3)+'" y="'+(y*cell).toFixed(3)+'" width="'+w.toFixed(3)+'" height="'+cell.toFixed(3)+'"/>';
+          runStart=-1;
+        }
+      }
+    }
+    return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges">'+
+           '<rect width="100" height="100" fill="#fff"/>'+
+           '<g fill="#080808">'+rects+'</g>'+
+           '</svg>';
+  }
+
+  function render(){
+    var els = document.querySelectorAll('[data-qr]');
+    for (var i=0;i<els.length;i++){
+      var el = els[i];
+      var seed = el.getAttribute('data-qr');
+      var size = parseInt(el.getAttribute('data-qr-size')||'33',10);
+      el.innerHTML = genSvg(seed, size);
+    }
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', render);
+  } else {
+    render();
+  }
+})();
+</script>
+
+</body>
+</html>

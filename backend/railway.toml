@@ -1,0 +1,24 @@
+# Railway config for the API service.
+#
+# IMPORTANT: in the Railway service settings, set
+#   Root Directory = backend
+# so this file and the Dockerfile are found, and build context = backend/.
+#
+# For the Telegram bot, create a SECOND Railway service on the same repo,
+# also with Root Directory = backend, and override Start Command to:
+#   python -m bot.main
+# (the bot doesn't need a public domain or healthcheck)
+#
+# For a Celery worker (optional, third service):
+#   celery -A app.celery_app worker --loglevel=info
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
