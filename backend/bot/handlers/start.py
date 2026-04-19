@@ -33,7 +33,15 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
                 return
             welcome = b.welcome_text.strip() if b.welcome_text else ""
             text = welcome or f"Xush kelibsiz! <b>{b.name}</b>\n\nQuyidagilardan tanlang:"
-            await message.answer(text, reply_markup=business_menu_kb(b.slug))
+            tg_id = message.from_user.id if message.from_user else None
+            is_owner = False
+            if tg_id:
+                owner = db.query(User).filter(User.id == b.owner_id).first()
+                is_owner = bool(owner and owner.telegram_id == tg_id)
+            await message.answer(
+                text,
+                reply_markup=business_menu_kb(b.slug, owner_view=is_owner, app_url=settings.public_app_url),
+            )
             return
 
         tg_id = message.from_user.id if message.from_user else None
