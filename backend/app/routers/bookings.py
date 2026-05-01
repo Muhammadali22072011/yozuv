@@ -10,15 +10,23 @@ from app.models import Booking, BookingStatus, Business, Client, Service, User
 from app.schemas.booking import BookingCancelBody, BookingCreatePublic, BookingRead
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
+from app.utils.ratelimit import rate_limit
 from app.utils.slots import get_available_slots
 
 router = APIRouter(tags=["bookings"])
 me_router = APIRouter(prefix="/business/me", tags=["bookings"])
 public_router = APIRouter(prefix="/business", tags=["bookings"])
 
+# 10/min per IP — protects public booking endpoint from slot spam.
+_booking_rate = rate_limit("public_booking", limit=10, window_seconds=60)
+
 
 @router.post("/bookings", response_model=BookingRead)
-def create_public_booking(body: BookingCreatePublic, db: Session = Depends(get_db)):
+def create_public_booking(
+    body: BookingCreatePublic,
+    db: Session = Depends(get_db),
+    _: None = Depends(_booking_rate),
+):
     try:
         booking = booking_service.create_booking(db, body)
     except ValueError as e:
