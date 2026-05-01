@@ -2,10 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 .venv/
 venv/
-.env
-.env.local
 *.egg-info/
 dist/
 build/
@@ -24,12 +23,13 @@ out/
 .DS_Store
 Thumbs.db
 
+# Database
+*.db
+*.db-journal
+*.sqlite3
+
 # Logs
 *.log
-
-# DB
-*.sqlite3
-*.db
 
 # Uploads (user files)
 /uploads/
@@ -38,6 +38,18 @@ backend/uploads/
 # TypeScript build cache
 *.tsbuildinfo
 
-# Local helper scripts (Windows)
-*.ps1
+# Tools (local binaries)
+tools/
+ngrok.exe
+ngrok.zip
+
+# Secrets
+.env
+.env.local
+.env.production
+.env.*
+!.env.example
+*.ps1.local
+
+# Claude
 .claude/
