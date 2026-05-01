@@ -2,20 +2,41 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, Check, Clock, Plus, Trash2 } from "lucide-react";
+import { HeroGradient } from "@/components/yz/HeroGradient";
+import { YzLoader } from "@/components/yz/Loader";
+import { YzLogo } from "@/components/yz/Logo";
 import { apiFetch } from "@/lib/api";
 
-const CATEGORIES: { value: string; label: string }[] = [
-  { value: "barbershop", label: "💈 Barbershop" },
-  { value: "salon", label: "💇 Salon krasoty" },
-  { value: "dentist", label: "🦷 Stomatologiya" },
-  { value: "tutor", label: "📚 Repetitor" },
-  { value: "photo", label: "📸 Fotograf" },
-  { value: "massage", label: "💆 Massaj / Spa" },
-  { value: "fitness", label: "🏋 Fitnes" },
-  { value: "clinic", label: "⚕️ Klinika" },
-  { value: "other", label: "📦 Boshqa" },
+const CATEGORIES: { value: string; label: string; emoji: string }[] = [
+  { value: "barbershop", label: "Barbershop", emoji: "💈" },
+  { value: "salon", label: "Salon", emoji: "💇" },
+  { value: "dentist", label: "Stomatologiya", emoji: "🦷" },
+  { value: "tutor", label: "Repetitor", emoji: "📚" },
+  { value: "photo", label: "Fotograf", emoji: "📸" },
+  { value: "massage", label: "Massaj / Spa", emoji: "💆" },
+  { value: "fitness", label: "Fitness", emoji: "🏋️" },
+  { value: "clinic", label: "Klinika", emoji: "⚕️" },
+  { value: "other", label: "Boshqa", emoji: "📦" },
 ];
+
+const DAY_NAMES = [
+  "Dushanba",
+  "Seshanba",
+  "Chorshanba",
+  "Payshanba",
+  "Juma",
+  "Shanba",
+  "Yakshanba",
+];
+
+type DraftService = { name: string; price: string; duration_minutes: string };
+type DraftDay = {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+};
 
 function slugify(s: string): string {
   return s
@@ -25,12 +46,23 @@ function slugify(s: string): string {
     .slice(0, 60);
 }
 
+function defaultDays(): DraftDay[] {
+  return Array.from({ length: 7 }).map((_, i) => ({
+    day_of_week: i,
+    start_time: "09:00",
+    end_time: "20:00",
+    is_working: i < 6,
+  }));
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
-  const [form, setForm] = useState({
+
+  const [biz, setBiz] = useState({
     name: "",
     slug: "",
     category: "barbershop",
@@ -39,144 +71,478 @@ export default function OnboardingPage() {
     phone: "",
   });
   const [slugTouched, setSlugTouched] = useState(false);
+  const [services, setServices] = useState<DraftService[]>([
+    { name: "", price: "", duration_minutes: "30" },
+    { name: "", price: "", duration_minutes: "30" },
+  ]);
+  const [days, setDays] = useState<DraftDay[]>(defaultDays());
 
   useEffect(() => {
     apiFetch<{ id: string }>("/api/business/me")
-      .then(() => {
-        router.replace("/dashboard");
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+      .then(() => router.replace("/dashboard"))
+      .catch(() => setLoading(false));
   }, [router]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  function next() {
     setErr("");
-    if (!form.name.trim() || !form.slug.trim()) {
-      setErr("Nomi va slug majburiy");
+    if (step === 1) {
+      if (!biz.name.trim() || !biz.slug.trim()) {
+        setErr("Biznes nomi va URL-slug majburiy");
+        return;
+      }
+      setStep(2);
       return;
     }
+    if (step === 2) {
+      const filled = services.filter((s) => s.name.trim());
+      if (filled.length === 0) {
+        setErr("Kamida 1 ta xizmat qo‘shing");
+        return;
+      }
+      setStep(3);
+      return;
+    }
+  }
+
+  function back() {
+    setErr("");
+    if (step === 2) setStep(1);
+    if (step === 3) setStep(2);
+  }
+
+  async function finish() {
+    setErr("");
+    const filledSvc = services.filter((s) => s.name.trim());
+    if (filledSvc.length === 0) {
+      setErr("Kamida 1 ta xizmat qo‘shing");
+      setStep(2);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await apiFetch("/api/business", {
         method: "POST",
         body: JSON.stringify({
-          name: form.name.trim(),
-          slug: form.slug.trim(),
-          category: form.category,
-          description: form.description.trim(),
-          address: form.address.trim(),
-          phone: form.phone.trim(),
+          name: biz.name.trim(),
+          slug: biz.slug.trim(),
+          category: biz.category,
+          description: biz.description.trim(),
+          address: biz.address.trim(),
+          phone: biz.phone.trim(),
         }),
       });
+
+      for (let i = 0; i < filledSvc.length; i++) {
+        const s = filledSvc[i];
+        await apiFetch("/api/business/me/services", {
+          method: "POST",
+          body: JSON.stringify({
+            name: s.name.trim(),
+            price: parseInt(s.price || "0", 10) || 0,
+            duration_minutes: parseInt(s.duration_minutes || "30", 10) || 30,
+            order: i,
+          }),
+        });
+      }
+
+      await apiFetch("/api/business/me/schedule", {
+        method: "PUT",
+        body: JSON.stringify({
+          days: days.map((d) => ({
+            day_of_week: d.day_of_week,
+            start_time: `${d.start_time}:00`,
+            end_time: `${d.end_time}:00`,
+            break_start: null,
+            break_end: null,
+            is_working: d.is_working,
+          })),
+        }),
+      });
+
       router.replace("/dashboard");
     } catch (e) {
-      setErr((e as Error).message || "Xatolik");
-    } finally {
+      setErr((e as Error).message || "Xatolik. Qayta urinib ko‘ring.");
       setSubmitting(false);
     }
   }
 
-  if (loading) return <p className="p-6 text-sm text-ink/60">Yuklanmoqda…</p>;
+  if (loading) {
+    return <YzLoader fullscreen />;
+  }
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <h1 className="font-serif text-3xl">Biznesingizni yarating</h1>
-        <p className="mt-2 text-sm text-ink/60">
-          2 minutda sozlab oling. Keyin xizmatlar va jadvalni qo&apos;shasiz.
-        </p>
-      </div>
-
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink/10 bg-white p-6">
-        <div>
-          <label className="block text-xs text-ink/60">Biznes nomi *</label>
-          <input
-            value={form.name}
-            onChange={(e) => {
-              const n = e.target.value;
-              setForm((f) => ({
-                ...f,
-                name: n,
-                slug: slugTouched ? f.slug : slugify(n),
-              }));
-            }}
-            placeholder="Masalan: Barber Akbar"
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
+    <main className="min-h-screen bg-ink-50">
+      <HeroGradient className="rounded-b-[32px] pb-24">
+        <div className="mx-auto flex w-full max-w-xl items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <YzLogo size={36} variant="light" />
+            <div className="font-display text-[17px] font-bold tracking-tight text-white">
+              Yozuv
+            </div>
+          </div>
+          <span className="rounded-full bg-white/14 px-3 py-1 text-[11px] font-bold text-white backdrop-blur">
+            {step} / 3
+          </span>
         </div>
-
-        <div>
-          <label className="block text-xs text-ink/60">URL-slug *</label>
-          <input
-            value={form.slug}
-            onChange={(e) => {
-              setSlugTouched(true);
-              setForm({ ...form, slug: slugify(e.target.value) });
-            }}
-            placeholder="barber-akbar"
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 font-mono text-sm"
-          />
-          <p className="mt-1 text-xs text-ink/50">
-            Mijoz sizni shu havola orqali topadi:{" "}
-            <span className="font-mono">t.me/Yozuv_cl_bot?start={form.slug || "sizning-slug"}</span>
+        <div className="mx-auto mt-10 max-w-xl">
+          <div className="text-sm font-semibold text-white/70">
+            Onboarding · {step}-qadam
+          </div>
+          <h1 className="mt-1 font-display text-[30px] font-extrabold leading-tight tracking-[-0.02em] text-white">
+            {step === 1 && "Biznesingizni yarating"}
+            {step === 2 && "Xizmatlarni qo‘shing"}
+            {step === 3 && "Ish vaqtingiz"}
+          </h1>
+          <p className="mt-2 max-w-md text-sm text-white/80">
+            {step === 1 && "Nom, kategoriya va asosiy ma'lumotlar."}
+            {step === 2 && "2–3 ta xizmat — narx va davomiyligini kiriting."}
+            {step === 3 && "Mijozlar qaysi vaqtda yozila olishini belgilang."}
           </p>
         </div>
 
-        <div>
-          <label className="block text-xs text-ink/60">Kategoriya *</label>
-          <select
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+        <div className="mx-auto mt-6 flex max-w-xl items-center gap-2">
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className={`h-1.5 flex-1 rounded-full ${
+                step >= n ? "bg-white" : "bg-white/25"
+              }`}
+            />
+          ))}
         </div>
+      </HeroGradient>
 
+      <div className="relative z-10 -mt-16 px-4 pb-24">
+        <div className="mx-auto max-w-xl space-y-3">
+          {step === 1 && (
+            <Step1
+              biz={biz}
+              setBiz={setBiz}
+              slugTouched={slugTouched}
+              setSlugTouched={setSlugTouched}
+            />
+          )}
+
+          {step === 2 && (
+            <Step2 services={services} setServices={setServices} />
+          )}
+
+          {step === 3 && <Step3 days={days} setDays={setDays} />}
+
+          {err && (
+            <div className="rounded-2xl bg-[#FFE7E3] px-3.5 py-2.5 text-sm text-[#C93A2A]">
+              {err}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2.5 pt-1">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={back}
+                disabled={submitting}
+                className="flex-1 rounded-2xl bg-white px-4 py-3.5 font-display text-[15px] font-bold text-ink-900 shadow-soft tap"
+              >
+                Orqaga
+              </button>
+            )}
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={next}
+                className="btn-primary flex-[2] justify-center"
+              >
+                Davom etish <ArrowRight className="ml-2 h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={finish}
+                disabled={submitting}
+                className="btn-primary flex-[2] justify-center"
+              >
+                {submitting ? "Saqlanmoqda…" : "Tayyor"}
+                {!submitting && <Check className="ml-2 h-4 w-4" />}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Step1({
+  biz,
+  setBiz,
+  slugTouched,
+  setSlugTouched,
+}: {
+  biz: {
+    name: string;
+    slug: string;
+    category: string;
+    description: string;
+    address: string;
+    phone: string;
+  };
+  setBiz: React.Dispatch<React.SetStateAction<typeof biz>>;
+  slugTouched: boolean;
+  setSlugTouched: (v: boolean) => void;
+}) {
+  return (
+    <div className="card-soft space-y-4 p-5 md:p-6">
+      <div>
+        <label className="block text-xs font-semibold text-ink-500">
+          Biznes nomi *
+        </label>
+        <input
+          value={biz.name}
+          onChange={(e) => {
+            const n = e.target.value;
+            setBiz((f) => ({
+              ...f,
+              name: n,
+              slug: slugTouched ? f.slug : slugify(n),
+            }));
+          }}
+          placeholder="Masalan: Barber Akbar"
+          className="yz-input mt-1.5"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink-500">URL-slug *</label>
+        <input
+          value={biz.slug}
+          onChange={(e) => {
+            setSlugTouched(true);
+            setBiz({ ...biz, slug: slugify(e.target.value) });
+          }}
+          placeholder="barber-akbar"
+          className="yz-input mt-1.5 font-mono"
+        />
+        <div className="mt-2 rounded-2xl bg-ink-50 px-3 py-2 font-mono text-xs text-ink-500">
+          t.me/Yozuv_cl_bot?start={biz.slug || "sizning-slug"}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink-500">Kategoriya *</label>
+        <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {CATEGORIES.map((c) => {
+            const active = biz.category === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setBiz({ ...biz, category: c.value })}
+                className={`flex items-center gap-2 rounded-2xl border-[1.5px] px-3 py-2.5 text-left tap ${
+                  active
+                    ? "border-indigo-600 bg-indigo-50"
+                    : "border-ink-100 bg-white"
+                }`}
+              >
+                <span className="text-lg">{c.emoji}</span>
+                <span
+                  className={`font-display text-sm font-bold ${
+                    active ? "text-indigo-700" : "text-ink-900"
+                  }`}
+                >
+                  {c.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="block text-xs text-ink/60">Telefon</label>
+          <label className="block text-xs font-semibold text-ink-500">Telefon</label>
           <input
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            value={biz.phone}
+            onChange={(e) => setBiz({ ...biz, phone: e.target.value })}
             placeholder="+998 90 123 45 67"
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
+            className="yz-input mt-1.5"
           />
         </div>
-
         <div>
-          <label className="block text-xs text-ink/60">Manzil</label>
+          <label className="block text-xs font-semibold text-ink-500">Manzil</label>
           <input
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            placeholder="Amir Temur ko'chasi 15"
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
+            value={biz.address}
+            onChange={(e) => setBiz({ ...biz, address: e.target.value })}
+            placeholder="Amir Temur 15"
+            className="yz-input mt-1.5"
           />
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div>
-          <label className="block text-xs text-ink/60">Tavsif</label>
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={3}
-            placeholder="Qisqa: biznes haqida bir-ikki jumla"
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
+function Step2({
+  services,
+  setServices,
+}: {
+  services: DraftService[];
+  setServices: React.Dispatch<React.SetStateAction<DraftService[]>>;
+}) {
+  function update(i: number, patch: Partial<DraftService>) {
+    setServices((arr) => arr.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  }
+  function remove(i: number) {
+    setServices((arr) => (arr.length > 1 ? arr.filter((_, idx) => idx !== i) : arr));
+  }
+  function add() {
+    setServices((arr) => [...arr, { name: "", price: "", duration_minutes: "30" }]);
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {services.map((s, i) => (
+        <div key={i} className="card-soft space-y-3 p-4 md:p-5">
+          <div className="flex items-center justify-between">
+            <div className="font-display text-sm font-bold text-ink-900">
+              Xizmat {i + 1}
+            </div>
+            {services.length > 1 && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="grid h-8 w-8 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
+                aria-label="O‘chirish"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Nomi</label>
+            <input
+              value={s.name}
+              onChange={(e) => update(i, { name: e.target.value })}
+              placeholder="Soch olish"
+              className="yz-input mt-1"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-ink-500">Narxi (so‘m)</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={s.price}
+                onChange={(e) => update(i, { price: e.target.value })}
+                placeholder="50000"
+                className="yz-input mt-1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink-500">Daqiqa</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={s.duration_minutes}
+                onChange={(e) => update(i, { duration_minutes: e.target.value })}
+                className="yz-input mt-1"
+              />
+            </div>
+          </div>
         </div>
+      ))}
 
-        {err && <p className="text-sm text-red-600">{err}</p>}
+      <button
+        type="button"
+        onClick={add}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-ink-200 bg-white px-4 py-3.5 font-display text-sm font-bold text-ink-700 tap"
+      >
+        <Plus className="h-4 w-4" /> Yana qo‘shish
+      </button>
+    </div>
+  );
+}
 
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Yaratilmoqda…" : "Biznes yaratish"}
-        </Button>
-        <p className="text-xs text-ink/50">🎁 14 kun bepul trial avtomatik yoqiladi.</p>
-      </form>
+function Step3({
+  days,
+  setDays,
+}: {
+  days: DraftDay[];
+  setDays: React.Dispatch<React.SetStateAction<DraftDay[]>>;
+}) {
+  function update(i: number, patch: Partial<DraftDay>) {
+    setDays((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+  }
+
+  return (
+    <div className="card-soft divide-y divide-ink-100 p-1.5">
+      {days.map((d, i) => (
+        <div key={d.day_of_week} className="px-3 py-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div
+                className={`font-display text-[15px] font-bold ${
+                  d.is_working ? "text-ink-900" : "text-ink-300"
+                }`}
+              >
+                {DAY_NAMES[i]}
+              </div>
+              <div className="mt-0.5 inline-flex items-center gap-1.5 font-mono text-xs text-ink-400">
+                {d.is_working ? (
+                  <>
+                    <Clock className="h-3 w-3" />
+                    {d.start_time} – {d.end_time}
+                  </>
+                ) : (
+                  "Dam olish kuni"
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => update(i, { is_working: !d.is_working })}
+              className={`h-[26px] w-11 rounded-full p-[3px] transition-colors ${
+                d.is_working ? "bg-indigo-600" : "bg-ink-200"
+              }`}
+              aria-label={d.is_working ? "Yopish" : "Ochish"}
+            >
+              <span
+                className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  d.is_working ? "translate-x-[18px]" : ""
+                }`}
+              />
+            </button>
+          </div>
+
+          {d.is_working && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">
+                  Boshlanish
+                </label>
+                <input
+                  type="time"
+                  value={d.start_time}
+                  onChange={(e) => update(i, { start_time: e.target.value })}
+                  className="yz-input mt-1"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">
+                  Tugash
+                </label>
+                <input
+                  type="time"
+                  value={d.end_time}
+                  onChange={(e) => update(i, { end_time: e.target.value })}
+                  className="yz-input mt-1"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

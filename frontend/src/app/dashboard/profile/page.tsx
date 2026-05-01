@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { ScreenHeader, YzLoader, YzLogo, useToast } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 
 type Sub = { plan: string; status: string; expires_at: string | null };
 
 export default function ProfilePage() {
+  const toast = useToast();
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [sub, setSub] = useState<Sub | null>(null);
-  const [me, setMe] = useState<{ first_name: string; last_name: string; telegram_id: number; username?: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -29,210 +28,223 @@ export default function ProfilePage() {
     Promise.all([
       apiFetch<BusinessMe>("/api/business/me"),
       apiFetch<Sub>("/api/subscription").catch(() => null),
-      apiFetch<{ first_name: string; last_name: string; telegram_id: number; username?: string }>("/api/auth/me").catch(() => null),
-    ]).then(([b, s, u]) => {
-      setBiz(b);
-      setSub(s);
-      setMe(u);
-      setForm({
-        name: b.name,
-        description: b.description,
-        address: b.address,
-        phone: b.phone,
-        welcome_text: b.welcome_text,
-        after_booking_text: b.after_booking_text,
-        reminder_text: b.reminder_text,
-        language: (b.language as "UZ" | "RU") || "UZ",
-        confirmation_mode: (b.confirmation_mode as "AUTO" | "MANUAL" | "PREPAYMENT") || "MANUAL",
-      });
-    }).catch(() => {});
+    ])
+      .then(([b, s]) => {
+        setBiz(b);
+        setSub(s);
+        setForm({
+          name: b.name,
+          description: b.description,
+          address: b.address,
+          phone: b.phone,
+          welcome_text: b.welcome_text,
+          after_booking_text: b.after_booking_text,
+          reminder_text: b.reminder_text,
+          language: (b.language as "UZ" | "RU") || "UZ",
+          confirmation_mode:
+            (b.confirmation_mode as "AUTO" | "MANUAL" | "PREPAYMENT") || "MANUAL",
+        });
+      })
+      .catch(() => {});
   }, []);
 
   async function save() {
     setSaving(true);
-    setMsg("");
     try {
       const updated = await apiFetch<BusinessMe>("/api/business/me", {
         method: "PUT",
         body: JSON.stringify(form),
       });
       setBiz(updated);
-      setMsg("Saqlandi ✓");
-      setTimeout(() => setMsg(""), 2000);
+      toast("Saqlandi");
     } catch (e) {
-      setMsg((e as Error).message || "Xatolik");
+      toast((e as Error).message || "Xatolik");
     } finally {
       setSaving(false);
     }
   }
 
-  if (!biz) return <p className="text-sm text-ink/60">Yuklanmoqda…</p>;
+  if (!biz) {
+    return <YzLoader />;
+  }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <h2 className="font-serif text-3xl">Profil</h2>
+    <div>
+      <ScreenHeader
+        title="Biznes profili"
+        back="/dashboard/settings"
+        right={
+          <button onClick={save} disabled={saving} className="btn-primary px-4 py-2.5 text-sm">
+            {saving ? "…" : "Saqlash"}
+          </button>
+        }
+      />
 
-      <section className="rounded-2xl border border-ink/10 bg-white p-5">
-        <div className="flex items-start gap-4">
-          <div className="grid h-14 w-14 place-items-center rounded-full bg-ink text-xl text-white">
-            {(me?.first_name?.[0] || "?").toUpperCase()}
+      <div className="mt-2 px-4 md:px-0">
+        <div className="card-soft p-5 text-center">
+          <div className="mx-auto grid place-items-center">
+            <YzLogo size={80} />
           </div>
-          <div>
-            <div className="font-serif text-xl">
-              {me?.first_name} {me?.last_name}
+          <div className="mt-3 font-display text-[22px] font-extrabold tracking-tight text-ink-900">
+            {biz.name}
+          </div>
+          <div className="mt-0.5 text-[13px] text-ink-500">{biz.description || "—"}</div>
+          {sub && (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-600">
+              💎 {sub.plan} · {sub.status}
             </div>
-            {me?.username && (
-              <a
-                href={`https://t.me/${me.username}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-brand hover:underline"
-              >
-                @{me.username}
-              </a>
-            )}
-            <div className="text-xs text-ink/60">Telegram ID: {me?.telegram_id}</div>
-          </div>
+          )}
         </div>
-      </section>
 
-      <section className="rounded-2xl border border-ink/10 bg-white p-5">
-        <h3 className="font-serif text-lg">Biznes</h3>
-        <p className="mt-1 text-xs text-ink/60">
-          Slug: <span className="font-mono">{biz.slug}</span> · Kategoriya: {biz.category}
-        </p>
-        {sub && (
-          <p className="mt-2 text-xs text-ink/60">
-            Tarif: <span className="font-medium">{sub.plan}</span> · {sub.status}
-            {sub.expires_at ? ` · ${sub.expires_at.slice(0, 10)} gacha` : ""}
-          </p>
-        )}
-        <p className="mt-3 rounded-md bg-cream p-3 font-mono text-xs">
-          t.me/Yozuv_cl_bot?start={biz.slug}
-        </p>
-      </section>
-
-      <section className="space-y-3 rounded-2xl border border-ink/10 bg-white p-5">
-        <h3 className="font-serif text-lg">Asosiy ma&apos;lumot</h3>
-        <div>
-          <label className="block text-xs text-ink/60">Nomi</label>
-          <input
+        <div className="mt-3 space-y-2.5">
+          <Field
+            icon="🏪"
+            bg="#EEF0FF"
+            label="Nomi"
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
+            onChange={(v) => setForm({ ...form, name: v })}
+          />
+          <Field
+            icon="📞"
+            bg="#FFF3DA"
+            label="Telefon"
+            value={form.phone}
+            onChange={(v) => setForm({ ...form, phone: v })}
+          />
+          <Field
+            icon="📍"
+            bg="#E6FAF3"
+            label="Manzil"
+            value={form.address}
+            onChange={(v) => setForm({ ...form, address: v })}
+          />
+          <Field
+            icon="📝"
+            bg="#FFE7E3"
+            label="Tavsif"
+            value={form.description}
+            onChange={(v) => setForm({ ...form, description: v })}
+            multi
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+
+        <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
+          Bot matnlari
+        </div>
+        <div className="card-soft space-y-3 p-4">
           <div>
-            <label className="block text-xs text-ink/60">Telefon</label>
-            <input
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
+            <label className="block text-xs font-semibold text-ink-500">Salomlashish</label>
+            <textarea
+              rows={2}
+              value={form.welcome_text}
+              onChange={(e) => setForm({ ...form, welcome_text: e.target.value })}
+              className="yz-input mt-1"
             />
           </div>
           <div>
-            <label className="block text-xs text-ink/60">Til</label>
-            <select
-              value={form.language}
-              onChange={(e) => setForm({ ...form, language: e.target.value as "UZ" | "RU" })}
-              className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-            >
-              <option value="UZ">O&apos;zbekcha</option>
-              <option value="RU">Русский</option>
-            </select>
+            <label className="block text-xs font-semibold text-ink-500">Yozilishdan keyin</label>
+            <textarea
+              rows={2}
+              value={form.after_booking_text}
+              onChange={(e) => setForm({ ...form, after_booking_text: e.target.value })}
+              className="yz-input mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Eslatma matni</label>
+            <textarea
+              rows={2}
+              value={form.reminder_text}
+              onChange={(e) => setForm({ ...form, reminder_text: e.target.value })}
+              className="yz-input mt-1"
+            />
           </div>
         </div>
-        <div>
-          <label className="block text-xs text-ink/60">Manzil</label>
-          <input
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-ink/60">Tavsif</label>
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={2}
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
-        </div>
-      </section>
 
-      <section className="space-y-3 rounded-2xl border border-ink/10 bg-white p-5">
-        <h3 className="font-serif text-lg">Bot matnlari</h3>
-        <div>
-          <label className="block text-xs text-ink/60">Salomlashish matni</label>
-          <textarea
-            value={form.welcome_text}
-            onChange={(e) => setForm({ ...form, welcome_text: e.target.value })}
-            rows={2}
-            placeholder="Xush kelibsiz! Yozilish uchun..."
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
+        <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
+          Tasdiqlash rejimi
         </div>
-        <div>
-          <label className="block text-xs text-ink/60">Yozilishdan keyin</label>
-          <textarea
-            value={form.after_booking_text}
-            onChange={(e) => setForm({ ...form, after_booking_text: e.target.value })}
-            rows={2}
-            placeholder="5 daqiqa oldinroq keling."
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-ink/60">Eslatma matni</label>
-          <textarea
-            value={form.reminder_text}
-            onChange={(e) => setForm({ ...form, reminder_text: e.target.value })}
-            rows={2}
-            placeholder="Bir soatdan keyin yozilishingiz bor."
-            className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-          />
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-ink/10 bg-white p-5">
-        <h3 className="font-serif text-lg">Tasdiqlash rejimi</h3>
-        <div className="mt-3 space-y-2 text-sm">
+        <div className="card-soft p-2">
           {(
             [
-              ["AUTO", "Avtomatik", "Mijoz yozilishi avtomatik tasdiqlanadi"],
-              ["MANUAL", "Qo'lda", "Siz har bir yozilishni tasdiqlaysiz"],
-              ["PREPAYMENT", "Oldindan to'lov", "Mijoz to'laganda tasdiqlanadi"],
+              ["AUTO", "Avtomatik", "Avtomatik tasdiqlanadi"],
+              ["MANUAL", "Qo‘lda", "Siz har bir yozilishni tasdiqlaysiz"],
+              ["PREPAYMENT", "Oldindan to‘lov", "Mijoz to‘laganda tasdiqlanadi"],
             ] as const
-          ).map(([val, title, desc]) => (
-            <label
-              key={val}
-              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${
-                form.confirmation_mode === val ? "border-ink bg-cream/50" : "border-ink/10"
-              }`}
-            >
-              <input
-                type="radio"
-                checked={form.confirmation_mode === val}
-                onChange={() => setForm({ ...form, confirmation_mode: val })}
-                className="mt-1"
-              />
-              <div>
-                <div className="font-medium">{title}</div>
-                <div className="text-xs text-ink/60">{desc}</div>
-              </div>
-            </label>
-          ))}
+          ).map(([val, title, desc]) => {
+            const active = form.confirmation_mode === val;
+            return (
+              <button
+                key={val}
+                onClick={() => setForm({ ...form, confirmation_mode: val })}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left tap ${
+                  active ? "bg-indigo-50" : ""
+                }`}
+              >
+                <span
+                  className={`grid h-5 w-5 place-items-center rounded-full border-2 ${
+                    active ? "border-indigo-600" : "border-ink-200"
+                  }`}
+                >
+                  {active && <span className="h-2 w-2 rounded-full bg-indigo-600" />}
+                </span>
+                <div>
+                  <div className="font-display text-sm font-bold text-ink-900">{title}</div>
+                  <div className="text-xs text-ink-500">{desc}</div>
+                </div>
+              </button>
+            );
+          })}
         </div>
-      </section>
-
-      <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={saving}>
-          {saving ? "Saqlanmoqda…" : "Saqlash"}
-        </Button>
-        {msg && <span className="text-sm text-ink/60">{msg}</span>}
       </div>
     </div>
+  );
+}
+
+function Field({
+  icon,
+  bg,
+  label,
+  value,
+  onChange,
+  multi,
+  placeholder,
+}: {
+  icon: string;
+  bg: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  multi?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <label className="card-soft flex cursor-text items-start gap-3 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30">
+      <div
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl"
+        style={{ background: bg }}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold text-ink-400">{label}</div>
+        {multi ? (
+          <textarea
+            rows={2}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder || "—"}
+            className="mt-1 w-full resize-none bg-transparent font-display text-sm font-bold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-300"
+          />
+        ) : (
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder || "—"}
+            className="mt-1 w-full bg-transparent font-display text-sm font-bold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-300"
+          />
+        )}
+      </div>
+    </label>
   );
 }

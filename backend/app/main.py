@@ -1,10 +1,14 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
+import httpx
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.responses import Response
 
 from app.config import get_settings
 from app.routers import (
@@ -76,6 +80,13 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        global _frontend_client
+        if _frontend_client is not None:
+            try:
+                await _frontend_client.aclose()
+            except Exception:
+                logger.exception("frontend proxy client close failed")
+            _frontend_client = None
         if _bot is not None:
             try:
                 await _bot.delete_webhook()
@@ -101,6 +112,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all so unexpected errors don't leak stack traces and ARE logged."""
+    # Let HTTPException pass through with its own status (FastAPI normally handles
+    # them before this, but we re-raise just in case it ever reaches us).
+    if isinstance(exc, HTTPException):
+        raise exc
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Server xatosi. Iltimos, keyinroq urinib ko'ring."},
+    )
+
 
 app.include_router(auth.router, prefix="/api/auth")
 # Specific /business/me/* routers must be registered BEFORE business.router,
@@ -142,3 +167,67 @@ async def telegram_webhook(token: str, request: Request):
         logger.exception("Failed to process Telegram update")
         # Return 200 anyway so Telegram doesn't spam retries for a malformed update.
     return {"ok": True}
+
+
+FRONTEND_UPSTREAM = os.getenv("FRONTEND_UPSTREAM_URL", "http://localhost:3000").rstrip("/")
+_HOP_BY_HOP = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+    "content-encoding",
+    "content-length",
+    "host",
+}
+_frontend_client: httpx.AsyncClient | None = None
+
+
+def _get_frontend_client() -> httpx.AsyncClient:
+    global _frontend_client
+    if _frontend_client is None:
+        _frontend_client = httpx.AsyncClient(
+            base_url=FRONTEND_UPSTREAM,
+            timeout=httpx.Timeout(30.0, connect=5.0),
+        )
+    return _frontend_client
+
+
+@app.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+async def frontend_proxy(path: str, request: Request):
+    """Catch-all: forward non-API requests to the Next.js frontend."""
+    headers = {
+        k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP
+    }
+    upstream_path = request.url.path
+    if request.url.query:
+        upstream_path = f"{upstream_path}?{request.url.query}"
+
+    client = _get_frontend_client()
+    try:
+        upstream = await client.request(
+            request.method,
+            upstream_path,
+            headers=headers,
+            content=await request.body(),
+        )
+    except httpx.RequestError as exc:
+        logger.warning("Frontend proxy failed for %s: %s", upstream_path, exc)
+        raise HTTPException(status_code=502, detail="Frontend unreachable") from exc
+
+    response_headers = {
+        k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP
+    }
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        headers=response_headers,
+        media_type=upstream.headers.get("content-type"),
+    )

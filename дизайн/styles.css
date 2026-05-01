@@ -1,0 +1,220 @@
+/* Yozuv Business — Design tokens */
+:root {
+  --indigo-50: #EEF0FF;
+  --indigo-100: #E0E4FF;
+  --indigo-200: #C7CCFF;
+  --indigo-300: #A3AAFF;
+  --indigo-500: #5B6BFF;
+  --indigo-600: #4853F5;
+  --indigo-700: #3640D4;
+  --indigo-900: #1E2270;
+
+  --ink-900: #0B0F1F;
+  --ink-700: #2A2F45;
+  --ink-500: #5A6078;
+  --ink-400: #848AA2;
+  --ink-300: #B9BECD;
+  --ink-200: #E3E5EC;
+  --ink-100: #F2F3F7;
+  --ink-50:  #F8F9FC;
+
+  --mint:   #22C8A8;
+  --lemon:  #FFC94A;
+  --coral:  #FF7A6B;
+  --lilac:  #B8A6FF;
+  --sky:    #7BC6FF;
+  --rose:   #FF9FB5;
+
+  --success-bg: #E6FAF3;
+  --warn-bg:    #FFF3DA;
+  --danger-bg:  #FFE7E3;
+
+  --font-display: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --font-text:    -apple-system, system-ui, sans-serif;
+  --font-mono:    'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #0B0F1F;
+  font-family: var(--font-text);
+  color: var(--ink-900);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* Stage: black, centered scaled device */
+.stage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 600px at 50% 20%, #1A1F3A 0%, transparent 60%),
+    linear-gradient(180deg, #0B0F1F 0%, #06081A 100%);
+  padding: 24px;
+}
+.device-wrap {
+  position: relative;
+}
+
+/* Scroll hidden */
+.scroll::-webkit-scrollbar { display: none; }
+.scroll { scrollbar-width: none; }
+
+/* Yozuv gradient utility */
+.yz-grad {
+  background: linear-gradient(135deg, #5B6BFF 0%, #4853F5 50%, #3640D4 100%);
+}
+.yz-grad-soft {
+  background: linear-gradient(135deg, #EEF0FF 0%, #E0E4FF 100%);
+}
+
+/* Button */
+.btn-primary {
+  background: linear-gradient(180deg, #5B6BFF 0%, #4853F5 100%);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  padding: 16px 20px;
+  box-shadow:
+    0 8px 24px rgba(72, 83, 245, 0.35),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  cursor: pointer;
+  transition: transform .1s ease;
+}
+.btn-primary:active { transform: scale(0.97); }
+
+.tap { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.tap:active { opacity: .7; }
+
+/* Screen transition */
+.screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--ink-50);
+}
+.screen-enter-right {
+  animation: slideInRight 280ms cubic-bezier(.32,.72,.2,1) both;
+}
+.screen-enter-left {
+  animation: slideInLeft 280ms cubic-bezier(.32,.72,.2,1) both;
+}
+.screen-fade {
+  animation: fadeIn 200ms ease both;
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-30%); opacity: 0.7; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal sheet */
+.sheet-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(11,15,31,0.45);
+  animation: fadeIn 200ms ease both;
+  z-index: 100;
+}
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: white;
+  border-radius: 28px 28px 0 0;
+  animation: sheetUp 320ms cubic-bezier(.32,.72,.2,1) both;
+  z-index: 101;
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.12);
+  max-height: 88%;
+  display: flex;
+  flex-direction: column;
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Illustration placeholder blobs */
+.blob {
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Toast */
+.toast {
+  position: absolute;
+  top: 64px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-900);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 14px;
+  z-index: 200;
+  animation: toastIn 300ms ease both, toastOut 300ms ease 1.8s both;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  white-space: nowrap;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, -20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes toastOut {
+  to { opacity: 0; transform: translate(-50%, -20px); }
+}
+
+/* Shimmery card */
+.card-soft {
+  background: white;
+  border-radius: 22px;
+  box-shadow: 0 1px 0 rgba(11,15,31,0.04), 0 6px 16px -8px rgba(11,15,31,0.08);
+}
+
+/* Progress ring handled inline */
+
+/* Avatar initials */
+.avatar {
+  display: grid;
+  place-items: center;
+  color: white;
+  font-family: var(--font-display);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* Chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--ink-100);
+  color: var(--ink-700);
+  white-space: nowrap;
+}
+.chip-active {
+  background: var(--ink-900);
+  color: white;
+}
+
+/* Focus */
+input, textarea { font-family: inherit; }
+
+/* No page-level highlight */
+* { -webkit-tap-highlight-color: transparent; }

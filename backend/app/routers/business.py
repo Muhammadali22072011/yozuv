@@ -1,9 +1,23 @@
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user, get_owned_business
-from app.models import Business, Service, User
+from app.models import (
+    Booking,
+    BookingStatus,
+    Business,
+    Client,
+    PromoCode,
+    Review,
+    Schedule,
+    Service,
+    Subscription,
+    User,
+)
 from app.models.enums import BusinessCategory
 from app.schemas.business import BusinessCreate, BusinessMe, BusinessPublic, BusinessUpdate
 
@@ -24,7 +38,7 @@ def create_business(
     if slug_taken:
         raise HTTPException(400, "Slug already taken")
 
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, time, timedelta, timezone
 
     from app.models import Subscription, SubscriptionPlan, SubscriptionStatus
 
@@ -50,6 +64,19 @@ def create_business(
         amount_paid=0,
     )
     db.add(trial)
+
+    # Default schedule: Mon–Sat 09:00–18:00, Sun off. Owner can change in /dashboard/schedule.
+    for dow in range(7):
+        db.add(
+            Schedule(
+                business_id=b.id,
+                day_of_week=dow,
+                start_time=time(9, 0),
+                end_time=time(18, 0),
+                is_working=dow != 6,
+            )
+        )
+
     db.commit()
     db.refresh(b)
     return b
@@ -58,6 +85,142 @@ def create_business(
 @router.get("/me", response_model=BusinessMe)
 def my_business(business: Business = Depends(get_owned_business)):
     return business
+
+
+@router.get("/me/dashboard")
+def my_dashboard(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    business: Business = Depends(get_owned_business),
+):
+    """One-shot payload that replaces ~10 calls from the dashboard page."""
+    today = date.today()
+    week_start = today - timedelta(days=7)
+
+    active_bookings = ~(Booking.status == BookingStatus.CANCELLED)
+    biz_bookings = Booking.business_id == business.id
+
+    today_count = (
+        db.query(func.count(Booking.id))
+        .filter(biz_bookings, Booking.date == today, active_bookings)
+        .scalar()
+        or 0
+    )
+    today_revenue = (
+        db.query(func.coalesce(func.sum(Booking.payment_amount), 0))
+        .filter(biz_bookings, Booking.date == today, active_bookings)
+        .scalar()
+        or 0
+    )
+    week_revenue = (
+        db.query(func.coalesce(func.sum(Booking.payment_amount), 0))
+        .filter(biz_bookings, Booking.date >= week_start, Booking.date <= today, active_bookings)
+        .scalar()
+        or 0
+    )
+    week_clients = (
+        db.query(func.count(func.distinct(Booking.client_id)))
+        .filter(biz_bookings, Booking.date >= week_start, Booking.date <= today)
+        .scalar()
+        or 0
+    )
+
+    bookings_today = (
+        db.query(Booking)
+        .filter(biz_bookings, Booking.date == today)
+        .order_by(Booking.start_time.asc())
+        .all()
+    )
+    services = (
+        db.query(Service)
+        .filter(Service.business_id == business.id, Service.is_active.is_(True))
+        .order_by(Service.order.asc(), Service.name.asc())
+        .all()
+    )
+    clients = (
+        db.query(Client)
+        .join(Booking, Booking.client_id == Client.id)
+        .filter(Booking.business_id == business.id)
+        .group_by(Client.id)
+        .order_by(func.max(Booking.date).desc())
+        .all()
+    )
+    active_promo_count = (
+        db.query(func.count(PromoCode.id))
+        .filter(PromoCode.business_id == business.id, PromoCode.is_active.is_(True))
+        .scalar()
+        or 0
+    )
+    reviews_count = (
+        db.query(func.count(Review.id)).filter(Review.business_id == business.id).scalar() or 0
+    )
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.business_id == business.id)
+        .order_by(Subscription.expires_at.desc())
+        .first()
+    )
+
+    return {
+        "business": BusinessMe.model_validate(business).model_dump(mode="json"),
+        "user": {"first_name": user.first_name or "", "last_name": user.last_name or ""},
+        "summary": {
+            "today": {"bookings_count": int(today_count), "revenue": int(today_revenue)},
+            "week": {"revenue": int(week_revenue), "clients_count": int(week_clients)},
+        },
+        "bookings_today": [
+            {
+                "id": str(b.id),
+                "business_id": str(b.business_id),
+                "service_id": str(b.service_id) if b.service_id else None,
+                "client_id": str(b.client_id) if b.client_id else None,
+                "date": b.date.isoformat(),
+                "start_time": b.start_time.strftime("%H:%M"),
+                "end_time": b.end_time.strftime("%H:%M"),
+                "status": b.status.value if hasattr(b.status, "value") else str(b.status),
+                "payment_status": b.payment_status.value
+                if hasattr(b.payment_status, "value")
+                else str(b.payment_status),
+                "payment_amount": int(b.payment_amount or 0),
+                "notes": b.notes or "",
+                "cancel_reason": b.cancel_reason,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            }
+            for b in bookings_today
+        ],
+        "services": [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "price": int(s.price or 0),
+                "duration_minutes": int(s.duration_minutes or 0),
+            }
+            for s in services
+        ],
+        "clients": [
+            {
+                "id": str(c.id),
+                "first_name": c.first_name or "",
+                "last_name": c.last_name or "",
+                "phone": c.phone or "",
+            }
+            for c in clients
+        ],
+        "counts": {
+            "active_promo": int(active_promo_count),
+            "reviews": int(reviews_count),
+            "services": len(services),
+        },
+        "subscription": (
+            {
+                "plan": sub.plan.value if hasattr(sub.plan, "value") else str(sub.plan),
+                "status": sub.status.value if hasattr(sub.status, "value") else str(sub.status),
+                "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+            }
+            if sub
+            else None
+        ),
+    }
 
 
 @router.put("/me", response_model=BusinessMe)

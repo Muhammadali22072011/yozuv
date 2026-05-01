@@ -9,14 +9,23 @@ from app.models import User
 from app.schemas.auth import RefreshRequest, TelegramAuthRequest, TokenPair, UserMe
 from app.deps import get_current_user
 from app.utils.auth import create_access_token, create_refresh_token, decode_token
+from app.utils.ratelimit import rate_limit
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter()
 settings = get_settings()
 
+# 30 attempts/min per IP — enough for a legit user retrying, blocks brute-force.
+_auth_rate = rate_limit("auth_tg", limit=30, window_seconds=60)
+_refresh_rate = rate_limit("auth_refresh", limit=60, window_seconds=60)
+
 
 @router.post("/telegram", response_model=TokenPair)
-def auth_telegram(body: TelegramAuthRequest, db: Session = Depends(get_db)):
+def auth_telegram(
+    body: TelegramAuthRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_auth_rate),
+):
     if not settings.bot_token:
         raise HTTPException(status_code=500, detail="BOT_TOKEN not configured")
     try:
@@ -53,7 +62,11 @@ def auth_telegram(body: TelegramAuthRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
+def refresh(
+    body: RefreshRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_refresh_rate),
+):
     try:
         payload = decode_token(body.refresh_token)
         if payload.get("type") != "refresh":

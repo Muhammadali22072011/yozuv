@@ -6,6 +6,8 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Service
+from bot.keyboards.inline import back_to_menu_kb
+from bot.utils import safe_edit_text
 
 router = Router()
 
@@ -72,14 +74,18 @@ async def my_from_menu(cb: CallbackQuery):
             .all()
         )
         if not bookings:
-            await cb.message.edit_text("Bu joyda faol yozilish yo'q.")
+            await safe_edit_text(
+                cb,
+                "Bu joyda faol yozilish yo'q.",
+                reply_markup=back_to_menu_kb(slug),
+            )
             await cb.answer()
             return
-        lines = []
+        lines = ["📋 <b>Mening yozilishlarim</b>", ""]
         for bk in bookings:
             svc = db.query(Service).filter(Service.id == bk.service_id).first()
             lines.append(f"• {bk.date} {bk.start_time.strftime('%H:%M')} — {svc.name if svc else ''}")
-        await cb.message.edit_text("\n".join(lines))
+        await safe_edit_text(cb, "\n".join(lines), reply_markup=back_to_menu_kb(slug))
     finally:
         db.close()
     await cb.answer()

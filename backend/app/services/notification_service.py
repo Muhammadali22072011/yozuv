@@ -1,8 +1,11 @@
+import logging
+
 import httpx
 
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 def send_telegram_message(chat_id: int, text: str, reply_markup: dict | None = None) -> None:
@@ -13,9 +16,14 @@ def send_telegram_message(chat_id: int, text: str, reply_markup: dict | None = N
     if reply_markup:
         payload["reply_markup"] = reply_markup
     try:
-        httpx.post(url, json=payload, timeout=15)
+        resp = httpx.post(url, json=payload, timeout=15)
+        if resp.status_code >= 400:
+            logger.warning(
+                "Telegram sendMessage non-2xx for chat_id=%s: %s %s",
+                chat_id, resp.status_code, resp.text[:200],
+            )
     except Exception:
-        pass
+        logger.exception("send_telegram_message failed for chat_id=%s", chat_id)
 
 
 def send_telegram_photo(chat_id: int, photo_path: str, caption: str = "") -> None:
@@ -26,6 +34,11 @@ def send_telegram_photo(chat_id: int, photo_path: str, caption: str = "") -> Non
         with open(photo_path, "rb") as f:
             files = {"photo": f}
             data = {"chat_id": str(chat_id), "caption": caption, "parse_mode": "HTML"}
-            httpx.post(url, data=data, files=files, timeout=30)
+            resp = httpx.post(url, data=data, files=files, timeout=30)
+            if resp.status_code >= 400:
+                logger.warning(
+                    "Telegram sendPhoto non-2xx for chat_id=%s: %s %s",
+                    chat_id, resp.status_code, resp.text[:200],
+                )
     except Exception:
-        pass
+        logger.exception("send_telegram_photo failed for chat_id=%s", chat_id)

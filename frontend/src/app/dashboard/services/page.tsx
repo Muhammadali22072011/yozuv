@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Clock, Plus, Trash2 } from "lucide-react";
+import { ScreenHeader, fmtSum, useToast } from "@/components/yz";
+import {
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetRoot,
+} from "@/components/yz/Sheet";
 import { apiFetch } from "@/lib/api";
 
 type Svc = {
@@ -14,15 +22,18 @@ type Svc = {
   order: number;
 };
 
+const SWATCHES = ["#C7CCFF", "#A3AAFF", "#FFC94A", "#FF9FB5", "#FF7A6B", "#22C8A8", "#7BC6FF", "#B8A6FF"];
+
 export default function ServicesPage() {
   const router = useRouter();
+  const toast = useToast();
   const [rows, setRows] = useState<Svc[]>([]);
-  const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", price: "", duration_minutes: "30" });
   const [err, setErr] = useState("");
-  const [loadErr, setLoadErr] = useState("");
 
   async function load() {
     setLoadErr("");
@@ -35,10 +46,10 @@ export default function ServicesPage() {
         return;
       }
       if (/401|not authenticated|invalid user/i.test(msg)) {
-        router.replace("/login");
+        router.replace("/auth/login");
         return;
       }
-      setLoadErr(msg || "Xizmatlarni yuklashda xatolik");
+      setLoadErr(msg || "Xatolik");
     } finally {
       setLoading(false);
     }
@@ -52,7 +63,7 @@ export default function ServicesPage() {
     e.preventDefault();
     setErr("");
     if (!form.name.trim()) {
-      setErr("Xizmat nomini kiriting");
+      setErr("Nom kiriting");
       return;
     }
     setSaving(true);
@@ -67,7 +78,8 @@ export default function ServicesPage() {
         }),
       });
       setForm({ name: "", price: "", duration_minutes: "30" });
-      setShowForm(false);
+      setFormOpen(false);
+      toast("Xizmat qo‘shildi");
       await load();
     } catch (e) {
       setErr((e as Error).message || "Xatolik");
@@ -81,102 +93,138 @@ export default function ServicesPage() {
     await load();
   }
 
+  async function toggle(id: string) {
+    await apiFetch(`/api/business/me/services/${id}/toggle`, { method: "PATCH" }).catch(() => {});
+    await load();
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-serif text-2xl">Xizmatlar</h2>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Yopish" : "+ Qo'shish"}
-        </Button>
-      </div>
+    <div>
+      <ScreenHeader
+        title="Xizmatlar"
+        subtitle={`${rows.length} ta xizmat`}
+        right={
+          <button
+            onClick={() => setFormOpen(true)}
+            className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-900 text-white tap"
+          >
+            <Plus className="h-5 w-5" strokeWidth={2.6} />
+          </button>
+        }
+      />
 
-      {showForm && (
-        <form onSubmit={addSvc} className="space-y-3 rounded-xl border border-ink/10 bg-white p-4">
-          <div>
-            <label className="block text-xs text-ink/60">Xizmat nomi</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Soch olish"
-              className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-            />
+      <div className="mt-3 flex flex-col gap-2.5 px-4 md:px-0">
+        {loadErr ? (
+          <div className="rounded-[22px] bg-[#FFE7E3] p-4 text-sm text-[#C93A2A]">{loadErr}</div>
+        ) : loading ? (
+          <div className="rounded-[22px] bg-white p-6 text-center text-sm text-ink-400 shadow-soft">
+            Yuklanmoqda…
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-ink/60">Narxi (so'm)</label>
-              <input
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                placeholder="50000"
-                className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-ink/60">Davomiyligi (daq)</label>
-              <input
-                type="number"
-                value={form.duration_minutes}
-                onChange={(e) => setForm({ ...form, duration_minutes: e.target.value })}
-                className="mt-1 w-full rounded-md border border-ink/10 p-2 text-sm"
-              />
-            </div>
+        ) : rows.length === 0 ? (
+          <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
+            Hali xizmat yo‘q — yuqoridan qo‘shing
           </div>
-          {err && <p className="text-sm text-red-600">{err}</p>}
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saqlanmoqda…" : "Saqlash"}
-          </Button>
-        </form>
-      )}
-
-      {loadErr ? (
-        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">
-          <div className="font-medium">Xatolik:</div>
-          <div className="mt-1 break-all">{loadErr}</div>
-          <Button size="sm" variant="outline" className="mt-3" onClick={() => load()}>
-            Qayta urinish
-          </Button>
-        </div>
-      ) : loading ? (
-        <div className="rounded-xl border border-ink/10 bg-white p-6 text-sm text-ink/60">
-          Yuklanmoqda…
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-ink/10 bg-white p-6 text-sm text-ink/60">
-          Hali xizmat qo'shilmagan. Yuqoridagi tugma orqali qo'shing.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between rounded-xl border border-ink/10 bg-white p-4"
-            >
-              <div>
-                <div className="font-medium">{s.name}</div>
-                <div className="text-xs text-ink/60">
-                  {s.price.toLocaleString("uz-UZ")} so'm · {s.duration_minutes} daq
+        ) : (
+          rows.map((s, i) => (
+            <div key={s.id} className="card-soft flex items-center gap-3.5 p-3.5">
+              <div
+                className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl"
+                style={{ background: SWATCHES[i % SWATCHES.length] }}
+              >
+                ✂️
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display text-[15px] font-bold text-ink-900">
+                  {s.name}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-ink-500">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-ink-400" />
+                    {s.duration_minutes} daq
+                  </span>
+                  <span>·</span>
+                  <button
+                    onClick={() => toggle(s.id)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      s.is_active ? "bg-[#E6FAF3] text-[#0E9577]" : "bg-ink-100 text-ink-500"
+                    }`}
+                  >
+                    {s.is_active ? "FAOL" : "O‘CHIQ"}
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    await apiFetch(`/api/business/me/services/${s.id}/toggle`, { method: "PATCH" });
-                    await load();
-                  }}
-                >
-                  {s.is_active ? "Faol" : "O'chiq"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => removeSvc(s.id)}>
-                  🗑
-                </Button>
+              <div className="text-right">
+                <div className="font-display text-[15px] font-extrabold text-ink-900">
+                  {fmtSum(s.price)}
+                </div>
+                <div className="text-[10px] font-semibold text-ink-400">so‘m</div>
               </div>
+              <button
+                onClick={() => removeSvc(s.id)}
+                className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
+                aria-label="O‘chirish"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
+
+      <SheetRoot open={formOpen} onOpenChange={setFormOpen}>
+        <SheetContent>
+          <SheetHeader title="Yangi xizmat" />
+          <form id="svc-form" onSubmit={addSvc}>
+            <SheetBody className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">Xizmat nomi</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Soch olish"
+                  className="yz-input mt-1"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">Narxi</label>
+                  <input
+                    type="number"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    placeholder="50000"
+                    className="yz-input mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">Daqiqa</label>
+                  <input
+                    type="number"
+                    value={form.duration_minutes}
+                    onChange={(e) =>
+                      setForm({ ...form, duration_minutes: e.target.value })
+                    }
+                    className="yz-input mt-1"
+                  />
+                </div>
+              </div>
+              {err && <p className="text-sm text-[#C93A2A]">{err}</p>}
+            </SheetBody>
+            <SheetFooter>
+              <button
+                type="button"
+                onClick={() => setFormOpen(false)}
+                className="flex-1 rounded-2xl bg-ink-100 px-4 py-4 font-display text-[15px] font-bold text-ink-900 tap"
+              >
+                Bekor
+              </button>
+              <button type="submit" disabled={saving} className="btn-primary flex-[2]">
+                {saving ? "Saqlanmoqda…" : "Saqlash"}
+              </button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </SheetRoot>
     </div>
   );
 }

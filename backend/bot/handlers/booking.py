@@ -12,7 +12,14 @@ from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
 from app.utils.slots import get_available_slots, next_working_dates
-from bot.keyboards.inline import confirm_kb, dates_kb, services_kb, times_kb
+from bot.keyboards.inline import (
+    back_to_menu_kb,
+    confirm_kb,
+    dates_kb,
+    services_kb,
+    times_kb,
+)
+from bot.utils import safe_edit_text
 
 logger = logging.getLogger("bot.booking")
 router = Router()
@@ -63,7 +70,15 @@ async def book_start(cb: CallbackQuery):
         for s in services:
             label = f"{s.name} — {s.price:,} so'm — {s.duration_minutes} daq".replace(",", " ")
             items.append((str(s.id), label))
-        await cb.message.edit_text("Xizmatni tanlang:", reply_markup=services_kb(slug, items))
+        if not items:
+            await safe_edit_text(
+                cb,
+                "Xizmatlar hali qo'shilmagan. Iltimos, biznes egasi bilan bog'laning.",
+                reply_markup=back_to_menu_kb(slug),
+            )
+            await cb.answer()
+            return
+        await safe_edit_text(cb, "Xizmatni tanlang:", reply_markup=services_kb(slug, items))
     finally:
         db.close()
     await cb.answer()
@@ -80,8 +95,14 @@ async def pick_service(cb: CallbackQuery):
             await cb.answer("Topilmadi", show_alert=True)
             return
         days = next_working_dates(db, b.id, 7)
+        if not days:
+            await cb.answer(
+                "Bu biznes hali ish vaqtini sozlamagan. Iltimos, keyinroq urinib ko'ring yoki biznes egasiga murojaat qiling.",
+                show_alert=True,
+            )
+            return
         items = [(d.isoformat(), _format_uz_date(d)) for d in days]
-        await cb.message.edit_text("Sanani tanlang:", reply_markup=dates_kb(b.slug, sid, items))
+        await safe_edit_text(cb, "Sanani tanlang:", reply_markup=dates_kb(b.slug, sid, items))
     finally:
         db.close()
     await cb.answer()
@@ -103,7 +124,7 @@ async def pick_day(cb: CallbackQuery):
         if not times:
             await cb.answer("Bo'sh vaqt yo'q", show_alert=True)
             return
-        await cb.message.edit_text("Vaqtni tanlang:", reply_markup=times_kb(b.slug, sid, d_iso, times))
+        await safe_edit_text(cb, "Vaqtni tanlang:", reply_markup=times_kb(b.slug, sid, d_iso, times))
     finally:
         db.close()
     await cb.answer()
@@ -128,7 +149,7 @@ async def pick_time(cb: CallbackQuery):
             f"📅 {_format_uz_date(d)}, {t_str}\n"
             f"💰 {service.price:,} so'm".replace(",", " ")
         )
-        await cb.message.edit_text(text, reply_markup=confirm_kb(b.slug, sid, d_iso, t_str))
+        await safe_edit_text(cb, text, reply_markup=confirm_kb(b.slug, sid, d_iso, t_str))
     finally:
         db.close()
     await cb.answer()
@@ -174,6 +195,7 @@ async def confirm_booking(cb: CallbackQuery):
                 "service_name": service.name,
                 "service_price": int(service.price),
                 "business_name": b.name,
+                "business_slug": b.slug,
                 "status": str(booking.status),
                 "owner_telegram_id": owner_tg,
             }
@@ -209,12 +231,16 @@ async def confirm_booking(cb: CallbackQuery):
         if is_confirmed
         else "⏳ So'rov yuborildi — biznes egasi tasdiqlashini kuting."
     )
-    await cb.message.edit_text(
-        f"{status_line}\n\n"
-        f"📋 {info['service_name']}\n"
-        f"📅 {_format_uz_date(d)} soat {t_str} da\n"
-        f"📍 {info['business_name']}\n\n"
-        "🔔 1 soat oldin eslatma yuboramiz"
+    await safe_edit_text(
+        cb,
+        (
+            f"{status_line}\n\n"
+            f"📋 {info['service_name']}\n"
+            f"📅 {_format_uz_date(d)} soat {t_str} da\n"
+            f"📍 {info['business_name']}\n\n"
+            "🔔 1 soat oldin eslatma yuboramiz"
+        ),
+        reply_markup=back_to_menu_kb(info["business_slug"]),
     )
     try:
         await cb.answer("✅ Yozildingiz")

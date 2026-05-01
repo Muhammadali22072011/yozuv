@@ -1,175 +1,373 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CalendarDays, QrCode, Scissors, Settings } from "lucide-react";
-import { BookingsList, type ClientLite, type ServiceLite } from "@/components/dashboard/BookingsList";
-import { StatsCards } from "@/components/dashboard/StatsCards";
+import {
+  Bell,
+  Copy,
+  Phone,
+  QrCode,
+  Scissors,
+  Share2,
+  Star,
+  Tag,
+  TrendingUp,
+} from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import type { BookingRow, BusinessMe } from "@/types";
+import {
+  BookingCard,
+  BookingSheet,
+  HeroGradient,
+  SectionLabel,
+  YzLoader,
+  YzLogo,
+  fmtShort,
+  fmtSum,
+  hm,
+  longDate,
+  todayISO,
+  useToast,
+} from "@/components/yz";
+import type { ClientLite, ServiceLite } from "@/components/yz";
+import { StatusBadge } from "@/components/yz/StatusBadge";
 
 type Sub = { plan: string; status: string; expires_at: string | null };
 
 export default function DashboardHome() {
   const router = useRouter();
+  const toast = useToast();
   const [ready, setReady] = useState(false);
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [sub, setSub] = useState<Sub | null>(null);
-  const [summary, setSummary] = useState({ bookings: 0, revenue: 0, clients: 0 });
+  const [me, setMe] = useState<{ first_name: string; last_name: string } | null>(null);
+  const [summary, setSummary] = useState({ bookings: 0, revenue: 0, clients: 0, weekRevenue: 0 });
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [services, setServices] = useState<ServiceLite[]>([]);
   const [clients, setClients] = useState<ClientLite[]>([]);
+  const [promoCount, setPromoCount] = useState(0);
+  const [reviewsCount, setReviewsCount] = useState(0);
   const [svcCount, setSvcCount] = useState(0);
-  const [schedCount, setSchedCount] = useState(0);
+  const [activeBooking, setActiveBooking] = useState<BookingRow | null>(null);
+
+  type DashboardBundle = {
+    business: BusinessMe;
+    user: { first_name: string; last_name: string };
+    summary: {
+      today: { bookings_count: number; revenue: number };
+      week: { revenue: number; clients_count: number };
+    };
+    bookings_today: BookingRow[];
+    services: ServiceLite[];
+    clients: ClientLite[];
+    counts: { active_promo: number; reviews: number; services: number };
+    subscription: Sub | null;
+  };
 
   async function load() {
-    const s = await apiFetch<{ bookings_count: number; revenue: number; clients_count: number }>(
-      "/api/business/me/analytics/summary?period=week"
-    );
-    setSummary({ bookings: s.bookings_count, revenue: s.revenue, clients: s.clients_count });
-    const today = new Date().toISOString().slice(0, 10);
-    const b = await apiFetch<BookingRow[]>(`/api/business/me/bookings?booking_date=${today}`);
-    setBookings(b);
-    const svc = await apiFetch<ServiceLite[]>("/api/business/me/services").catch(() => []);
-    setServices(svc);
-    setSvcCount(svc.length);
-    const cli = await apiFetch<ClientLite[]>("/api/business/me/clients").catch(() => []);
-    setClients(cli);
-    const sch = await apiFetch<{ is_working: boolean }[]>("/api/business/me/schedule").catch(() => []);
-    setSchedCount(sch.filter((x) => x.is_working).length);
-    const subNow = await apiFetch<Sub>("/api/subscription").catch(() => null);
-    setSub(subNow);
+    const data = await apiFetch<DashboardBundle>("/api/business/me/dashboard");
+    setBiz(data.business);
+    setMe(data.user);
+    setSummary({
+      bookings: data.summary.today.bookings_count,
+      revenue: data.summary.today.revenue,
+      weekRevenue: data.summary.week.revenue,
+      clients: data.summary.week.clients_count,
+    });
+    setBookings(data.bookings_today);
+    setServices(data.services);
+    setSvcCount(data.counts.services);
+    setClients(data.clients);
+    setPromoCount(data.counts.active_promo);
+    setReviewsCount(data.counts.reviews);
+    setSub(data.subscription);
   }
 
   useEffect(() => {
-    apiFetch<BusinessMe>("/api/business/me")
-      .then((b) => {
-        setBiz(b);
-        setReady(true);
-        load().catch(() => {});
-      })
+    const onChanged = () => load().catch(() => {});
+    window.addEventListener("yz:bookings-changed", onChanged);
+    load()
+      .then(() => setReady(true))
       .catch(() => router.replace("/dashboard/onboarding"));
+    return () => window.removeEventListener("yz:bookings-changed", onChanged);
   }, [router]);
 
-  if (!ready) return <p className="text-sm text-ink/60">Yuklanmoqda…</p>;
+  if (!ready || !biz) {
+    return <YzLoader fullscreen />;
+  }
 
-  const setupDone = svcCount > 0 && schedCount > 0;
-  const trialDaysLeft = sub?.expires_at
-    ? Math.max(
-        0,
-        Math.ceil(
-          (new Date(sub.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-        )
-      )
-    : null;
+  const ownerFirst = (me?.first_name || biz.name.split(" ")[0] || "").trim() || "Yozuv";
+  const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
+  const botLink = `t.me/${botUsername}?start=${biz.slug}`;
+  const plan = sub?.plan || "FREE";
+  const next = bookings.find((b) => b.status !== "CANCELLED") || bookings[0];
 
   return (
-    <div className="space-y-6">
+    <div className="-mx-4 md:-mx-0">
       {/* Hero */}
-      <div className="card p-5">
-        <div className="text-xs uppercase tracking-wide text-ink/50">Biznesingiz</div>
-        <h1 className="mt-1 text-2xl font-semibold">{biz?.name}</h1>
-        <p className="mt-2 text-xs text-ink/60">
-          Mijozlar havolasi:{" "}
-          <span className="font-mono text-ink">t.me/Yozuv_cl_bot?start={biz?.slug}</span>
-        </p>
-        {sub && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-cream px-3 py-1 text-xs">
-            {sub.plan === "TRIAL" ? `🎁 Trial: ${trialDaysLeft} kun qoldi` : `✅ ${sub.plan}`}
+      <HeroGradient>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <YzLogo size={34} variant="light" />
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/70">
+                YOZUV · {plan}
+              </div>
+              <div className="font-display text-[17px] font-bold tracking-tight text-white">
+                {biz.name}
+              </div>
+            </div>
           </div>
-        )}
+          <button
+            onClick={() => toast("Bildirishnomalar tez orada")}
+            className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+          >
+            <Bell className="h-5 w-5 text-white" strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="mt-7">
+          <div className="text-sm font-medium text-white/70">Assalomu alaykum,</div>
+          <div className="mt-0.5 font-display text-[28px] font-extrabold tracking-tight text-white">
+            {ownerFirst} 👋
+          </div>
+          <div className="mt-1.5 text-sm font-medium text-white/85">{longDate(new Date())}</div>
+        </div>
+      </HeroGradient>
+
+      {/* Stats card pulled up */}
+      <div className="relative -mt-16 px-4 md:px-0">
+        <div className="rounded-3xl bg-white p-5 shadow-soft-lg">
+          <div className="grid grid-cols-3 gap-0 divide-x divide-ink-200">
+            <StatBox label="Bugun" value={summary.bookings} sub="yozilish" color="#4853F5" />
+            <StatBox
+              label="Daromad"
+              value={fmtShort(summary.revenue)}
+              sub="so‘m"
+              color="#22C8A8"
+              trend={summary.weekRevenue > 0 ? `+${Math.round((summary.revenue / summary.weekRevenue) * 100)}%` : undefined}
+            />
+            <StatBox
+              label="Mijozlar"
+              value={summary.clients}
+              sub="hafta"
+              color="#FFC94A"
+            />
+          </div>
+        </div>
       </div>
 
-      {!setupDone && (
-        <div className="card p-4">
-          <div className="text-lg font-semibold">Birinchi qadamlar</div>
-          <p className="mt-1 text-sm text-ink/70">
-            Mijozlar yozila olishi uchun xizmatlar va jadvalni sozlang.
-          </p>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            <Link
-              href="/dashboard/services"
-              className="flex items-center justify-between rounded-xl bg-cream p-3 text-sm hover:bg-cream/70"
+      {/* Next booking */}
+      {next && (
+        <div className="mt-6 px-4 md:px-0">
+          <SectionLabel title="Keyingi yozilish" action="Jadval" href="/dashboard/bookings" />
+          <button
+            onClick={() => setActiveBooking(next)}
+            className="mt-2.5 flex w-full items-center gap-3.5 rounded-[22px] border-[1.5px] border-indigo-100 bg-white p-4 shadow-soft tap"
+          >
+            <div
+              className="min-w-[64px] rounded-2xl px-3 py-2.5 text-center"
+              style={{ background: "linear-gradient(135deg,#EEF0FF,#E0E4FF)" }}
             >
-              <span className="flex items-center gap-2">
-                <Scissors className="h-4 w-4" />
-                {svcCount > 0 ? `${svcCount} ta xizmat` : "Xizmat qo'shish"}
-              </span>
-              <ArrowRight className="h-4 w-4 text-ink/40" />
-            </Link>
-            <Link
-              href="/dashboard/schedule"
-              className="flex items-center justify-between rounded-xl bg-cream p-3 text-sm hover:bg-cream/70"
+              <div className="font-display text-[22px] font-extrabold tracking-tight text-indigo-700">
+                {hm(next.start_time)}
+              </div>
+              <div className="-mt-0.5 text-[11px] font-semibold text-ink-500">
+                {(parseInt(next.end_time) - parseInt(next.start_time)) * 60 +
+                  (parseInt(next.end_time.slice(3, 5)) - parseInt(next.start_time.slice(3, 5)))}{" "}
+                daq
+              </div>
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate font-display text-[15px] font-bold tracking-tight text-ink-900">
+                {clientName(next, clients)}
+              </div>
+              <div className="truncate text-[13px] text-ink-500">
+                {services.find((s) => s.id === next.service_id)?.name || "Xizmat"}
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <StatusBadge status={next.status} compact />
+                <span className="text-xs font-bold text-ink-900">
+                  {fmtSum(next.payment_amount)} so‘m
+                </span>
+              </div>
+            </div>
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                const phone = clients.find((c) => c.id === next.client_id)?.phone;
+                if (phone) window.location.href = `tel:${phone}`;
+              }}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50"
             >
-              <span className="flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
-                {schedCount > 0 ? `${schedCount} ish kuni` : "Jadvalni sozlash"}
-              </span>
-              <ArrowRight className="h-4 w-4 text-ink/40" />
-            </Link>
-          </div>
+              <Phone className="h-4.5 w-4.5 text-indigo-600" />
+            </span>
+          </button>
         </div>
       )}
 
-      <StatsCards bookings={summary.bookings} revenue={summary.revenue} clients={summary.clients} />
-
-      <div className="card p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Bugungi yozilishlar</h3>
-          <Link href="/dashboard/bookings" className="text-xs text-brand hover:underline">
-            Barchasini ko&apos;rish
-          </Link>
-        </div>
-        <div className="mt-4">
-          <BookingsList
-            rows={bookings}
-            services={services}
-            clients={clients}
-            onChanged={load}
-            emptyMessage="Bugun hali yozilish yo'q."
+      {/* Quick actions */}
+      <div className="mt-6 px-4 md:px-0">
+        <SectionLabel title="Tezkor amallar" />
+        <div className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+          <QuickTile
+            href="/dashboard/qr"
+            label="QR kod"
+            sub="Broshyura va havola"
+            bg="#FFF3DA"
+            icon={<QrCode className="h-5 w-5 text-warn" />}
+          />
+          <QuickTile
+            href="/dashboard/promo"
+            label="Promo-kodlar"
+            sub={`${promoCount} ta faol`}
+            bg="#E6FAF3"
+            icon={<Tag className="h-5 w-5 text-success" />}
+          />
+          <QuickTile
+            href="/dashboard/services"
+            label="Xizmatlar"
+            sub={`${svcCount} ta`}
+            bg="#EEF0FF"
+            icon={<Scissors className="h-5 w-5 text-indigo-600" />}
+          />
+          <QuickTile
+            href="/dashboard/reviews"
+            label="Baholar"
+            sub={`${reviewsCount} ta sharh`}
+            bg="#FFE7E3"
+            icon={<Star className="h-5 w-5 text-coral" />}
           />
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Link
-          href="/dashboard/qr"
-          className="card flex items-center gap-3 p-4 hover:bg-cream"
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-cream text-ink">
-            <QrCode className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-medium">QR / Broshyura</div>
-            <div className="text-xs text-ink/60">Chop eting va osib qo&apos;ying</div>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/profile"
-          className="card flex items-center gap-3 p-4 hover:bg-cream"
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-cream text-ink">
-            <Settings className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-medium">Profil</div>
-            <div className="text-xs text-ink/60">Logotip, matnlar, rejim</div>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/settings"
-          className="card flex items-center gap-3 p-4 hover:bg-cream"
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-cream text-ink">
-            💳
-          </div>
-          <div>
-            <div className="text-sm font-medium">To&apos;lov</div>
-            <div className="text-xs text-ink/60">Obunani uzaytirish</div>
-          </div>
-        </Link>
+      {/* Today timeline */}
+      <div className="mt-6 px-4 md:px-0">
+        <SectionLabel title="Bugungi kun" action="Barchasi" href="/dashboard/bookings" />
+        <div className="mt-2.5 flex flex-col gap-2">
+          {bookings.length === 0 ? (
+            <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
+              Bugun hali yozilish yo‘q
+            </div>
+          ) : (
+            bookings
+              .slice(0, 4)
+              .map((b) => (
+                <BookingCard
+                  key={b.id}
+                  b={b}
+                  services={services}
+                  clients={clients}
+                  onClick={() => setActiveBooking(b)}
+                />
+              ))
+          )}
+        </div>
       </div>
+
+      {/* Bot link */}
+      <div className="mt-6 px-4 md:px-0">
+        <button
+          onClick={() => {
+            navigator.clipboard?.writeText(`https://${botLink}`);
+            toast("Havola nusxalandi");
+          }}
+          className="relative flex w-full items-center gap-3.5 overflow-hidden rounded-[22px] p-4 text-left tap"
+          style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
+        >
+          <div className="pointer-events-none absolute -right-5 -top-5 h-32 w-32 rounded-full bg-indigo-500/30 blur-2xl" />
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/14 backdrop-blur">
+            <Share2 className="h-5 w-5 text-white" />
+          </div>
+          <div className="relative min-w-0 flex-1">
+            <div className="font-display text-[15px] font-bold tracking-tight text-white">
+              Mijozlar havolangiz
+            </div>
+            <div className="mt-0.5 truncate font-mono text-xs text-white/70">{botLink}</div>
+          </div>
+          <div className="relative flex items-center gap-1.5 rounded-xl bg-white/14 px-3 py-2 text-xs font-bold text-white">
+            <Copy className="h-3.5 w-3.5" /> Nusxa
+          </div>
+        </button>
+      </div>
+
+      <BookingSheet
+        open={!!activeBooking}
+        onOpenChange={(v) => !v && setActiveBooking(null)}
+        booking={activeBooking}
+        services={services}
+        clients={clients}
+        onChanged={load}
+      />
     </div>
   );
 }
+
+function clientName(b: BookingRow, clients: ClientLite[]) {
+  const c = clients.find((x) => x.id === b.client_id);
+  return c ? `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Mijoz" : "Mijoz";
+}
+
+function StatBox({
+  label,
+  value,
+  sub,
+  color,
+  trend,
+}: {
+  label: string;
+  value: string | number;
+  sub: string;
+  color: string;
+  trend?: string;
+}) {
+  return (
+    <div className="px-2 text-center first:pl-0 last:pr-0">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-400">{label}</div>
+      <div
+        className="mt-1 font-display text-2xl font-extrabold tracking-tight"
+        style={{ color }}
+      >
+        {value}
+      </div>
+      <div className="-mt-0.5 text-[11px] font-semibold text-ink-500">{sub}</div>
+      {trend && (
+        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-bold text-success">
+          <TrendingUp className="h-3 w-3" strokeWidth={2.4} />
+          {trend}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuickTile({
+  href,
+  label,
+  sub,
+  bg,
+  icon,
+}: {
+  href: string;
+  label: string;
+  sub: string;
+  bg: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Link href={href} className="card-soft flex flex-col gap-2.5 p-3.5 tap">
+      <div
+        className="grid h-10 w-10 place-items-center rounded-xl"
+        style={{ background: bg }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div className="font-display text-sm font-bold tracking-tight text-ink-900">{label}</div>
+        <div className="mt-0.5 text-xs text-ink-400">{sub}</div>
+      </div>
+    </Link>
+  );
+}
+

@@ -6,26 +6,41 @@
 <title>Yozuv — Broshyura</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#FAFAF7;
-    --ink:#080808;
-    --blue:#005AFF;
-    --cream:#F2EFE8;
-    --gray:#6B6B6B;
-    --serif:'Instrument Serif', Georgia, serif;
-    --sans:'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --ink-900:#0B0F1F;
+    --ink-700:#2A2F45;
+    --ink-500:#5A6078;
+    --ink-400:#848AA2;
+    --ink-200:#E3E5EC;
+    --ink-100:#F2F3F7;
+    --ink-50:#F8F9FC;
+    --indigo-50:#EEF0FF;
+    --indigo-100:#E0E4FF;
+    --indigo-500:#5B6BFF;
+    --indigo-600:#4853F5;
+    --indigo-700:#3640D4;
+    --indigo-900:#1E2270;
+    --mint:#22C8A8;
+    --lemon:#FFC94A;
+    --coral:#FF7A6B;
+    --success:#0E9577;
+    --success-bg:#E6FAF3;
+    --warn:#A8751A;
+    --warn-bg:#FFF3DA;
+    --danger:#C93A2A;
+    --danger-bg:#FFE7E3;
+    --display:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
 
-  *{box-sizing:border-box;margin:0;padding:0}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 
   html,body{
     background:#e5e5e5;
-    font-family:var(--sans);
-    color:var(--ink);
-    -webkit-font-smoothing:antialiased;
-    -moz-osx-font-smoothing:grayscale;
+    font-family:var(--display);
+    color:var(--ink-900);
+    font-feature-settings:"ss01","cv11";
   }
 
   body{
@@ -36,40 +51,34 @@
     gap:28px;
   }
 
-  .controls{
-    display:flex;
-    gap:12px;
-    align-items:center;
-    margin-bottom:4px;
-  }
-
+  .controls{display:flex;gap:12px;align-items:center;margin-bottom:4px}
   .btn{
-    background:var(--ink);
+    background:var(--indigo-600);
     color:#fff;
     padding:12px 22px;
     border:none;
-    border-radius:10px;
-    font-family:var(--sans);
+    border-radius:14px;
+    font-family:var(--display);
     font-size:14px;
-    font-weight:500;
+    font-weight:700;
     cursor:pointer;
-    letter-spacing:0.01em;
+    letter-spacing:-0.01em;
+    box-shadow:0 8px 24px rgba(72,83,245,0.35);
   }
-  .btn:hover{opacity:0.88}
-
+  .btn:hover{transform:translateY(-1px)}
   .btn-light{
     background:#fff;
-    color:var(--ink);
-    border:1px solid rgba(0,0,0,0.12);
+    color:var(--ink-900);
+    border:1px solid var(--ink-200);
+    box-shadow:none;
   }
-
   .label{
     font-size:10px;
-    letter-spacing:0.14em;
+    letter-spacing:0.18em;
     text-transform:uppercase;
-    color:var(--gray);
+    color:var(--indigo-600);
     margin-bottom:6px;
-    font-weight:500;
+    font-weight:800;
   }
 
   .sheet{
@@ -78,19 +87,18 @@
     background:#fff;
     display:grid;
     grid-template-columns:repeat(3,99mm);
-    box-shadow:0 20px 60px rgba(0,0,0,0.14);
+    box-shadow:0 30px 80px -10px rgba(11,15,31,0.25);
     position:relative;
     overflow:hidden;
   }
 
   /* fold lines — экран only */
-  .sheet::before,
-  .sheet::after{
+  .sheet::before,.sheet::after{
     content:'';
     position:absolute;
     top:0;bottom:0;
     width:0;
-    border-left:1px dashed rgba(0,0,0,0.22);
+    border-left:1px dashed rgba(11,15,31,0.18);
     z-index:50;
     pointer-events:none;
   }
@@ -100,369 +108,486 @@
   .panel{
     width:99mm;
     height:210mm;
-    padding:12mm;
+    padding:11mm;
     overflow:hidden;
     position:relative;
     display:flex;
     flex-direction:column;
   }
-
-  .p-dark{background:#080808;color:#fff}
-  .p-light{background:#FAFAF7;color:var(--ink)}
-  .p-blue{background:#005AFF;color:#fff}
-  .p-cream{background:#F2EFE8;color:var(--ink)}
-
-  /* ───────── logo ───────── */
-  .logo{
-    display:flex;align-items:center;gap:8px;
-  }
-  .logo-icon{
-    width:30px;height:30px;
-    background:var(--blue);
-    border-radius:7px;
-    display:flex;align-items:center;justify-content:center;
-    flex-shrink:0;
-  }
-  .logo-icon svg{width:18px;height:18px;display:block}
-  .logo-name{
-    font-family:var(--serif);
-    font-size:26px;
-    line-height:1;
-    letter-spacing:-0.01em;
-  }
-  .logo-sm .logo-icon{width:22px;height:22px;border-radius:5px}
-  .logo-sm .logo-icon svg{width:13px;height:13px}
-  .logo-sm .logo-name{font-size:18px}
-
-  /* ───────── PANEL 1 — cover front ───────── */
-  .cover{
-    justify-content:space-between;
-    background:
-      radial-gradient(ellipse at 50% 15%, rgba(0,90,255,0.14), transparent 60%),
-      #080808;
-  }
-  .cover .logo-name{color:#fff}
-  .cover-hero{
-    margin-top:14mm;
-    text-align:center;
-  }
-  .cover-hero h1{
-    font-family:var(--serif);
-    font-style:italic;
-    font-size:28px;
-    line-height:1.12;
+  .p-light{background:var(--ink-50)}
+  .p-white{background:#fff}
+  .p-hero{
+    background:linear-gradient(160deg,#5B6BFF 0%,#4853F5 55%,#3640D4 100%);
     color:#fff;
-    font-weight:400;
-    letter-spacing:-0.01em;
+  }
+  .p-dark{
+    background:linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%);
+    color:#fff;
+  }
+  .p-indigo{
+    background:linear-gradient(160deg,#5B6BFF 0%,#4853F5 55%,#3640D4 100%);
+    color:#fff;
+  }
+
+  /* decorative blobs (matching landing Hero) */
+  .blob{position:absolute;border-radius:50%;pointer-events:none}
+  .blob-w{background:rgba(255,255,255,0.10)}
+  .blob-lemon{background:rgba(255,201,74,0.22);filter:blur(3px)}
+  .blob-lilac{background:rgba(184,166,255,0.22)}
+  .blob-indigo-soft{background:rgba(255,255,255,0.10);filter:blur(20px)}
+
+  /* ───────── logo (matches YzLogo) ───────── */
+  .logo{display:flex;align-items:center;gap:9px;position:relative;z-index:1}
+  .y-mark{
+    width:32px;height:32px;
+    border-radius:9px;
+    background:linear-gradient(135deg,#5B6BFF,#3640D4);
+    color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--display);
+    font-weight:800;
+    font-size:17px;
+    box-shadow:0 4px 12px rgba(72,83,245,0.4);
+    flex-shrink:0;
+    letter-spacing:-0.02em;
+  }
+  .y-mark.dark{background:var(--ink-900);box-shadow:none}
+  .y-mark.white{background:#fff;color:var(--indigo-600);box-shadow:0 4px 12px rgba(11,15,31,0.18)}
+  .y-mark.sm{width:24px;height:24px;border-radius:7px;font-size:13px}
+  .logo-meta .kicker{
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--ink-400);
+    line-height:1;
+  }
+  .logo-meta .name{
+    margin-top:2px;
+    font-family:var(--display);
+    font-weight:800;
+    font-size:15px;
+    line-height:1;
+    letter-spacing:-0.02em;
+    color:var(--ink-900);
+  }
+  .p-hero .logo-meta .kicker,.p-indigo .logo-meta .kicker,.p-dark .logo-meta .kicker{color:rgba(255,255,255,0.65)}
+  .p-hero .logo-meta .name,.p-indigo .logo-meta .name,.p-dark .logo-meta .name{color:#fff}
+
+  /* ───────── kicker label (eyebrow) ───────── */
+  .kicker-lab{
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--indigo-600);
+  }
+  .p-hero .kicker-lab,.p-indigo .kicker-lab,.p-dark .kicker-lab{color:rgba(255,255,255,0.7)}
+
+  /* ───────── headlines ───────── */
+  .h-display{
+    font-family:var(--display);
+    font-weight:800;
+    letter-spacing:-0.03em;
+    line-height:1.05;
+  }
+  .h-section{
+    font-family:var(--display);
+    font-weight:800;
+    letter-spacing:-0.025em;
+    line-height:1.08;
+    color:var(--ink-900);
+  }
+  .sub{
+    font-size:11px;
+    color:var(--ink-500);
+    font-weight:500;
+    line-height:1.45;
+    margin-top:2.5mm;
+  }
+  .p-hero .sub,.p-indigo .sub,.p-dark .sub{color:rgba(255,255,255,0.78)}
+
+  /* ───────── PANEL 1 — COVER (hero, outside right of front) ───────── */
+  .cover{justify-content:space-between;position:relative;overflow:hidden}
+  .cover .blob-1{width:80mm;height:80mm;right:-30mm;top:-20mm}
+  .cover .blob-2{width:35mm;height:35mm;right:30mm;top:25mm;background:rgba(255,201,74,0.30);filter:blur(2px)}
+  .cover .blob-3{width:55mm;height:55mm;left:-20mm;bottom:25mm;background:rgba(184,166,255,0.25)}
+
+  .cover-hero{margin-top:9mm;position:relative;z-index:1}
+  .cover-hero h1{
+    font-size:30px;
+    line-height:1.05;
+    color:#fff;
+    letter-spacing:-0.035em;
+    font-weight:800;
   }
   .cover-hero p{
-    margin-top:6px;
-    font-size:11px;
-    color:rgba(255,255,255,0.48);
-    letter-spacing:0.02em;
+    margin-top:4mm;
+    font-size:11.5px;
+    color:rgba(255,255,255,0.85);
+    line-height:1.5;
+    font-weight:500;
+    max-width:62mm;
   }
 
   .qr-card{
+    margin-top:7mm;
     background:#fff;
-    border-radius:10px;
+    border-radius:18px;
     padding:6mm 6mm 5mm;
-    box-shadow:0 12px 40px rgba(0,0,0,0.35);
+    box-shadow:0 20px 50px -10px rgba(11,15,31,0.4);
     display:flex;
     flex-direction:column;
     align-items:center;
-    gap:5mm;
+    gap:4mm;
+    position:relative;
+    z-index:1;
   }
-  .qr-card .qr{
-    width:56mm;
-    height:56mm;
-    display:block;
-  }
+  .qr-card .qr{width:54mm;height:54mm;display:block}
   .qr-card .qr svg{width:100%;height:100%;display:block}
-  .qr-cap{
-    text-align:center;
-  }
+  .qr-cap{text-align:center}
   .qr-cap .t1{
     font-size:11px;
-    color:var(--ink);
-    font-weight:500;
+    color:var(--ink-900);
+    font-weight:700;
+    letter-spacing:-0.01em;
   }
   .qr-cap .t2{
-    margin-top:2px;
+    margin-top:1.5mm;
     font-size:10px;
-    color:var(--gray);
+    color:var(--ink-500);
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-    letter-spacing:0.01em;
+    letter-spacing:0;
   }
 
   .cover-banner{
-    margin:0 -12mm -12mm;
-    padding:5mm 12mm;
-    background:var(--blue);
+    margin:0 -11mm -11mm;
+    padding:5mm 11mm;
+    background:rgba(255,255,255,0.14);
+    backdrop-filter:blur(6px);
     color:#fff;
     font-size:11px;
-    font-weight:500;
+    font-weight:700;
     text-align:center;
-    letter-spacing:0.02em;
+    letter-spacing:-0.005em;
+    border-top:1px solid rgba(255,255,255,0.12);
+    position:relative;
+    z-index:1;
   }
+  .cover-banner .lemon{color:var(--lemon)}
 
-  /* ───────── PANEL 2 — how it works ───────── */
-  .section-h{
-    font-family:var(--serif);
-    font-size:22px;
-    line-height:1.1;
-    letter-spacing:-0.01em;
-    font-weight:400;
-  }
-  .section-sub{
-    font-size:11px;
-    color:var(--gray);
-    margin-top:2mm;
-  }
-
+  /* ───────── PANEL 2 — how it works (light) ───────── */
   .steps{
     margin-top:7mm;
     display:flex;
     flex-direction:column;
-    gap:5mm;
+    gap:4.5mm;
   }
   .step{
-    padding-top:4mm;
-    border-top:1px solid rgba(0,0,0,0.1);
+    background:#fff;
+    border-radius:14px;
+    padding:4mm 4.5mm;
+    display:flex;
+    gap:4mm;
+    align-items:flex-start;
+    box-shadow:0 1px 0 rgba(11,15,31,0.04),0 6px 16px -8px rgba(11,15,31,0.08);
   }
-  .step:first-child{border-top:none;padding-top:0}
   .step-num{
-    font-family:var(--sans);
-    font-size:11px;
-    font-weight:600;
-    color:var(--blue);
-    letter-spacing:0.08em;
-    margin-bottom:2mm;
+    flex-shrink:0;
+    width:9mm;height:9mm;
+    border-radius:9px;
+    background:linear-gradient(135deg,#EEF0FF,#E0E4FF);
+    color:var(--indigo-700);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;
+    font-size:13px;
+    letter-spacing:-0.02em;
   }
-  .step-row{
-    display:flex;gap:7px;align-items:baseline;
-  }
-  .step-ico{
-    font-size:14px;line-height:1;flex-shrink:0;
-  }
+  .step-body{flex:1;min-width:0}
   .step-h{
-    font-family:var(--serif);
-    font-size:15px;
-    line-height:1.2;
-    font-weight:400;
+    font-size:13px;
+    font-weight:800;
+    color:var(--ink-900);
+    letter-spacing:-0.015em;
+    line-height:1.15;
   }
   .step-p{
-    margin-top:2mm;
-    font-size:11px;
-    color:var(--gray);
-    line-height:1.45;
-  }
-
-  /* ───────── PANEL 3 — features (blue) ───────── */
-  .feat-h{
-    font-family:var(--serif);
-    font-style:italic;
-    font-size:22px;
-    color:#fff;
-    font-weight:400;
-    line-height:1.1;
-  }
-  .feat-sub{
-    margin-top:1.5mm;
-    font-size:11px;
-    color:rgba(255,255,255,0.6);
-  }
-  .feats{
-    margin-top:6mm;
-    display:flex;
-    flex-direction:column;
-    gap:3mm;
-  }
-  .feat{
-    background:#fff;
-    border-radius:8px;
-    padding:4mm 4.5mm;
-  }
-  .feat-head{
-    display:flex;align-items:center;gap:7px;
-  }
-  .feat-ico{font-size:14px;line-height:1}
-  .feat-name{
-    font-size:12px;
-    font-weight:600;
-    color:var(--ink);
-    letter-spacing:-0.005em;
-  }
-  .feat-desc{
     margin-top:1.5mm;
     font-size:10.5px;
-    color:var(--gray);
+    color:var(--ink-500);
     line-height:1.4;
+    font-weight:500;
   }
 
-  /* ───────── PANEL 4 — back cover (cream) ───────── */
-  .price-block{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    align-items:center;
-    text-align:center;
-    padding:6mm 0;
-  }
-  .price{
-    font-family:var(--serif);
-    font-size:56px;
-    line-height:1;
-    letter-spacing:-0.02em;
-    color:var(--ink);
-    font-weight:400;
-  }
-  .price .per{
-    font-size:22px;
-    color:var(--gray);
-    font-style:italic;
-  }
-  .price-sub{
-    margin-top:3mm;
-    font-size:13px;
-    color:var(--gray);
-  }
-  .price-list{
+  /* ───────── PANEL 3 — features (white cards on light) ───────── */
+  .feats{
     margin-top:7mm;
     display:flex;
     flex-direction:column;
-    gap:2.5mm;
-    width:100%;
-    text-align:left;
-    padding:0 2mm;
+    gap:3mm;
+    flex:1;
   }
-  .pl-item{
-    display:flex;align-items:center;gap:7px;
-    font-size:11.5px;
-    color:var(--ink);
+  .feat{
+    background:#fff;
+    border-radius:14px;
+    padding:3.5mm 4mm;
+    display:flex;
+    align-items:center;
+    gap:4mm;
+    box-shadow:0 1px 0 rgba(11,15,31,0.04),0 4px 12px -6px rgba(11,15,31,0.08);
   }
-  .pl-check{
-    width:14px;height:14px;
-    border-radius:50%;
-    background:var(--blue);
-    display:inline-flex;align-items:center;justify-content:center;
+  .feat-ico{
     flex-shrink:0;
+    width:9mm;height:9mm;
+    border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;
   }
-  .pl-check svg{width:8px;height:8px}
+  .ic-indigo{background:var(--indigo-50);color:var(--indigo-600)}
+  .ic-mint{background:var(--success-bg);color:var(--success)}
+  .ic-lemon{background:var(--warn-bg);color:var(--warn)}
+  .ic-coral{background:var(--danger-bg);color:var(--danger)}
+  .ic-lilac{background:#F0EBFF;color:#6B4FE0}
+  .ic-sky{background:#E5F4FF;color:#2A7DC2}
+  .feat-body{flex:1;min-width:0}
+  .feat-name{
+    font-size:12px;
+    font-weight:800;
+    color:var(--ink-900);
+    letter-spacing:-0.015em;
+    line-height:1.1;
+  }
+  .feat-desc{
+    margin-top:1.2mm;
+    font-size:10px;
+    color:var(--ink-500);
+    line-height:1.4;
+    font-weight:500;
+  }
 
-  .cta-wrap{
+  /* ───────── PANEL 4 — pricing hero (back outside-left) ───────── */
+  .price-hero{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .price-hero .blob-a{width:80mm;height:80mm;right:-30mm;top:-30mm}
+  .price-hero .blob-b{width:30mm;height:30mm;left:-10mm;bottom:30mm;background:rgba(255,201,74,0.18);filter:blur(2px)}
+
+  .pop-badge{
+    position:absolute;
+    top:11mm;right:11mm;
+    background:var(--lemon);
+    color:var(--ink-900);
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:0.12em;
+    padding:1.5mm 3mm;
+    border-radius:999px;
+    z-index:2;
+  }
+
+  .price-block{
+    margin-top:11mm;
+    position:relative;z-index:1;
+  }
+  .plan-name{
+    font-size:14px;
+    font-weight:800;
+    color:#fff;
+    letter-spacing:-0.02em;
+  }
+  .price-num{
+    margin-top:5mm;
+    font-family:var(--display);
+    font-weight:800;
+    font-size:64px;
+    line-height:1;
+    color:#fff;
+    letter-spacing:-0.04em;
+  }
+  .price-num .per{
+    font-size:18px;
+    font-weight:600;
+    color:rgba(255,255,255,0.7);
+    letter-spacing:-0.01em;
+  }
+  .price-note{
+    margin-top:2mm;
+    font-size:11px;
+    color:rgba(255,255,255,0.78);
+    font-weight:500;
+  }
+
+  .perks{
+    margin-top:8mm;
+    display:flex;
+    flex-direction:column;
+    gap:3mm;
+    position:relative;z-index:1;
+  }
+  .perk{
+    display:flex;align-items:flex-start;gap:7px;
+    font-size:11px;
+    color:rgba(255,255,255,0.92);
+    font-weight:500;
+    letter-spacing:-0.005em;
+  }
+  .perk-check{
+    flex-shrink:0;
+    width:5mm;height:5mm;
+    border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    color:var(--lemon);
+    display:flex;align-items:center;justify-content:center;
+    margin-top:0.3mm;
+  }
+  .perk-check svg{width:3mm;height:3mm}
+
+  .cta-card{
+    margin-top:auto;
+    background:#fff;
+    border-radius:14px;
+    padding:5mm 5mm;
     text-align:center;
+    box-shadow:0 16px 32px -10px rgba(11,15,31,0.35);
+    position:relative;z-index:1;
   }
   .cta-label{
-    font-size:11px;
-    color:var(--gray);
-    margin-bottom:3mm;
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--indigo-600);
   }
-  .cta-btn{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:6px;
-    background:var(--blue);
-    color:#fff;
-    padding:4mm 7mm;
-    border-radius:999px;
-    font-size:12px;
-    font-weight:500;
-    letter-spacing:0.01em;
+  .cta-link{
+    margin-top:2mm;
+    font-size:13px;
+    font-weight:800;
+    color:var(--ink-900);
+    letter-spacing:-0.02em;
+    display:inline-flex;align-items:center;gap:5px;
   }
+  .cta-link .arr{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:5mm;height:5mm;border-radius:50%;
+    background:var(--indigo-600);color:#fff;
+  }
+  .cta-link .arr svg{width:3mm;height:3mm}
 
-  /* ───────── PANEL 5 — categories ───────── */
+  /* ───────── PANEL 5 — categories + quote (light) ───────── */
   .cats{
-    margin-top:6mm;
+    margin-top:7mm;
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:3mm;
+    gap:2.5mm;
   }
   .cat{
-    background:var(--cream);
-    border-radius:8px;
-    padding:4mm 4mm;
-    display:flex;align-items:center;gap:7px;
-    font-size:11.5px;
-    color:var(--ink);
-    font-weight:500;
+    background:#fff;
+    border-radius:12px;
+    padding:3.5mm 3.5mm;
+    display:flex;align-items:center;gap:6px;
+    font-size:11px;
+    color:var(--ink-900);
+    font-weight:700;
+    letter-spacing:-0.01em;
+    box-shadow:0 1px 0 rgba(11,15,31,0.04),0 4px 12px -6px rgba(11,15,31,0.08);
   }
-  .cat-ico{font-size:14px;line-height:1}
+  .cat-ico{
+    width:7mm;height:7mm;
+    border-radius:7px;
+    background:var(--indigo-50);
+    color:var(--indigo-600);
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;
+    flex-shrink:0;
+  }
 
   .quote{
     margin-top:auto;
-    padding:4mm 4mm 4mm 5mm;
-    border-left:3px solid var(--blue);
     background:#fff;
-    border-radius:0 8px 8px 0;
+    border-radius:14px;
+    padding:5mm 5mm;
+    box-shadow:0 1px 0 rgba(11,15,31,0.04),0 6px 16px -8px rgba(11,15,31,0.08);
+    border-left:3px solid var(--indigo-600);
+  }
+  .quote-stars{
+    display:flex;gap:1.5mm;
+    color:var(--lemon);
+    font-size:11px;
   }
   .quote p{
-    font-family:var(--serif);
-    font-style:italic;
-    font-size:13px;
-    line-height:1.35;
-    color:var(--ink);
+    margin-top:2mm;
+    font-size:12px;
+    line-height:1.4;
+    color:var(--ink-900);
+    font-weight:600;
+    letter-spacing:-0.01em;
   }
   .quote footer{
-    margin-top:2.5mm;
-    font-size:10.5px;
-    color:var(--gray);
-    font-style:normal;
+    margin-top:3mm;
+    display:flex;align-items:center;gap:6px;
+    font-size:10px;
+    color:var(--ink-500);
+    font-weight:600;
+  }
+  .quote-avatar{
+    width:6mm;height:6mm;
+    border-radius:50%;
+    background:linear-gradient(135deg,#FFC94A,#FF7A6B);
+    color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;
+    font-size:9px;
   }
 
   /* ───────── PANEL 6 — contact (dark) ───────── */
-  .contact-h{
-    font-family:var(--serif);
-    font-size:22px;
-    color:#fff;
-    line-height:1.1;
-    font-weight:400;
-  }
   .contact-list{
-    margin-top:6mm;
+    margin-top:7mm;
     display:flex;
     flex-direction:column;
-    gap:4mm;
+    gap:3.5mm;
   }
   .contact-row{
-    display:flex;align-items:center;gap:10px;
+    display:flex;align-items:center;gap:9px;
     font-size:12px;
     color:#fff;
+    font-weight:600;
+    letter-spacing:-0.01em;
   }
   .contact-ico{
-    width:28px;height:28px;
-    border-radius:50%;
-    background:rgba(255,255,255,0.08);
+    width:8mm;height:8mm;
+    border-radius:9px;
+    background:rgba(255,255,255,0.10);
     display:flex;align-items:center;justify-content:center;
-    font-size:13px;
     flex-shrink:0;
   }
-  .contact-ico svg{width:14px;height:14px}
+  .contact-ico svg{width:4mm;height:4mm;stroke:#fff;fill:none;stroke-width:1.6}
 
   .divider{
-    margin:8mm 0;
+    margin:7mm 0;
     height:1px;
     background:rgba(255,255,255,0.12);
   }
 
   .mini-qr{
     display:flex;gap:4mm;align-items:center;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;
+    padding:3.5mm;
   }
   .mini-qr .qr{
-    width:24mm;height:24mm;
+    width:22mm;height:22mm;
     background:#fff;
-    border-radius:6px;
-    padding:2mm;
+    border-radius:7px;
+    padding:1.5mm;
     flex-shrink:0;
   }
   .mini-qr .qr svg{width:100%;height:100%;display:block}
   .mini-qr-txt{
-    font-size:11px;
-    color:rgba(255,255,255,0.8);
-    line-height:1.35;
+    font-size:10.5px;
+    color:rgba(255,255,255,0.85);
+    line-height:1.4;
+    font-weight:500;
   }
-  .mini-qr-txt b{color:#fff;font-weight:600}
+  .mini-qr-txt b{color:#fff;font-weight:800;letter-spacing:-0.01em}
 
   .foot{
     margin-top:auto;
@@ -470,12 +595,12 @@
     justify-content:space-between;
     align-items:center;
     padding-top:5mm;
-    border-top:1px solid rgba(255,255,255,0.1);
+    border-top:1px solid rgba(255,255,255,0.10);
   }
-  .foot .logo-name{color:#fff}
   .foot small{
-    font-size:10px;
+    font-size:9.5px;
     color:rgba(255,255,255,0.45);
+    font-weight:500;
   }
 
   /* ───────── print ───────── */
@@ -492,134 +617,151 @@
     .sheet:last-child{page-break-after:auto}
   }
 
-  @page{
-    size:A4 landscape;
-    margin:0;
-  }
+  @page{size:A4 landscape;margin:0}
 
-  @media (max-width: 1280px){
-    .sheet{transform:scale(0.85);transform-origin:top center}
-  }
-  @media (max-width: 1080px){
-    .sheet{transform:scale(0.7);transform-origin:top center}
-  }
-  @media (max-width: 880px){
-    .sheet{transform:scale(0.55);transform-origin:top center}
-  }
-  @media (max-width: 680px){
-    .sheet{transform:scale(0.42);transform-origin:top center}
-  }
+  @media (max-width: 1280px){.sheet{transform:scale(0.85);transform-origin:top center}}
+  @media (max-width: 1080px){.sheet{transform:scale(0.7);transform-origin:top center}}
+  @media (max-width: 880px){.sheet{transform:scale(0.55);transform-origin:top center}}
+  @media (max-width: 680px){.sheet{transform:scale(0.42);transform-origin:top center}}
 </style>
 </head>
 <body>
 
 <div class="controls screen-only">
-  <button class="btn" onclick="window.print()">🖨 Printerga chiqarish</button>
-  <a href="#back" class="btn btn-light">Orqa tomonga o'tish ↓</a>
+  <button class="btn" onclick="window.print()">Printerga chiqarish</button>
+  <a href="#back" class="btn btn-light">Orqa tomon ↓</a>
 </div>
 
 <!-- ───────────────── FRONT ───────────────── -->
 <div>
-  <div class="label screen-only">Lice · Front — Panel 3 | Panel 2 | Panel 1</div>
+  <div class="label screen-only">Lice — Panel 3 · Panel 2 · Panel 1 (cover)</div>
   <div class="sheet" id="front">
 
-    <!-- PANEL 3 — features (blue, inside left) -->
-    <div class="panel p-blue">
+    <!-- PANEL 3 — features (light bg, white cards) -->
+    <div class="panel p-light">
       <div class="logo">
-        <span class="logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="1.7"/>
-            <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="1.7"/>
-            <line x1="8" y1="3.5" x2="8" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <line x1="16" y1="3.5" x2="16" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          </svg>
-        </span>
-        <span class="logo-name" style="color:#fff">Yozuv</span>
+        <span class="y-mark">Y</span>
+        <div class="logo-meta">
+          <div class="kicker">Telegram Mini App</div>
+          <div class="name">Yozuv</div>
+        </div>
       </div>
 
       <div style="margin-top:9mm">
-        <h2 class="feat-h">Imkoniyatlar</h2>
-        <p class="feat-sub">Biznesingiz uchun kerakli barcha vositalar</p>
+        <div class="kicker-lab">Imkoniyatlar</div>
+        <h2 class="h-section" style="margin-top:2mm;font-size:22px">Biznesingiz uchun barcha vositalar</h2>
       </div>
 
       <div class="feats">
         <div class="feat">
-          <div class="feat-head"><span class="feat-ico">📅</span><span class="feat-name">Aqlli yozilish</span></div>
-          <div class="feat-desc">Mijoz xizmat va vaqt tanlaydi</div>
+          <span class="feat-ico ic-indigo">📅</span>
+          <div class="feat-body">
+            <div class="feat-name">Aqlli yozilish</div>
+            <div class="feat-desc">Mijoz xizmat va vaqt tanlaydi</div>
+          </div>
         </div>
         <div class="feat">
-          <div class="feat-head"><span class="feat-ico">🔔</span><span class="feat-name">Tasdiqlash / Rad etish</span></div>
-          <div class="feat-desc">Bir tugma bilan boshqarish</div>
+          <span class="feat-ico ic-mint">🔔</span>
+          <div class="feat-body">
+            <div class="feat-name">Tasdiqlash / Rad etish</div>
+            <div class="feat-desc">Bir tugma bilan boshqarish</div>
+          </div>
         </div>
         <div class="feat">
-          <div class="feat-head"><span class="feat-ico">💳</span><span class="feat-name">Payme / Click to'lov</span></div>
-          <div class="feat-desc">To'g'ridan-to'g'ri Telegramda</div>
+          <span class="feat-ico ic-lemon">💳</span>
+          <div class="feat-body">
+            <div class="feat-name">Payme / Click to'lov</div>
+            <div class="feat-desc">To'g'ridan-to'g'ri Telegramda</div>
+          </div>
         </div>
         <div class="feat">
-          <div class="feat-head"><span class="feat-ico">📊</span><span class="feat-name">Analitika</span></div>
-          <div class="feat-desc">Daromad va yozilishlar statistikasi</div>
+          <span class="feat-ico ic-sky">📊</span>
+          <div class="feat-body">
+            <div class="feat-name">Analitika</div>
+            <div class="feat-desc">Daromad va statistika</div>
+          </div>
         </div>
         <div class="feat">
-          <div class="feat-head"><span class="feat-ico">📄</span><span class="feat-name">QR-broshyura</span></div>
-          <div class="feat-desc">Avtomatik PDF va QR-kod</div>
+          <span class="feat-ico ic-lilac">📄</span>
+          <div class="feat-body">
+            <div class="feat-name">QR-broshyura</div>
+            <div class="feat-desc">Avtomatik PDF va QR-kod</div>
+          </div>
         </div>
         <div class="feat">
-          <div class="feat-head"><span class="feat-ico">🌐</span><span class="feat-name">Katalog</span></div>
-          <div class="feat-desc">Mijozlar biznesingizni topadi</div>
+          <span class="feat-ico ic-coral">🌐</span>
+          <div class="feat-body">
+            <div class="feat-name">Katalog</div>
+            <div class="feat-desc">Mijozlar sizni topadi</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- PANEL 2 — how it works (light, inside center) -->
-    <div class="panel p-light">
-      <div>
-        <h2 class="section-h">Qanday ishlaydi?</h2>
-        <p class="section-sub">To'rt qadamda ishga tushirish</p>
+    <!-- PANEL 2 — how it works (white) -->
+    <div class="panel p-white">
+      <div class="logo">
+        <span class="y-mark dark">Y</span>
+        <div class="logo-meta">
+          <div class="kicker">4 qadam</div>
+          <div class="name">Qanday ishlaydi</div>
+        </div>
+      </div>
+
+      <div style="margin-top:9mm">
+        <div class="kicker-lab">Boshlash oson</div>
+        <h2 class="h-section" style="margin-top:2mm;font-size:22px">To'rt qadamda ishga tushirish</h2>
       </div>
 
       <div class="steps">
         <div class="step">
           <div class="step-num">01</div>
-          <div class="step-row"><span class="step-ico">📱</span><span class="step-h">Ro'yxatdan o'ting</span></div>
-          <div class="step-p">Biznes nomi, kategoriya va xizmatlarni kiriting. Shablonlardan foydalaning.</div>
+          <div class="step-body">
+            <div class="step-h">Ro'yxatdan o'ting</div>
+            <div class="step-p">Biznes nomi, kategoriya va xizmatlarni kiriting. Tayyor shablonlardan foydalaning.</div>
+          </div>
         </div>
         <div class="step">
           <div class="step-num">02</div>
-          <div class="step-row"><span class="step-ico">🔗</span><span class="step-h">Havola oling</span></div>
-          <div class="step-p">Tizim Telegram-botingizni va QR-kodingizni avtomatik yaratadi.</div>
+          <div class="step-body">
+            <div class="step-h">Havola va QR oling</div>
+            <div class="step-p">Tizim Telegram-botingizni va QR-kodingizni avtomatik yaratadi.</div>
+          </div>
         </div>
         <div class="step">
           <div class="step-num">03</div>
-          <div class="step-row"><span class="step-ico">📄</span><span class="step-h">Chop eting</span></div>
-          <div class="step-p">Ushbu broshyurani chop etib do'koningizga ilib qo'ying. Mijozlar skanerlaydi.</div>
+          <div class="step-body">
+            <div class="step-h">Chop eting</div>
+            <div class="step-p">Ushbu broshyurani chop etib do'koningizga ilib qo'ying — mijozlar skanerlaydi.</div>
+          </div>
         </div>
         <div class="step">
           <div class="step-num">04</div>
-          <div class="step-row"><span class="step-ico">✅</span><span class="step-h">Tayyor!</span></div>
-          <div class="step-p">Mijozlar o'zlari yoziladi. Siz faqat tasdiqlaysiz yoki rad etasiz.</div>
+          <div class="step-body">
+            <div class="step-h">Tayyor!</div>
+            <div class="step-p">Mijozlar o'zlari yoziladi. Siz faqat tasdiqlaysiz yoki rad etasiz.</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- PANEL 1 — COVER (dark, outside right) -->
-    <div class="panel p-dark cover">
+    <!-- PANEL 1 — COVER (hero gradient, outside right) -->
+    <div class="panel p-hero cover">
+      <div class="blob blob-w blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+
       <div class="logo">
-        <span class="logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="1.7"/>
-            <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="1.7"/>
-            <line x1="8" y1="3.5" x2="8" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <line x1="16" y1="3.5" x2="16" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          </svg>
-        </span>
-        <span class="logo-name">Yozuv</span>
+        <span class="y-mark white">Y</span>
+        <div class="logo-meta">
+          <div class="kicker">Telegram Mini App</div>
+          <div class="name">Yozuv</div>
+        </div>
       </div>
 
       <div class="cover-hero">
-        <h1>Mijozlar yozilishi —<br>endi oson</h1>
-        <p>Telegram orqali — kod kerak emas</p>
+        <h1>Mijozlar Telegram orqali yoziladi</h1>
+        <p>Barbershop, salon, klinika va boshqa xizmatlar uchun — slotlar, eslatmalar va analitika bitta platformada.</p>
       </div>
 
       <div class="qr-card">
@@ -630,7 +772,9 @@
         </div>
       </div>
 
-      <div class="cover-banner">3 kun bepul · Karta shart emas</div>
+      <div class="cover-banner">
+        <span class="lemon">★</span> 14 kun bepul · Karta talab qilinmaydi
+      </div>
     </div>
 
   </div>
@@ -638,49 +782,78 @@
 
 <!-- ───────────────── BACK ───────────────── -->
 <div id="back">
-  <div class="label screen-only">Orqa · Back — Panel 4 | Panel 5 | Panel 6</div>
+  <div class="label screen-only">Orqa — Panel 4 (pricing) · Panel 5 · Panel 6</div>
   <div class="sheet">
 
-    <!-- PANEL 4 — back cover (cream, outside left) -->
-    <div class="panel p-cream">
+    <!-- PANEL 4 — pricing hero (indigo gradient, outside left back) -->
+    <div class="panel p-indigo price-hero">
+      <div class="blob blob-w blob-a"></div>
+      <div class="blob blob-b"></div>
+      <div class="pop-badge">MASHHUR</div>
+
       <div class="logo">
-        <span class="logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="1.7"/>
-            <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="1.7"/>
-            <line x1="8" y1="3.5" x2="8" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <line x1="16" y1="3.5" x2="16" y2="7" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          </svg>
-        </span>
-        <span class="logo-name" style="color:var(--ink)">Yozuv</span>
-      </div>
-
-      <div class="price-block">
-        <div class="price">$15<span class="per"> / oy</span></div>
-        <div class="price-sub">Barcha imkoniyatlar — cheksiz</div>
-
-        <div class="price-list">
-          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Cheksiz yozilishlar</div>
-          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Payme / Click to'lov</div>
-          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Analitika va hisobotlar</div>
-          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>PDF broshyura va QR-kod</div>
-          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Mijozlar bazasi</div>
-          <div class="pl-item"><span class="pl-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Texnik yordam</div>
+        <span class="y-mark white">Y</span>
+        <div class="logo-meta">
+          <div class="kicker">Tarif</div>
+          <div class="name">Oylik reja</div>
         </div>
       </div>
 
-      <div class="cta-wrap">
-        <div class="cta-label">3 kun bepul sinab ko'ring</div>
-        <a class="cta-btn" href="https://yozuv.uz">yozuv.uz da boshlash →</a>
+      <div class="price-block">
+        <div class="plan-name">Pro</div>
+        <div class="price-num">$15<span class="per"> / oy</span></div>
+        <div class="price-note">187 500 so'm · barcha imkoniyatlar cheksiz</div>
+      </div>
+
+      <div class="perks">
+        <div class="perk">
+          <span class="perk-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          Cheksiz yozilishlar
+        </div>
+        <div class="perk">
+          <span class="perk-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          Payme / Click to'lov
+        </div>
+        <div class="perk">
+          <span class="perk-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          Analitika va eslatmalar
+        </div>
+        <div class="perk">
+          <span class="perk-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          QR va PDF broshyura
+        </div>
+        <div class="perk">
+          <span class="perk-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          Mijozlar bazasi
+        </div>
+        <div class="perk">
+          <span class="perk-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5.2 L4.2 7.2 L8 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          Premium qo'llab-quvvatlash
+        </div>
+      </div>
+
+      <div class="cta-card">
+        <div class="cta-label">14 kun bepul sinab ko'ring</div>
+        <a class="cta-link" href="https://yozuv.uz">
+          yozuv.uz
+          <span class="arr"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5h6m0 0L5.5 2.5M8 5L5.5 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </a>
       </div>
     </div>
 
-    <!-- PANEL 5 — categories (light, inside center back) -->
+    <!-- PANEL 5 — categories + quote (light) -->
     <div class="panel p-light">
-      <div>
-        <h2 class="section-h">Qaysi bizneslar uchun?</h2>
-        <p class="section-sub">Kichik va o'rta biznes uchun mo'ljallangan</p>
+      <div class="logo">
+        <span class="y-mark dark">Y</span>
+        <div class="logo-meta">
+          <div class="kicker">Kim uchun</div>
+          <div class="name">Kichik biznes</div>
+        </div>
+      </div>
+
+      <div style="margin-top:9mm">
+        <div class="kicker-lab">Kategoriyalar</div>
+        <h2 class="h-section" style="margin-top:2mm;font-size:22px">Qaysi bizneslar uchun?</h2>
       </div>
 
       <div class="cats">
@@ -695,40 +868,55 @@
       </div>
 
       <div class="quote">
-        <p>"Har kuni 5-10 ta yozilish avtomatik keladi."</p>
-        <footer>— Akbar, Barber Akbar egasi</footer>
+        <div class="quote-stars">★★★★★</div>
+        <p>"Har kuni 5–10 ta yozilish avtomatik keladi. Endi hech qaysi mijozni unutmaymiz."</p>
+        <footer>
+          <span class="quote-avatar">A</span>
+          Akbar · Barber Akbar egasi
+        </footer>
       </div>
     </div>
 
-    <!-- PANEL 6 — contact (dark, inside right back) -->
+    <!-- PANEL 6 — contact (dark) -->
     <div class="panel p-dark">
-      <div>
-        <h2 class="contact-h">Bog'lanish</h2>
-        <p class="feat-sub" style="margin-top:2mm">Savollar va tijorat takliflari</p>
+      <div class="blob blob-indigo-soft" style="width:80mm;height:80mm;right:-30mm;top:-30mm"></div>
+
+      <div class="logo">
+        <span class="y-mark white">Y</span>
+        <div class="logo-meta">
+          <div class="kicker">Bog'lanish</div>
+          <div class="name">Yozuv jamoasi</div>
+        </div>
+      </div>
+
+      <div style="margin-top:9mm;position:relative;z-index:1">
+        <div class="kicker-lab">Kontakt</div>
+        <h2 class="h-display" style="margin-top:2mm;font-size:22px;color:#fff">Savollar bormi?</h2>
+        <p class="sub" style="max-width:62mm">Tijorat takliflari va texnik yordam uchun yozing.</p>
       </div>
 
       <div class="contact-list">
         <div class="contact-row">
           <span class="contact-ico">
-            <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#fff" stroke-width="1.2"/><path d="M1.5 8 H14.5 M8 1.5 C10 4 10 12 8 14.5 C6 12 6 4 8 1.5" stroke="#fff" stroke-width="1.1" fill="none"/></svg>
+            <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M1.5 8 H14.5 M8 1.5 C10 4 10 12 8 14.5 C6 12 6 4 8 1.5"/></svg>
           </span>
           yozuv.uz
         </div>
         <div class="contact-row">
           <span class="contact-ico">
-            <svg viewBox="0 0 16 16" fill="none"><path d="M14 2.5 L1.5 7.5 L6 9.5 L8 13.5 L14 2.5 Z M6 9.5 L10 6" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>
+            <svg viewBox="0 0 16 16"><path d="M14 2.5 L1.5 7.5 L6 9.5 L8 13.5 L14 2.5 Z M6 9.5 L10 6" stroke-linejoin="round"/></svg>
           </span>
           @YozuvBot
         </div>
         <div class="contact-row">
           <span class="contact-ico">
-            <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="#fff" stroke-width="1.2"/><path d="M2 4 L8 9 L14 4" stroke="#fff" stroke-width="1.2" fill="none"/></svg>
+            <svg viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M2 4 L8 9 L14 4"/></svg>
           </span>
           hello@yozuv.uz
         </div>
         <div class="contact-row">
           <span class="contact-ico">
-            <svg viewBox="0 0 16 16" fill="none"><path d="M8 14 C4 10 2 7 2 5 A4 4 0 0 1 8 2 A4 4 0 0 1 14 5 C14 7 12 10 8 14 Z" stroke="#fff" stroke-width="1.2" fill="none"/><circle cx="8" cy="5.5" r="1.5" stroke="#fff" stroke-width="1.1"/></svg>
+            <svg viewBox="0 0 16 16"><path d="M8 14 C4 10 2 7 2 5 A4 4 0 0 1 8 2 A4 4 0 0 1 14 5 C14 7 12 10 8 14 Z"/><circle cx="8" cy="5.5" r="1.5"/></svg>
           </span>
           Toshkent, O'zbekiston
         </div>
@@ -739,22 +927,16 @@
       <div class="mini-qr">
         <div class="qr" data-qr="https://t.me/YozuvSupport" data-qr-size="25"></div>
         <div class="mini-qr-txt">
-          <b>Savollar uchun yozing</b><br>
+          <b>Yordam uchun yozing</b><br>
           Skaner qiling yoki<br>
           @YozuvSupport
         </div>
       </div>
 
       <div class="foot">
-        <div class="logo logo-sm">
-          <span class="logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="3.5" y="5.5" width="17" height="15" rx="2" stroke="#fff" stroke-width="2"/>
-              <line x1="3.5" y1="10" x2="20.5" y2="10" stroke="#fff" stroke-width="2"/>
-              <path d="M8.2 15 L10.8 17.5 L15.8 12.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-          </span>
-          <span class="logo-name">Yozuv</span>
+        <div class="logo">
+          <span class="y-mark sm white">Y</span>
+          <div class="logo-meta"><div class="name" style="font-size:13px">Yozuv</div></div>
         </div>
         <small>© 2026 Yozuv</small>
       </div>
@@ -764,15 +946,13 @@
 </div>
 
 <script>
-/* Realistic QR pattern generator (visual, deterministic from seed).
-   Renders inline SVG into every [data-qr] element. */
+/* Realistic QR pattern generator (visual, deterministic from seed). */
 (function(){
   function genSvg(seedStr, size){
     size = size || 33;
     var grid = [];
     for (var i=0;i<size;i++){ grid.push(new Array(size).fill(0)); }
 
-    // seeded PRNG
     var seed = 2166136261 >>> 0;
     for (var i=0;i<seedStr.length;i++){
       seed ^= seedStr.charCodeAt(i);
@@ -785,12 +965,10 @@
       return (seed >>> 0) / 4294967295;
     }
 
-    // fill random data
     for (var y=0;y<size;y++)
       for (var x=0;x<size;x++)
         grid[y][x] = rnd() > 0.5 ? 1 : 0;
 
-    // finder patterns
     function placeFinder(cx, cy){
       for (var y=-1;y<=7;y++){
         for (var x=-1;x<=7;x++){
@@ -808,13 +986,11 @@
     placeFinder(size-7,0);
     placeFinder(0,size-7);
 
-    // timing patterns
     for (var i=8;i<size-8;i++){
       grid[6][i] = i%2===0 ? 1 : 0;
       grid[i][6] = i%2===0 ? 1 : 0;
     }
 
-    // alignment pattern 5x5 near bottom-right
     var ax = size-9, ay = size-9;
     for (var y=0;y<5;y++){
       for (var x=0;x<5;x++){
@@ -825,7 +1001,6 @@
       }
     }
 
-    // format info strips (sprinkled around finders — more authentic look)
     for (var i=0;i<9;i++){
       if (i===6) continue;
       grid[8][i] = rnd()>0.5?1:0;
@@ -835,10 +1010,8 @@
       grid[size-1-i][8] = rnd()>0.5?1:0;
       grid[8][size-1-i] = rnd()>0.5?1:0;
     }
-    // dark module
     grid[size-8][8] = 1;
 
-    // build svg rects
     var cell = 100/size;
     var rects = '';
     for (var y=0;y<size;y++){
@@ -855,7 +1028,7 @@
     }
     return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges">'+
            '<rect width="100" height="100" fill="#fff"/>'+
-           '<g fill="#080808">'+rects+'</g>'+
+           '<g fill="#0B0F1F">'+rects+'</g>'+
            '</svg>';
   }
 

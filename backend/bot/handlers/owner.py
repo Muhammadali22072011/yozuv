@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from aiogram import F, Router
@@ -69,7 +70,8 @@ async def owner_reject_reason(cb: CallbackQuery):
         client = db.query(Client).filter(Client.id == booking.client_id).first()
         svc = db.query(Service).filter(Service.id == booking.service_id).first()
         if client:
-            send_telegram_message(
+            await asyncio.to_thread(
+                send_telegram_message,
                 int(client.telegram_id),
                 f"❌ Yozilishingiz bekor qilindi\n\nSabab: {reason}",
             )

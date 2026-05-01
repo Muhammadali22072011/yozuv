@@ -40,7 +40,7 @@ def services_kb(slug: str, items: list[tuple[str, str]]) -> InlineKeyboardMarkup
     rows = []
     for sid, label in items:
         rows.append([InlineKeyboardButton(text=label, callback_data=f"svc:{sid}")])
-    rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data=f"book:{slug}")])
+    rows.append([InlineKeyboardButton(text="🏠 Bosh menyu", callback_data=f"menu:{slug}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -48,7 +48,12 @@ def dates_kb(slug: str, sid: str, items: list[tuple[str, str]]) -> InlineKeyboar
     rows = []
     for d_iso, label in items:
         rows.append([InlineKeyboardButton(text=label, callback_data=f"day:{sid}:{d_iso}")])
-    rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data=f"book:{slug}")])
+    rows.append(
+        [
+            InlineKeyboardButton(text="◀️ Xizmatlar", callback_data=f"book:{slug}"),
+            InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{slug}"),
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -62,7 +67,12 @@ def times_kb(slug: str, sid: str, d_iso: str, times: list[str]) -> InlineKeyboar
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data=f"svc:{sid}")])
+    rows.append(
+        [
+            InlineKeyboardButton(text="◀️ Sanalar", callback_data=f"svc:{sid}"),
+            InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{slug}"),
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -75,7 +85,19 @@ def confirm_kb(slug: str, sid: str, d_iso: str, t: str) -> InlineKeyboardMarkup:
                     callback_data=f"confirm:{sid}:{d_iso}:{t}",
                 )
             ],
-            [InlineKeyboardButton(text="◀️ Orqaga", callback_data=f"day:{sid}:{d_iso}")],
+            [
+                InlineKeyboardButton(text="◀️ Vaqtlar", callback_data=f"day:{sid}:{d_iso}"),
+                InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{slug}"),
+            ],
+        ]
+    )
+
+
+def back_to_menu_kb(slug: str) -> InlineKeyboardMarkup:
+    """Single 'back to business main menu' button — used on terminal screens."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🏠 Bosh menyu", callback_data=f"menu:{slug}")],
         ]
     )
 

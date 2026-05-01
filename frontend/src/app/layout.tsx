@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Instrument_Serif } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 
-const instrument = Instrument_Serif({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin", "latin-ext"],
-  weight: ["400"],
-  variable: "--font-instrument",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-jakarta",
   display: "swap",
 });
 
@@ -17,11 +17,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uz" className={`${instrument.variable} ${GeistSans.variable}`}>
+    <html lang="uz" className={`${jakarta.variable} ${GeistSans.variable}`}>
       <head>
         <script src="https://telegram.org/js/telegram-web-app.js" async={false} />
       </head>
-      <body className={`min-h-screen ${GeistSans.className}`}>{children}</body>
+      <body className={`min-h-screen bg-ink-50 ${jakarta.className}`}>{children}</body>
     </html>
   );
 }

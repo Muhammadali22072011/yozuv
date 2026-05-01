@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -224,7 +225,7 @@ async def upload_receipt(
             f"ID: <code>{tx.id}</code>"
         )
         try:
-            send_telegram_photo(chat_id, str(path), caption)
+            await asyncio.to_thread(send_telegram_photo, chat_id, str(path), caption)
         except Exception:
             pass
 

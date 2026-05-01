@@ -163,7 +163,7 @@ def list_businesses(
                     "name": f"{owner.first_name or ''} {owner.last_name or ''}".strip() if owner else "",
                 },
                 "subscription": {
-                    "plan": str(sub.plan) if sub else None,
+                    "plan": getattr(sub.plan, "value", str(sub.plan)) if sub else None,
                     "expires_at": sub.expires_at.isoformat() if sub and sub.expires_at else None,
                 }
                 if sub
@@ -252,16 +252,16 @@ class BroadcastBody(BaseModel):
 def broadcast(
     body: BroadcastBody, db: Session = Depends(get_db), _=Depends(get_admin_user)
 ):
-    q = db.query(Business).join(User, User.id == Business.owner_id)
+    q = db.query(Business, User).join(User, User.id == Business.owner_id)
     if body.only_active:
         q = q.filter(Business.is_active.is_(True))
     rows = q.all()
     sent = 0
     failed = 0
     text = body.text
-    for b in rows:
-        owner = db.query(User).filter(User.id == b.owner_id).first()
+    for _b, owner in rows:
         if not owner or not owner.telegram_id:
+            failed += 1
             continue
         try:
             send_telegram_message(int(owner.telegram_id), text)

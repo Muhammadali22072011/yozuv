@@ -2,27 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Download, FileDown, Share2 } from "lucide-react";
+import { ScreenHeader, YzLogo, useToast } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 
 export default function QrPage() {
   const router = useRouter();
+  const toast = useToast();
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loadErr, setLoadErr] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let revoked = false;
     const urls: string[] = [];
-
     (async () => {
       const token = getToken();
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
       try {
         const me = await apiFetch<BusinessMe>("/api/business/me");
         if (revoked) return;
@@ -33,42 +32,32 @@ export default function QrPage() {
           router.replace("/dashboard/onboarding");
           return;
         }
-        if (/401|not authenticated|invalid user/i.test(msg)) {
-          router.replace("/login");
-          return;
-        }
-        setLoadErr(msg || "Ma'lumotlarni yuklab bo'lmadi");
         return;
       }
-
       try {
         const r = await fetch(`${apiBase()}/api/business/me/qr`, { headers });
         if (r.ok) {
-          const blob = await r.blob();
-          const u = URL.createObjectURL(blob);
+          const u = URL.createObjectURL(await r.blob());
           urls.push(u);
           if (!revoked) setQrUrl(u);
         }
       } catch {}
-
       try {
         const r = await fetch(`${apiBase()}/api/business/me/brochure`, { headers });
         if (r.ok) {
-          const blob = await r.blob();
-          const u = URL.createObjectURL(blob);
+          const u = URL.createObjectURL(await r.blob());
           urls.push(u);
           if (!revoked) setPdfUrl(u);
         }
       } catch {}
     })();
-
     return () => {
       revoked = true;
       urls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [router]);
 
-  const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "YozuvBot";
+  const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
   const telegramLink = biz ? `https://t.me/${botUsername}?start=${biz.slug}` : "";
 
   async function downloadBrochure() {
@@ -88,8 +77,9 @@ export default function QrPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      toast("Broshyura yuklandi");
     } catch (e) {
-      alert((e as Error).message || "Yuklab bo'lmadi");
+      toast((e as Error).message || "Xatolik");
     } finally {
       setDownloading(false);
     }
@@ -103,163 +93,80 @@ export default function QrPage() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-  }
-
-  async function copyLink() {
-    if (!telegramLink) return;
-    try {
-      await navigator.clipboard.writeText(telegramLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {}
+    toast("QR yuklandi");
   }
 
   async function shareLink() {
     if (!telegramLink || !biz) return;
-    const text = `${biz.name} — Telegram orqali yoziling: ${telegramLink}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: biz.name, text, url: telegramLink });
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: biz.name, text: telegramLink, url: telegramLink });
         return;
-      } catch {}
-    }
-    copyLink();
-  }
-
-  if (loadErr) {
-    return (
-      <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">
-        <div className="font-medium">Xatolik:</div>
-        <div className="mt-1 break-all">{loadErr}</div>
-      </div>
-    );
+      }
+    } catch {}
+    navigator.clipboard?.writeText(telegramLink);
+    setCopied(true);
+    toast("Havola nusxalandi");
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="font-serif text-2xl">QR va broshyura</h2>
-        <p className="mt-1 text-sm text-ink/60">
-          Broshyurani chop eting va eshikka osing. Mijoz QR orqali yoziladi.
-        </p>
-      </div>
+    <div>
+      <ScreenHeader title="QR kod" subtitle="Mijozlar uchun havola" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* ─── LEFT: preview ─── */}
-        <section className="rounded-xl border border-ink/10 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-ink/70">Jonli ko&apos;rinish</h3>
-            <span className="text-[10px] uppercase tracking-wider text-ink/40">A5 · PDF</span>
+      <div className="mt-2 px-4 md:px-0">
+        <div className="rounded-[28px] border-[1.5px] border-ink-100 bg-gradient-to-b from-white to-ink-50 px-5 py-6 text-center shadow-soft-lg">
+          <div className="mb-1 flex items-center justify-center gap-2">
+            <YzLogo size={24} />
+            <div className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
+              {biz?.name || "Yozuv"}
+            </div>
           </div>
+          <div className="text-[13px] font-medium text-ink-500">Skanerlang va yoziling</div>
 
-          <div className="overflow-hidden rounded-lg border border-ink/10 bg-cream">
-            {pdfUrl ? (
-              <iframe
-                src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                title="Broshyura preview"
-                className="h-[520px] w-full bg-white"
-              />
-            ) : biz ? (
-              <div className="grid h-[520px] place-items-center text-sm text-ink/50">
-                Tayyorlanmoqda…
-              </div>
+          <div className="mx-auto mt-4 grid h-60 w-60 place-items-center rounded-[20px] bg-white p-4 shadow-[0_10px_30px_rgba(11,15,31,0.08),_inset_0_0_0_1px_rgba(11,15,31,0.06)]">
+            {qrUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qrUrl} alt="QR" className="h-full w-full" />
             ) : (
-              <div className="grid h-[520px] place-items-center p-6 text-center text-sm text-ink/50">
-                Avval biznes ma&apos;lumotlarini to&apos;ldiring, keyin bu yerda
-                broshyura ko&apos;rinadi.
-              </div>
+              <div className="text-xs text-ink-400">Yuklanmoqda…</div>
             )}
           </div>
 
-          <p className="mt-3 text-xs text-ink/50">
-            Ma&apos;lumotlar avtomatik yangilanadi — biznes yoki xizmatni o&apos;zgartirsangiz,
-            broshyura ham yangilanadi.
-          </p>
-        </section>
+          <div className="mt-4 break-all font-mono text-xs text-ink-500">{telegramLink || "—"}</div>
+        </div>
 
-        {/* ─── RIGHT: actions ─── */}
-        <div className="space-y-4">
-          {/* Block 1: QR */}
-          <section className="rounded-xl border border-ink/10 bg-white p-5">
-            <h3 className="font-serif text-lg">Sizning QR-kodingiz</h3>
-            <p className="mt-1 text-xs text-ink/60">Mijozlar shu kodni skanerlaydi</p>
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
+          <button onClick={downloadQr} disabled={!qrUrl} className="btn-primary">
+            <Download className="mr-2 h-4 w-4" /> QR yuklash
+          </button>
+          <button onClick={shareLink} disabled={!telegramLink} className="btn-soft">
+            <Share2 className="mr-2 h-4 w-4" /> {copied ? "✓ Nusxa" : "Ulashish"}
+          </button>
+        </div>
 
-            <div className="mt-4 flex justify-center rounded-xl bg-cream p-5">
-              {qrUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={qrUrl} alt="QR" className="h-48 w-48" />
-              ) : (
-                <div className="grid h-48 w-48 place-items-center text-xs text-ink/50">
-                  Yuklanmoqda…
-                </div>
-              )}
+        <div className="card-soft mt-4 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-display text-[15px] font-bold text-ink-900">Broshyura</div>
+              <div className="mt-0.5 text-xs text-ink-500">A5 PDF — xizmatlar va QR</div>
             </div>
-
-            {telegramLink && (
-              <div className="mt-3 truncate rounded-md bg-ink/[0.04] px-3 py-2 text-center text-[11px] text-ink/70">
-                {telegramLink}
-              </div>
-            )}
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={downloadQr} disabled={!qrUrl}>
-                ⬇ PNG yuklab olish
-              </Button>
-              <Button variant="outline" onClick={shareLink} disabled={!telegramLink}>
-                {copied ? "✓ Nusxa olindi" : "🔗 Ulashish"}
-              </Button>
-            </div>
-          </section>
-
-          {/* Block 2: Brochure */}
-          <section className="rounded-xl border border-ink/10 bg-white p-5">
-            <h3 className="font-serif text-lg">Broshyura</h3>
-            <p className="mt-1 text-xs text-ink/60">
-              Barcha ma&apos;lumotlar avtomatik to&apos;ldiriladi:
-            </p>
-
-            <ul className="mt-3 space-y-1.5 text-[13px] text-ink/80">
-              <li className="flex items-center gap-2">
-                <span className="text-[--color-blue,#005AFF]" style={{ color: "#005AFF" }}>
-                  ✓
-                </span>
-                Biznes nomi va kategoriyasi
-              </li>
-              <li className="flex items-center gap-2">
-                <span style={{ color: "#005AFF" }}>✓</span>
-                Barcha xizmatlar va narxlar
-              </li>
-              <li className="flex items-center gap-2">
-                <span style={{ color: "#005AFF" }}>✓</span>
-                QR-kod
-              </li>
-              <li className="flex items-center gap-2">
-                <span style={{ color: "#005AFF" }}>✓</span>
-                Telefon va manzil
-              </li>
-            </ul>
-
-            <Button
-              className="mt-4 w-full"
-              size="lg"
+            <button
               onClick={downloadBrochure}
               disabled={downloading || !biz}
+              className="btn-primary px-4 py-3 text-sm"
             >
-              {downloading ? "Tayyorlanmoqda…" : "⬇ PDF yuklab olish"}
-            </Button>
-          </section>
-
-          {/* Block 3: Tip */}
-          <section className="rounded-xl border border-ink/10 bg-cream p-5">
-            <h4 className="text-sm font-semibold text-ink/80">💡 Qanday foydalanish</h4>
-            <ol className="mt-2 space-y-1.5 text-[13px] text-ink/70">
-              <li>1. PDF yuklab oling</li>
-              <li>2. A5 yoki A4 qog&apos;ozga chop eting</li>
-              <li>3. Do&apos;kon yoki xonangizga ilib qo&apos;ying</li>
-              <li>4. Mijozlar QR-kodni skanerlaydi</li>
-              <li>5. Yozilish avtomatik keladi ✓</li>
-            </ol>
-          </section>
+              <FileDown className="mr-2 h-4 w-4" />
+              {downloading ? "…" : "PDF"}
+            </button>
+          </div>
+          {pdfUrl && (
+            <iframe
+              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+              title="Broshyura preview"
+              className="mt-3 h-80 w-full rounded-2xl border border-ink-100 bg-white"
+            />
+          )}
         </div>
       </div>
     </div>
