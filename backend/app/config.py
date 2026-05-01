@@ -10,6 +10,8 @@ _INSECURE_DEFAULTS = {"change_me", "secret", "changeme", "your_secret_key"}
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    app_env: str = "development"
+
     database_url: str = "postgresql://yozuv:yozuv@localhost:5432/yozuv"
     redis_url: str = "redis://localhost:6379/0"
 

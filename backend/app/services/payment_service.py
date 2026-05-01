@@ -78,7 +78,7 @@ def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
         payme = PaymeGateway(
             payme_id=settings.payme_merchant_id,
             payme_key=settings.payme_secret_key,
-            is_test_mode=True,
+            is_test_mode=(settings.app_env != "production"),
         )
         link = payme.create_payment(
             id=str(tx.id),
@@ -121,7 +121,7 @@ def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
             merchant_id=settings.click_merchant_id,
             merchant_user_id=settings.click_merchant_user_id,
             secret_key=settings.click_secret_key,
-            is_test_mode=True,
+            is_test_mode=(settings.app_env != "production"),
         )
         link = click.create_payment(
             id=str(tx.id),
