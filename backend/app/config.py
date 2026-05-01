@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
 
-    database_url: str = "postgresql://yozuv:yozuv@localhost:5432/yozuv"
+    database_url: str
     redis_url: str = "redis://localhost:6379/0"
 
     secret_key: str = "change_me"
