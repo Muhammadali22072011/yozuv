@@ -24,6 +24,8 @@ _REASONS = {
 async def owner_confirm(cb: CallbackQuery):
     bid = cb.data.split(":", 1)[1]
     db = SessionLocal()
+    client_tg_id: int | None = None
+    svc_name: str | None = None
     try:
         booking = db.query(Booking).filter(Booking.id == UUID(bid)).first()
         owner = db.query(User).filter(User.telegram_id == cb.from_user.id).first()
@@ -34,11 +36,42 @@ async def owner_confirm(cb: CallbackQuery):
         if not biz or biz.owner_id != owner.id:
             await cb.answer("Ruxsat yo'q", show_alert=True)
             return
+        if booking.status == BookingStatus.CONFIRMED:
+            await cb.answer("Allaqachon tasdiqlangan", show_alert=True)
+            return
         booking.status = BookingStatus.CONFIRMED
         db.commit()
-        await cb.message.edit_text("✅ Yozilish tasdiqlandi.")
+        client = db.query(Client).filter(Client.id == booking.client_id).first()
+        svc = db.query(Service).filter(Service.id == booking.service_id).first()
+        if client and client.telegram_id:
+            try:
+                client_tg_id = int(client.telegram_id)
+            except (TypeError, ValueError):
+                client_tg_id = None
+        svc_name = svc.name if svc else None
+        booking_date = booking.date
+        booking_time = booking.start_time
     finally:
         db.close()
+
+    try:
+        await cb.message.edit_text("✅ Yozilish tasdiqlandi.")
+    except Exception:
+        try:
+            await cb.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+    if client_tg_id:
+        text = (
+            f"✅ Yozilishingiz tasdiqlandi!\n\n"
+            + (f"📋 {svc_name}\n" if svc_name else "")
+            + f"📅 {booking_date.isoformat()} · {booking_time.strftime('%H:%M')}"
+        )
+        try:
+            await asyncio.to_thread(send_telegram_message, client_tg_id, text)
+        except Exception:
+            pass
     await cb.answer()
 
 
