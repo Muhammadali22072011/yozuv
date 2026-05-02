@@ -470,10 +470,16 @@ class RefundBody(BaseModel):
 def refund(
     body: RefundBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    admin: User = Depends(get_admin_user),
 ):
+    # Refunds are admin-only: a business owner refunding their own
+    # subscription payment would be a free-money exploit. The service
+    # layer cancels the active subscription as part of the refund.
+    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == body.transaction_id).first()
+    if not tx:
+        raise HTTPException(404, "Transaction not found")
     try:
-        tx = refund_transaction(db, body.transaction_id, business.id)
+        tx = refund_transaction(db, body.transaction_id, tx.business_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     db.commit()
