@@ -1,7 +1,5 @@
-from io import BytesIO
-
 from fastapi import APIRouter, Depends
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -47,9 +45,9 @@ def brochure_pdf(
     qr_bytes = generate_qr(business.slug, bot_username)
     pdf = build_brochure_pdf(business, services, qr_bytes, bot_username=bot_username)
 
-    filename = f"yozuv-{business.slug}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf),
+    filename = f"{business.slug}-broshyura.pdf"
+    return Response(
+        content=pdf,
         media_type="application/pdf",
         headers={
             "Cache-Control": "no-store",

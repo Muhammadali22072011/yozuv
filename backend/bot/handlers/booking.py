@@ -16,6 +16,7 @@ from bot.keyboards.inline import (
     back_to_menu_kb,
     confirm_kb,
     dates_kb,
+    owner_decision_kb,
     services_kb,
     times_kb,
 )
@@ -192,6 +193,7 @@ async def confirm_booking(cb: CallbackQuery):
                     owner_tg = None
 
             info = {
+                "booking_id": str(booking.id),
                 "service_name": service.name,
                 "service_price": int(service.price),
                 "business_name": b.name,
@@ -258,6 +260,9 @@ async def confirm_booking(cb: CallbackQuery):
             client_name = "Mijoz"
         suffix = "kutilmoqda (tasdiqlang)" if not is_confirmed else "tasdiqlangan"
         price_fmt = f"{info['service_price']:,}".replace(",", " ") + " so'm"
+        owner_markup = None
+        if not is_confirmed:
+            owner_markup = owner_decision_kb(info["booking_id"]).model_dump(exclude_none=True)
         try:
             await asyncio.to_thread(
                 send_telegram_message,
@@ -270,6 +275,7 @@ async def confirm_booking(cb: CallbackQuery):
                     f"💰 {price_fmt}\n\n"
                     f"Holati: {suffix}"
                 ),
+                owner_markup,
             )
         except Exception:
             logger.exception("owner notify failed")

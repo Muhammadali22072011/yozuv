@@ -26,7 +26,9 @@ class BusinessUpdate(BaseModel):
     reminder_text: str | None = None
     confirmation_mode: ConfirmationMode | None = None
     language: LanguageCode | None = None
-    is_active: bool | None = None
+    # NOTE: is_active is intentionally NOT here. A blocked owner could
+    # otherwise re-activate themselves via PUT /business/me. Toggling
+    # is_active belongs in admin endpoints only.
 
 
 class BusinessPublic(BaseModel):

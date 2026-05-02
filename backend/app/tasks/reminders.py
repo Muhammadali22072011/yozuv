@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,7 @@ def send_hourly_reminders() -> None:
             .filter(
                 Booking.status.in_([BookingStatus.CONFIRMED, BookingStatus.PENDING]),
                 Booking.date >= date.today(),
+                Booking.reminder_sent_at.is_(None),
             )
             .all()
         )
@@ -46,6 +48,10 @@ def send_hourly_reminders() -> None:
                     business=business.name,
                 )
                 send_telegram_message(int(client.telegram_id), text)
+            # Mark sent even when client/business is missing — otherwise the
+            # broken row would re-enter the window every minute forever.
+            b.reminder_sent_at = datetime.now(ZoneInfo("Asia/Tashkent"))
+            db.commit()
     finally:
         db.close()
 
