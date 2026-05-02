@@ -1,15 +1,22 @@
+from datetime import date as _date
 from uuid import UUID
 
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.database import SessionLocal
-from app.models import Booking, BookingStatus, Business, Client, Service
+from app.models import Booking, BookingStatus, Business, Client, Review, Service
 from bot.keyboards.inline import back_to_menu_kb
 from bot.utils import safe_edit_text
 
 router = Router()
+
+
+class ReviewStates(StatesGroup):
+    waiting_for_comment = State()
 
 
 @router.message(Command("mybookings"))
@@ -20,7 +27,7 @@ async def cmd_mybookings(message: Message):
         if not client:
             await message.answer("Hozircha yozilishlar yo'q.")
             return
-        bookings = (
+        active = (
             db.query(Booking)
             .filter(
                 Booking.client_id == client.id,
@@ -30,10 +37,21 @@ async def cmd_mybookings(message: Message):
             .limit(20)
             .all()
         )
-        if not bookings:
+        completed = (
+            db.query(Booking)
+            .filter(
+                Booking.client_id == client.id,
+                Booking.status == BookingStatus.COMPLETED,
+                Booking.date <= _date.today(),
+            )
+            .order_by(Booking.date.desc(), Booking.start_time.desc())
+            .limit(20)
+            .all()
+        )
+        if not active and not completed:
             await message.answer("Faol yozilishlar yo'q.")
             return
-        for b in bookings:
+        for b in active:
             biz = db.query(Business).filter(Business.id == b.business_id).first()
             svc = db.query(Service).filter(Service.id == b.service_id).first()
             text = (
@@ -45,6 +63,25 @@ async def cmd_mybookings(message: Message):
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="Bekor qilish", callback_data=f"cxl:{b.id}")],
+                ]
+            )
+            await message.answer(text, reply_markup=kb)
+        for b in completed:
+            biz = db.query(Business).filter(Business.id == b.business_id).first()
+            svc = db.query(Service).filter(Service.id == b.service_id).first()
+            existing = db.query(Review).filter(Review.booking_id == b.id).first()
+            label = "✏️ Bahoni o'zgartirish" if existing else "⭐ Baho berish"
+            text = (
+                f"✅ <b>Tashrif yakunlandi</b>\n"
+                f"📍 {biz.name if biz else ''}\n"
+                f"📋 {svc.name if svc else ''}\n"
+                f"📅 {b.date.isoformat()} {b.start_time.strftime('%H:%M')}"
+            )
+            if existing:
+                text += f"\nSizning bahoyingiz: {'⭐' * existing.rating}"
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=label, callback_data=f"rev:{b.id}")],
                 ]
             )
             await message.answer(text, reply_markup=kb)
@@ -89,6 +126,125 @@ async def my_from_menu(cb: CallbackQuery):
     finally:
         db.close()
     await cb.answer()
+
+
+def _stars_kb(booking_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⭐" * n, callback_data=f"rate:{booking_id}:{n}")]
+            for n in (5, 4, 3, 2, 1)
+        ]
+    )
+
+
+@router.callback_query(F.data.startswith("rev:"))
+async def start_review(cb: CallbackQuery, state: FSMContext):
+    bid = cb.data.split(":", 1)[1]
+    db = SessionLocal()
+    try:
+        booking = db.query(Booking).filter(Booking.id == UUID(bid)).first()
+        client = db.query(Client).filter(Client.telegram_id == cb.from_user.id).first()
+        if not booking or not client or booking.client_id != client.id:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        if booking.status != BookingStatus.COMPLETED:
+            await cb.answer("Yozilish hali tugamagan", show_alert=True)
+            return
+        if booking.date > _date.today():
+            await cb.answer("Tashrif hali bo'lmagan", show_alert=True)
+            return
+    finally:
+        db.close()
+
+    await state.clear()
+    await cb.message.answer("Bahoyingizni tanlang:", reply_markup=_stars_kb(bid))
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("rate:"))
+async def receive_rating(cb: CallbackQuery, state: FSMContext):
+    parts = cb.data.split(":")
+    if len(parts) != 3:
+        await cb.answer()
+        return
+    bid, rating_s = parts[1], parts[2]
+    try:
+        rating = int(rating_s)
+    except ValueError:
+        await cb.answer()
+        return
+    if not 1 <= rating <= 5:
+        await cb.answer()
+        return
+
+    await state.set_state(ReviewStates.waiting_for_comment)
+    await state.update_data(booking_id=bid, rating=rating)
+
+    skip_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Izohsiz yuborish", callback_data="rev_skip")]
+        ]
+    )
+    await cb.message.edit_text(
+        f"Bahoyingiz: {'⭐' * rating}\n\nIzohingizni yozib yuboring (ixtiyoriy):",
+        reply_markup=skip_kb,
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "rev_skip", ReviewStates.waiting_for_comment)
+async def skip_comment(cb: CallbackQuery, state: FSMContext):
+    saved = _save_review_from_state(await state.get_data(), cb.from_user.id, "")
+    await state.clear()
+    if saved:
+        await cb.message.edit_text("Rahmat, bahoyingiz qabul qilindi! ✅")
+    else:
+        await cb.message.edit_text("Bahoni saqlab bo'lmadi.")
+    await cb.answer()
+
+
+@router.message(ReviewStates.waiting_for_comment)
+async def receive_comment(message: Message, state: FSMContext):
+    comment = (message.text or "").strip()[:2000]
+    saved = _save_review_from_state(await state.get_data(), message.from_user.id, comment)
+    await state.clear()
+    if saved:
+        await message.answer("Rahmat, bahoyingiz qabul qilindi! ✅")
+    else:
+        await message.answer("Bahoni saqlab bo'lmadi.")
+
+
+def _save_review_from_state(data: dict, telegram_id: int, comment: str) -> bool:
+    bid = data.get("booking_id")
+    rating = data.get("rating")
+    if not bid or not rating:
+        return False
+    db = SessionLocal()
+    try:
+        booking = db.query(Booking).filter(Booking.id == UUID(bid)).first()
+        client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
+        if not booking or not client or booking.client_id != client.id:
+            return False
+        if booking.status != BookingStatus.COMPLETED or booking.date > _date.today():
+            return False
+        existing = db.query(Review).filter(Review.booking_id == booking.id).first()
+        if existing:
+            existing.rating = rating
+            existing.comment = comment
+        else:
+            db.add(
+                Review(
+                    business_id=booking.business_id,
+                    booking_id=booking.id,
+                    client_id=booking.client_id,
+                    rating=rating,
+                    comment=comment,
+                )
+            )
+        db.commit()
+        return True
+    finally:
+        db.close()
 
 
 @router.callback_query(F.data.startswith("cxl:"))
