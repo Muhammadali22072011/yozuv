@@ -19,6 +19,9 @@ def _owner_kb() -> InlineKeyboardMarkup:
         rows.append(
             [InlineKeyboardButton(text="🚀 Kabinetni ochish", web_app=WebAppInfo(url=f"{app_url}/dashboard"))]
         )
+    rows.append(
+        [InlineKeyboardButton(text="🔎 Biznes qidirish", callback_data="role:client")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
