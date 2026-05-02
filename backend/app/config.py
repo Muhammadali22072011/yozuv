@@ -1,7 +1,8 @@
 import os
+import secrets
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_DEFAULTS = {"change_me", "secret", "changeme", "your_secret_key"}
@@ -34,6 +35,10 @@ class Settings(BaseSettings):
 
     bot_token: str = ""
     webhook_url: str = ""
+    # Shared secret sent in X-Telegram-Bot-Api-Secret-Token. Random per-process
+    # default keeps dev safe; production deployments must set WEBHOOK_SECRET so
+    # restarts don't invalidate the registered webhook.
+    webhook_secret: str = secrets.token_hex(16)
 
     paytech_license_api_key: str = ""
 
@@ -52,6 +57,28 @@ class Settings(BaseSettings):
     admin_telegram_ids: str = ""
     uploads_dir: str = "/tmp/yozuv_uploads"
     public_api_url: str = "http://localhost:8000"
+
+    @model_validator(mode="after")
+    def validate_production(self):
+        if (self.app_env or "").lower() != "production":
+            return self
+        errors: list[str] = []
+        if not self.bot_token or ":" not in self.bot_token:
+            errors.append("BOT_TOKEN is missing or malformed")
+        if not self.database_url or "localhost" in self.database_url:
+            errors.append("DATABASE_URL is missing or points to localhost")
+        cors = self.cors_origins or ""
+        if not cors.strip() or "localhost" in cors:
+            errors.append("CORS_ORIGINS is missing or contains localhost")
+        if not self.public_api_url or "localhost" in self.public_api_url:
+            errors.append("PUBLIC_API_URL is missing or points to localhost")
+        if not self.webhook_secret or len(self.webhook_secret) < 16:
+            errors.append("WEBHOOK_SECRET must be set (>=16 chars) in production")
+        if errors:
+            raise ValueError(
+                "Production config errors:\n" + "\n".join(f"  - {e}" for e in errors)
+            )
+        return self
 
 
 @lru_cache

@@ -57,14 +57,15 @@ async def lifespan(_: FastAPI):
 
     api_url = (settings.public_api_url or "").rstrip("/")
     if api_url.startswith("https://"):
-        webhook_url = f"{api_url}/webhook/{settings.bot_token}"
+        webhook_url = f"{api_url}/webhook"
         try:
             await _bot.set_webhook(
                 url=webhook_url,
+                secret_token=settings.webhook_secret,
                 drop_pending_updates=True,
                 allowed_updates=["message", "callback_query"],
             )
-            logger.info("Telegram webhook set to %s/webhook/<token>", api_url)
+            logger.info("Telegram webhook set to %s/webhook (secret-token header)", api_url)
         except Exception:
             logger.exception("Failed to set Telegram webhook")
     else:
@@ -152,10 +153,12 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/webhook/{token:path}")
-async def telegram_webhook(token: str, request: Request):
-    """Telegram → here. Token in path acts as shared secret."""
-    if not settings.bot_token or token != settings.bot_token:
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    """Telegram → here. Secret comes via X-Telegram-Bot-Api-Secret-Token header
+    so the bot token never appears in URLs or proxy/CDN logs."""
+    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not settings.webhook_secret or secret != settings.webhook_secret:
         raise HTTPException(status_code=403, detail="Forbidden")
     if _bot is None or _dp is None:
         raise HTTPException(status_code=503, detail="Bot not initialised")
