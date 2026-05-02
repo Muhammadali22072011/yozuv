@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Send, Shield, Sparkles } from "lucide-react";
 import { HeroGradient } from "@/components/yz/HeroGradient";
 import { YzLogo } from "@/components/yz/Logo";
+import { apiBase } from "@/lib/api";
 
 declare global {
   interface Window {
@@ -58,7 +59,7 @@ export default function LoginPage() {
         return;
       }
 
-      const url = `${window.location.origin}/api/auth/telegram`;
+      const url = `${apiBase()}/api/auth/telegram`;
       log(bag, `POST ${url}`);
 
       let res: Response;

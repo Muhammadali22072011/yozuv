@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { YzLoader } from "@/components/yz/Loader";
+import { apiBase } from "@/lib/api";
 
 declare global {
   interface Window {
@@ -34,7 +35,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       }
       const initData = window.Telegram?.WebApp?.initData;
       if (!initData) return false;
-      const res = await fetch(`${window.location.origin}/api/auth/telegram`, {
+      const res = await fetch(`${apiBase()}/api/auth/telegram`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -53,7 +54,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
     }
 
     async function tokenIsValid(token: string): Promise<boolean> {
-      const res = await fetch(`${window.location.origin}/api/auth/me`, {
+      const res = await fetch(`${apiBase()}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "ngrok-skip-browser-warning": "1",
