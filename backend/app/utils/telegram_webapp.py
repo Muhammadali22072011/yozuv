@@ -3,7 +3,7 @@ import hmac
 import time
 from urllib.parse import parse_qsl
 
-INIT_DATA_TTL_SECONDS = 300
+INIT_DATA_TTL_SECONDS = 86400
 
 
 def validate_telegram_init_data(init_data: str, bot_token: str) -> dict[str, str]:
