@@ -68,14 +68,13 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
             if tg_id:
                 owner = db.query(User).filter(User.id == b.owner_id).first()
                 is_owner = bool(owner and owner.telegram_id == tg_id)
-            can_review = _user_can_review(db, b.id, tg_id) if not is_owner else False
             await message.answer(
                 text,
                 reply_markup=business_menu_kb(
                     b.slug,
                     owner_view=is_owner,
                     app_url=settings.public_app_url,
-                    can_review=can_review,
+                    can_review=not is_owner,
                 ),
             )
             return
@@ -377,7 +376,6 @@ async def back_to_menu(cb: CallbackQuery):
         if tg_id:
             owner = db.query(User).filter(User.id == b.owner_id).first()
             is_owner = bool(owner and owner.telegram_id == tg_id)
-        can_review = _user_can_review(db, b.id, tg_id) if not is_owner else False
         await safe_edit_text(
             cb,
             text,
@@ -385,7 +383,7 @@ async def back_to_menu(cb: CallbackQuery):
                 b.slug,
                 owner_view=is_owner,
                 app_url=settings.public_app_url,
-                can_review=can_review,
+                can_review=not is_owner,
             ),
         )
     finally:
