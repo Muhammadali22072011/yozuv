@@ -1,3 +1,4 @@
+from datetime import date as _date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,9 +6,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.deps import get_owned_business
-from app.models import Booking, Business, Client, Review
+from app.models import Booking, BookingStatus, Business, Client, Review
+from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter(tags=["reviews"])
 
@@ -16,7 +19,7 @@ class ReviewCreate(BaseModel):
     booking_id: UUID
     rating: int = Field(..., ge=1, le=5)
     comment: str = ""
-    client_telegram_id: int | None = None
+    init_data: str = Field(..., min_length=1)
 
 
 class ReviewOut(BaseModel):
@@ -30,15 +33,33 @@ class ReviewOut(BaseModel):
 
 @router.post("/reviews", response_model=ReviewOut)
 def submit_review(body: ReviewCreate, db: Session = Depends(get_db)):
+    settings = get_settings()
+    if not settings.bot_token:
+        raise HTTPException(500, "BOT_TOKEN not configured")
+    try:
+        parsed = validate_telegram_init_data(body.init_data, settings.bot_token)
+        tg_user = parse_user_from_init(parsed)
+        author_telegram_id = int(tg_user["id"])
+    except Exception as exc:
+        raise HTTPException(401, f"Invalid initData: {exc}") from exc
+
     booking = db.query(Booking).filter(Booking.id == body.booking_id).first()
     if not booking:
         raise HTTPException(404, "Booking not found")
 
-    # Ensure client owns the booking (match by telegram id)
-    if body.client_telegram_id and booking.client_id:
-        client = db.query(Client).filter(Client.id == booking.client_id).first()
-        if not client or int(client.telegram_id or 0) != int(body.client_telegram_id):
-            raise HTTPException(403, "Not your booking")
+    client = (
+        db.query(Client).filter(Client.id == booking.client_id).first()
+        if booking.client_id
+        else None
+    )
+    if not client or int(client.telegram_id or 0) != author_telegram_id:
+        raise HTTPException(403, "Not your booking")
+
+    # Reviews are only allowed for past, completed visits.
+    if booking.status != BookingStatus.COMPLETED:
+        raise HTTPException(400, "Booking is not completed")
+    if booking.date > _date.today():
+        raise HTTPException(400, "Cannot review a booking before the visit")
 
     existing = db.query(Review).filter(Review.booking_id == booking.id).first()
     if existing:
