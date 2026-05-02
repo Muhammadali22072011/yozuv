@@ -13,7 +13,12 @@ from app.models import Business, Service, User
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
-from app.utils.slots import get_available_slots, next_working_dates
+from app.utils.slots import (
+    get_available_slots,
+    get_schedule_for_weekday,
+    is_holiday,
+    next_working_dates,
+)
 from bot.keyboards.inline import (
     back_to_menu_kb,
     confirm_kb,
@@ -129,7 +134,42 @@ async def pick_day(cb: CallbackQuery):
         slots = get_available_slots(b.id, d, service.duration_minutes, db)
         times = [t.strftime("%H:%M") for t in slots]
         if not times:
-            await cb.answer("Bo'sh vaqt yo'q", show_alert=True)
+            sched = get_schedule_for_weekday(db, b.id, d.weekday())
+            holiday = is_holiday(db, b.id, d)
+            if holiday:
+                reason = "bu kun bayram"
+            elif not sched:
+                reason = "jadval saqlanmagan"
+            elif not sched.is_working:
+                reason = "dam olish kuni"
+            elif sched.start_time >= sched.end_time:
+                reason = f"jadval xato: {sched.start_time}-{sched.end_time}"
+            else:
+                window_min = (
+                    sched.end_time.hour * 60 + sched.end_time.minute
+                    - sched.start_time.hour * 60 - sched.start_time.minute
+                )
+                if service.duration_minutes > window_min:
+                    reason = (
+                        f"xizmat {service.duration_minutes} daq, "
+                        f"ish vaqti {window_min} daq"
+                    )
+                else:
+                    reason = "barcha vaqtlar band"
+            logger.warning(
+                "no slots biz=%s date=%s service=%s(%smin) sched=%s reason=%s",
+                b.slug,
+                d.isoformat(),
+                service.name,
+                service.duration_minutes,
+                (
+                    f"{sched.start_time}-{sched.end_time} working={sched.is_working}"
+                    if sched
+                    else "MISSING"
+                ),
+                reason,
+            )
+            await cb.answer(f"Bo'sh vaqt yo'q ({reason})", show_alert=True)
             return
         await safe_edit_text(cb, "Vaqtni tanlang:", reply_markup=times_kb(b.slug, sid, d_iso, times))
     finally:
