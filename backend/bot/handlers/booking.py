@@ -13,7 +13,12 @@ from app.models import Business, Service, User
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
-from app.utils.slots import get_available_slots, next_working_dates
+from app.utils.slots import (
+    get_available_slots,
+    get_schedule_for_weekday,
+    is_holiday,
+    next_working_dates,
+)
 from bot.keyboards.inline import (
     back_to_menu_kb,
     confirm_kb,
@@ -129,6 +134,25 @@ async def pick_day(cb: CallbackQuery):
         slots = get_available_slots(b.id, d, service.duration_minutes, db)
         times = [t.strftime("%H:%M") for t in slots]
         if not times:
+            sched = get_schedule_for_weekday(db, b.id, d.weekday())
+            holiday = is_holiday(db, b.id, d)
+            logger.warning(
+                "no slots biz=%s slug=%s date=%s weekday=%s service=%s duration=%s "
+                "schedule=%s holiday=%s",
+                b.id,
+                b.slug,
+                d.isoformat(),
+                d.weekday(),
+                service.name,
+                service.duration_minutes,
+                (
+                    f"{sched.start_time}-{sched.end_time} working={sched.is_working} "
+                    f"break={sched.break_start}-{sched.break_end}"
+                    if sched
+                    else "MISSING"
+                ),
+                holiday,
+            )
             await cb.answer("Bo'sh vaqt yo'q", show_alert=True)
             return
         await safe_edit_text(cb, "Vaqtni tanlang:", reply_markup=times_kb(b.slug, sid, d_iso, times))
