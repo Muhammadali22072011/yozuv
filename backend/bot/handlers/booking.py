@@ -4,7 +4,9 @@ from datetime import date, time, timedelta
 from uuid import UUID
 
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.database import SessionLocal
 from app.models import Business, Service, User
@@ -24,6 +26,10 @@ from bot.utils import safe_edit_text
 
 logger = logging.getLogger("bot.booking")
 router = Router()
+
+
+class BookingPromoStates(StatesGroup):
+    waiting_for_code = State()
 
 
 def _format_uz_date(d: date) -> str:
@@ -131,12 +137,59 @@ async def pick_day(cb: CallbackQuery):
     await cb.answer()
 
 
+def _promo_prompt_kb(slug: str, sid: str, d_iso: str, t_str: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎟 Promokod kiritish",
+                    callback_data=f"prom_y:{sid}:{d_iso}:{t_str}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="➡️ O'tkazib yuborish",
+                    callback_data=f"prom_n:{sid}:{d_iso}:{t_str}",
+                )
+            ],
+            [
+                InlineKeyboardButton(text="◀️ Vaqtlar", callback_data=f"day:{sid}:{d_iso}"),
+                InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{slug}"),
+            ],
+        ]
+    )
+
+
+def _format_summary(service_name: str, d: date, t_str: str, base_price: int, promo: dict | None) -> str:
+    lines = [
+        "Yozilishni tasdiqlaysizmi?\n",
+        f"📋 {service_name}",
+        f"📅 {_format_uz_date(d)}, {t_str}",
+    ]
+    base_str = f"{base_price:,}".replace(",", " ")
+    if promo:
+        final = int(promo.get("final_price", base_price))
+        final_str = f"{final:,}".replace(",", " ")
+        parts = []
+        if promo.get("discount_percent"):
+            parts.append(f"-{promo['discount_percent']}%")
+        if promo.get("discount_amount"):
+            disc_str = f"{int(promo['discount_amount']):,}".replace(",", " ")
+            parts.append(f"-{disc_str} so'm")
+        disc_label = " ".join(parts) if parts else ""
+        lines.append(f"🎟 Promokod: <code>{promo['code']}</code> ({disc_label})")
+        lines.append(f"💰 <s>{base_str}</s> → <b>{final_str} so'm</b>")
+    else:
+        lines.append(f"💰 {base_str} so'm")
+    return "\n".join(lines)
+
+
 @router.callback_query(F.data.startswith("time:"))
-async def pick_time(cb: CallbackQuery):
+async def pick_time(cb: CallbackQuery, state: FSMContext):
     _, sid, d_iso, t_str = cb.data.split(":", 3)
     d = date.fromisoformat(d_iso)
     h, m = t_str.split(":")
-    t = time(int(h), int(m))
+    _ = time(int(h), int(m))  # validate format
     db = SessionLocal()
     try:
         service = db.query(Service).filter(Service.id == UUID(sid)).first()
@@ -144,25 +197,178 @@ async def pick_time(cb: CallbackQuery):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
+        # Reset any previous promo state for a fresh booking attempt
+        await state.clear()
         text = (
-            f"Yozilishni tasdiqlaysizmi?\n\n"
             f"📋 {service.name}\n"
             f"📅 {_format_uz_date(d)}, {t_str}\n"
-            f"💰 {service.price:,} so'm".replace(",", " ")
+            f"💰 {service.price:,} so'm\n\nPromokodingiz bormi?".replace(",", " ")
         )
-        await safe_edit_text(cb, text, reply_markup=confirm_kb(b.slug, sid, d_iso, t_str))
+        await safe_edit_text(
+            cb,
+            text,
+            reply_markup=_promo_prompt_kb(b.slug, sid, d_iso, t_str),
+        )
     finally:
         db.close()
     await cb.answer()
 
 
+@router.callback_query(F.data.startswith("prom_n:"))
+async def promo_skip(cb: CallbackQuery, state: FSMContext):
+    """User chose to skip promo — show standard confirm screen."""
+    _, sid, d_iso, t_str = cb.data.split(":", 3)
+    d = date.fromisoformat(d_iso)
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        await state.clear()
+        await safe_edit_text(
+            cb,
+            _format_summary(service.name, d, t_str, int(service.price), None),
+            reply_markup=confirm_kb(b.slug, sid, d_iso, t_str),
+        )
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("prom_y:"))
+async def promo_ask(cb: CallbackQuery, state: FSMContext):
+    """User wants to enter a promo code — enter FSM."""
+    _, sid, d_iso, t_str = cb.data.split(":", 3)
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        slug = b.slug
+        biz_id = str(b.id)
+        base_price = int(service.price)
+    finally:
+        db.close()
+
+    await state.set_state(BookingPromoStates.waiting_for_code)
+    await state.update_data(
+        sid=sid,
+        d_iso=d_iso,
+        t_str=t_str,
+        slug=slug,
+        biz_id=biz_id,
+        base_price=base_price,
+    )
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"prom_x:{sid}:{d_iso}:{t_str}")]
+        ]
+    )
+    await safe_edit_text(cb, "🎟 Promokodni yuboring (matn ko'rinishida):", reply_markup=cancel_kb)
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("prom_x:"), BookingPromoStates.waiting_for_code)
+async def promo_cancel(cb: CallbackQuery, state: FSMContext):
+    """User cancelled promo entry — go back to promo prompt."""
+    _, sid, d_iso, t_str = cb.data.split(":", 3)
+    await state.clear()
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        d = date.fromisoformat(d_iso)
+        text = (
+            f"📋 {service.name}\n"
+            f"📅 {_format_uz_date(d)}, {t_str}\n"
+            f"💰 {service.price:,} so'm\n\nPromokodingiz bormi?".replace(",", " ")
+        )
+        await safe_edit_text(
+            cb,
+            text,
+            reply_markup=_promo_prompt_kb(b.slug, sid, d_iso, t_str),
+        )
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.message(BookingPromoStates.waiting_for_code)
+async def promo_received(message: Message, state: FSMContext):
+    """User typed a promo code — validate and either retry or move to confirm."""
+    data = await state.get_data()
+    sid = data.get("sid")
+    d_iso = data.get("d_iso")
+    t_str = data.get("t_str")
+    biz_id = data.get("biz_id")
+    base_price = int(data.get("base_price") or 0)
+    if not sid or not d_iso or not t_str or not biz_id:
+        await state.clear()
+        return
+
+    raw = (message.text or "").strip()
+
+    def _validate():
+        db = SessionLocal()
+        try:
+            return booking_service.validate_promo_for_business(db, UUID(biz_id), raw, base_price)
+        finally:
+            db.close()
+
+    promo = await asyncio.to_thread(_validate)
+
+    if not promo:
+        retry_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"prom_x:{sid}:{d_iso}:{t_str}")]
+            ]
+        )
+        await message.answer(
+            "❌ Promokod noto'g'ri yoki ishlatib bo'lingan. Qayta urinib ko'ring:",
+            reply_markup=retry_kb,
+        )
+        return
+
+    # Save validated promo so confirm: handler can apply it
+    await state.update_data(promo_code=promo["code"], promo_info=promo)
+
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = (
+            db.query(Business).filter(Business.id == service.business_id).first()
+            if service
+            else None
+        )
+        if not service or not b:
+            await message.answer("Xatolik")
+            await state.clear()
+            return
+        d = date.fromisoformat(d_iso)
+        text = _format_summary(service.name, d, t_str, base_price, promo)
+        await message.answer(text, reply_markup=confirm_kb(b.slug, sid, d_iso, t_str))
+    finally:
+        db.close()
+
+
 @router.callback_query(F.data.startswith("confirm:"))
-async def confirm_booking(cb: CallbackQuery):
+async def confirm_booking(cb: CallbackQuery, state: FSMContext):
     logger.info("confirm_booking: cb.data=%s from_user=%s", cb.data, cb.from_user.id if cb.from_user else None)
     _, sid, d_iso, t_str = cb.data.split(":", 3)
     d = date.fromisoformat(d_iso)
     h, m = t_str.split(":")
     t = time(int(h), int(m))
+
+    state_data = await state.get_data()
+    promo_code = str(state_data.get("promo_code") or "")
+    await state.clear()
 
     def _work():
         db = SessionLocal()
@@ -180,6 +386,7 @@ async def confirm_booking(cb: CallbackQuery):
                 client_phone="",
                 date=d,
                 start_time=t,
+                promo_code=promo_code,
             )
             booking = booking_service.create_booking(db, payload)
             db.commit()
@@ -196,6 +403,8 @@ async def confirm_booking(cb: CallbackQuery):
                 "booking_id": str(booking.id),
                 "service_name": service.name,
                 "service_price": int(service.price),
+                "payment_amount": int(booking.payment_amount or 0),
+                "promo_code": promo_code,
                 "business_name": b.name,
                 "business_slug": b.slug,
                 "status": str(booking.status),
@@ -259,7 +468,11 @@ async def confirm_booking(cb: CallbackQuery):
         else:
             client_name = "Mijoz"
         suffix = "kutilmoqda (tasdiqlang)" if not is_confirmed else "tasdiqlangan"
-        price_fmt = f"{info['service_price']:,}".replace(",", " ") + " so'm"
+        paid = info.get("payment_amount", info["service_price"])
+        price_fmt = f"{paid:,}".replace(",", " ") + " so'm"
+        if info.get("promo_code") and paid != info["service_price"]:
+            base_fmt = f"{info['service_price']:,}".replace(",", " ")
+            price_fmt = f"<s>{base_fmt}</s> {price_fmt} (promokod: {info['promo_code']})"
         owner_markup = None
         if not is_confirmed:
             owner_markup = owner_decision_kb(info["booking_id"]).model_dump(exclude_none=True)

@@ -15,6 +15,7 @@ class BookingCreatePublic(BaseModel):
     client_phone: str = ""
     date: date
     start_time: time
+    promo_code: str = ""
 
 
 class BookingRead(BaseModel):

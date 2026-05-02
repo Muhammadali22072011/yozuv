@@ -9,6 +9,40 @@ from app.deps import get_owned_business
 from app.models import Business, PromoCode
 
 router = APIRouter(prefix="/business/me/promo-codes", tags=["promo"])
+public_router = APIRouter(tags=["promo"])
+
+
+@public_router.post("/business/{slug}/promo/validate")
+def validate_promo_public(slug: str, body: dict, db: Session = Depends(get_db)):
+    """Client-facing: check a promo code by business slug (no auth)."""
+    code = str(body.get("code", "")).strip().upper()
+    if not code:
+        raise HTTPException(400, "Code required")
+    business = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
+    if not business:
+        raise HTTPException(404, "Business not found")
+    p = (
+        db.query(PromoCode)
+        .filter(
+            PromoCode.business_id == business.id,
+            PromoCode.code == code,
+            PromoCode.is_active.is_(True),
+        )
+        .first()
+    )
+    if not p:
+        raise HTTPException(404, "Invalid code")
+    if p.max_uses and (p.uses_count or 0) >= p.max_uses:
+        raise HTTPException(400, "Code usage limit reached")
+    return {
+        "code": p.code,
+        "discount_percent": int(p.discount_percent or 0),
+        "discount_amount": int(p.discount_amount or 0),
+    }
 
 
 class PromoCreate(BaseModel):

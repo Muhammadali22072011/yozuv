@@ -5,7 +5,17 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models import Booking, BookingStatus, Business, Client, PaymentStatus, Service, Subscription, SubscriptionStatus
+from app.models import (
+    Booking,
+    BookingStatus,
+    Business,
+    Client,
+    PaymentStatus,
+    PromoCode,
+    Service,
+    Subscription,
+    SubscriptionStatus,
+)
 from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
 
@@ -143,6 +153,8 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
     else:
         status = BookingStatus.PENDING
 
+    final_price, promo = _apply_promo(db, business.id, payload.promo_code, service.price)
+
     booking = Booking(
         business_id=business.id,
         service_id=service.id,
@@ -152,11 +164,63 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
         end_time=end_dt.time(),
         status=status,
         payment_status=PaymentStatus.UNPAID,
-        payment_amount=service.price,
+        payment_amount=final_price,
     )
     db.add(booking)
     db.flush()
+    if promo is not None:
+        promo.uses_count = (promo.uses_count or 0) + 1
     return booking
+
+
+def _apply_promo(db: Session, business_id: UUID, raw_code: str, base_price: int) -> tuple[int, PromoCode | None]:
+    """Returns (final_price, promo_or_None). Silently ignores invalid codes."""
+    code = (raw_code or "").strip().upper()
+    if not code:
+        return base_price, None
+    p = (
+        db.query(PromoCode)
+        .filter(
+            PromoCode.business_id == business_id,
+            PromoCode.code == code,
+            PromoCode.is_active.is_(True),
+        )
+        .with_for_update()
+        .first()
+    )
+    if not p:
+        return base_price, None
+    if p.max_uses and (p.uses_count or 0) >= p.max_uses:
+        return base_price, None
+    discount = (base_price * (p.discount_percent or 0) // 100) + (p.discount_amount or 0)
+    return max(0, base_price - discount), p
+
+
+def validate_promo_for_business(db: Session, business_id: UUID, raw_code: str, base_price: int) -> dict | None:
+    """Read-only validation for the bot/UI. Returns dict with discount info or None if invalid."""
+    code = (raw_code or "").strip().upper()
+    if not code:
+        return None
+    p = (
+        db.query(PromoCode)
+        .filter(
+            PromoCode.business_id == business_id,
+            PromoCode.code == code,
+            PromoCode.is_active.is_(True),
+        )
+        .first()
+    )
+    if not p:
+        return None
+    if p.max_uses and (p.uses_count or 0) >= p.max_uses:
+        return None
+    discount = (base_price * (p.discount_percent or 0) // 100) + (p.discount_amount or 0)
+    return {
+        "code": p.code,
+        "discount_percent": int(p.discount_percent or 0),
+        "discount_amount": int(p.discount_amount or 0),
+        "final_price": max(0, base_price - discount),
+    }
 
 
 def cancel_booking(db: Session, booking_id: UUID, business_id: UUID, reason: str = "") -> Booking | None:
