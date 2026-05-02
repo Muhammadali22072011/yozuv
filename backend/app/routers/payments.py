@@ -371,7 +371,9 @@ def _find_tx_id(obj) -> UUID | None:
 
 def _verify_payme_auth(request: Request) -> bool:
     if not settings.payme_secret_key:
-        return True
+        # Fail closed: an unconfigured secret must reject all callbacks,
+        # otherwise an attacker can bypass auth by hitting the webhook directly.
+        return False
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Basic "):
         return False
@@ -386,7 +388,8 @@ def _verify_payme_auth(request: Request) -> bool:
 
 def _verify_click_signature(body: dict) -> bool:
     if not settings.click_secret_key:
-        return True
+        # Fail closed: an unconfigured secret must reject all callbacks.
+        return False
     sign_time = str(body.get("sign_time", ""))
     click_trans_id = str(body.get("click_trans_id", ""))
     service_id = str(body.get("service_id", ""))
