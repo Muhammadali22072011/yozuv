@@ -6,6 +6,7 @@ import { ArrowRight, Check, Clock, Plus, Trash2 } from "lucide-react";
 import { HeroGradient } from "@/components/yz/HeroGradient";
 import { YzLoader } from "@/components/yz/Loader";
 import { YzLogo } from "@/components/yz/Logo";
+import { MapPicker } from "@/components/yz/MapPicker";
 import { apiFetch } from "@/lib/api";
 
 const CATEGORIES: { value: string; label: string; emoji: string }[] = [
@@ -69,6 +70,10 @@ export default function OnboardingPage() {
     description: "",
     address: "",
     phone: "",
+    viloyat: "",
+    tuman: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
   const [slugTouched, setSlugTouched] = useState(false);
   const [services, setServices] = useState<DraftService[]>([
@@ -130,6 +135,10 @@ export default function OnboardingPage() {
           description: biz.description.trim(),
           address: biz.address.trim(),
           phone: biz.phone.trim(),
+          viloyat: biz.viloyat,
+          tuman: biz.tuman,
+          latitude: biz.latitude,
+          longitude: biz.longitude,
         }),
       });
 
@@ -273,24 +282,52 @@ export default function OnboardingPage() {
   );
 }
 
+type Step1Biz = {
+  name: string;
+  slug: string;
+  category: string;
+  description: string;
+  address: string;
+  phone: string;
+  viloyat: string;
+  tuman: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 function Step1({
   biz,
   setBiz,
   slugTouched,
   setSlugTouched,
 }: {
-  biz: {
-    name: string;
-    slug: string;
-    category: string;
-    description: string;
-    address: string;
-    phone: string;
-  };
-  setBiz: React.Dispatch<React.SetStateAction<typeof biz>>;
+  biz: Step1Biz;
+  setBiz: React.Dispatch<React.SetStateAction<Step1Biz>>;
   slugTouched: boolean;
   setSlugTouched: (v: boolean) => void;
 }) {
+  const [viloyats, setViloyats] = useState<string[]>([]);
+  const [tumans, setTumans] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch<string[]>("/api/geo/viloyats", { auth: false })
+      .then(setViloyats)
+      .catch(() => setViloyats([]));
+  }, []);
+
+  useEffect(() => {
+    if (!biz.viloyat) {
+      setTumans([]);
+      return;
+    }
+    apiFetch<string[]>(
+      `/api/geo/tumans?viloyat=${encodeURIComponent(biz.viloyat)}`,
+      { auth: false },
+    )
+      .then(setTumans)
+      .catch(() => setTumans([]));
+  }, [biz.viloyat]);
+
   return (
     <div className="card-soft space-y-4 p-5 md:p-6">
       <div>
@@ -355,6 +392,59 @@ function Step1({
               </button>
             );
           })}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-semibold text-ink-500">Viloyat</label>
+          <select
+            value={biz.viloyat}
+            onChange={(e) => setBiz({ ...biz, viloyat: e.target.value, tuman: "" })}
+            className="yz-input mt-1.5"
+          >
+            <option value="">Tanlang…</option>
+            {viloyats.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-ink-500">Tuman / Shahar</label>
+          <select
+            value={biz.tuman}
+            onChange={(e) => setBiz({ ...biz, tuman: e.target.value })}
+            disabled={!biz.viloyat}
+            className="yz-input mt-1.5 disabled:opacity-50"
+          >
+            <option value="">{biz.viloyat ? "Tanlang…" : "Avval viloyat"}</option>
+            {tumans.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink-500">
+          Xaritada joylashuv
+        </label>
+        <div className="mt-1.5">
+          <MapPicker
+            value={
+              biz.latitude !== null && biz.longitude !== null
+                ? { lat: biz.latitude, lng: biz.longitude }
+                : null
+            }
+            onChange={(v) => setBiz((f) => ({ ...f, latitude: v.lat, longitude: v.lng }))}
+            onAddressLookup={(addr) =>
+              setBiz((f) => (f.address.trim() ? f : { ...f, address: addr }))
+            }
+          />
         </div>
       </div>
 

@@ -13,6 +13,10 @@ class BusinessCreate(BaseModel):
     description: str = ""
     address: str = ""
     phone: str = ""
+    viloyat: str = ""
+    tuman: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class BusinessUpdate(BaseModel):
@@ -26,6 +30,10 @@ class BusinessUpdate(BaseModel):
     reminder_text: str | None = None
     confirmation_mode: ConfirmationMode | None = None
     language: LanguageCode | None = None
+    viloyat: str | None = None
+    tuman: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     # NOTE: is_active is intentionally NOT here. A blocked owner could
     # otherwise re-activate themselves via PUT /business/me. Toggling
     # is_active belongs in admin endpoints only.
@@ -41,6 +49,10 @@ class BusinessPublic(BaseModel):
     phone: str
     logo_url: str
     language: LanguageCode
+    viloyat: str = ""
+    tuman: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
 
     class Config:
         from_attributes = True
@@ -62,6 +74,10 @@ class BusinessMe(BaseModel):
     language: LanguageCode
     is_active: bool
     created_at: datetime
+    viloyat: str = ""
+    tuman: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
 
     class Config:
         from_attributes = True

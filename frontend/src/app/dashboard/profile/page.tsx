@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ScreenHeader, YzLoader, YzLogo, useToast } from "@/components/yz";
+import { MapPicker } from "@/components/yz/MapPicker";
 import { apiFetch } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 
@@ -22,7 +23,32 @@ export default function ProfilePage() {
     reminder_text: "",
     language: "UZ" as "UZ" | "RU",
     confirmation_mode: "MANUAL" as "AUTO" | "MANUAL" | "PREPAYMENT",
+    viloyat: "",
+    tuman: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
+  const [viloyats, setViloyats] = useState<string[]>([]);
+  const [tumans, setTumans] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch<string[]>("/api/geo/viloyats", { auth: false })
+      .then(setViloyats)
+      .catch(() => setViloyats([]));
+  }, []);
+
+  useEffect(() => {
+    if (!form.viloyat) {
+      setTumans([]);
+      return;
+    }
+    apiFetch<string[]>(
+      `/api/geo/tumans?viloyat=${encodeURIComponent(form.viloyat)}`,
+      { auth: false },
+    )
+      .then(setTumans)
+      .catch(() => setTumans([]));
+  }, [form.viloyat]);
 
   useEffect(() => {
     Promise.all([
@@ -43,6 +69,10 @@ export default function ProfilePage() {
           language: (b.language as "UZ" | "RU") || "UZ",
           confirmation_mode:
             (b.confirmation_mode as "AUTO" | "MANUAL" | "PREPAYMENT") || "MANUAL",
+          viloyat: b.viloyat || "",
+          tuman: b.tuman || "",
+          latitude: b.latitude ?? null,
+          longitude: b.longitude ?? null,
         });
       })
       .catch(() => {});
@@ -125,6 +155,58 @@ export default function ProfilePage() {
             value={form.description}
             onChange={(v) => setForm({ ...form, description: v })}
             multi
+          />
+        </div>
+
+        <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
+          Joylashuv
+        </div>
+        <div className="card-soft space-y-3 p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-ink-500">Viloyat</label>
+              <select
+                value={form.viloyat}
+                onChange={(e) => setForm({ ...form, viloyat: e.target.value, tuman: "" })}
+                className="yz-input mt-1"
+              >
+                <option value="">Tanlang…</option>
+                {viloyats.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink-500">
+                Tuman / Shahar
+              </label>
+              <select
+                value={form.tuman}
+                onChange={(e) => setForm({ ...form, tuman: e.target.value })}
+                disabled={!form.viloyat}
+                className="yz-input mt-1 disabled:opacity-50"
+              >
+                <option value="">{form.viloyat ? "Tanlang…" : "Avval viloyat"}</option>
+                {tumans.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <MapPicker
+            value={
+              form.latitude !== null && form.longitude !== null
+                ? { lat: form.latitude, lng: form.longitude }
+                : null
+            }
+            onChange={(v) => setForm((f) => ({ ...f, latitude: v.lat, longitude: v.lng }))}
+            onAddressLookup={(addr) =>
+              setForm((f) => (f.address.trim() ? f : { ...f, address: addr }))
+            }
           />
         </div>
 

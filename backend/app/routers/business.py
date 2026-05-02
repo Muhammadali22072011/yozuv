@@ -50,6 +50,10 @@ def create_business(
         description=body.description,
         address=body.address,
         phone=body.phone,
+        viloyat=body.viloyat,
+        tuman=body.tuman,
+        latitude=body.latitude,
+        longitude=body.longitude,
     )
     db.add(b)
     db.flush()
@@ -237,11 +241,17 @@ def update_business(
     return business
 
 
-@router.get("/catalog", response_model=list[BusinessPublic])
+@router.get("/catalog")
 def catalog(
     db: Session = Depends(get_db),
     category: BusinessCategory | None = None,
     q: str | None = None,
+    viloyat: str | None = None,
+    tuman: str | None = None,
+    min_rating: float | None = Query(None, ge=0, le=5),
+    sort: str = Query("name", pattern="^(name|rating|distance)$"),
+    lat: float | None = None,
+    lng: float | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ):
@@ -251,7 +261,77 @@ def catalog(
     if q:
         like = f"%{q}%"
         query = query.filter(Business.name.ilike(like))
-    return query.order_by(Business.name.asc()).offset(offset).limit(limit).all()
+    if viloyat:
+        query = query.filter(Business.viloyat == viloyat)
+    if tuman:
+        query = query.filter(Business.tuman == tuman)
+
+    items = query.order_by(Business.name.asc()).all()
+
+    review_stats: dict = {}
+    if items:
+        biz_ids = [b.id for b in items]
+        rows = (
+            db.query(
+                Review.business_id,
+                func.coalesce(func.avg(Review.rating), 0).label("avg"),
+                func.count(Review.id).label("cnt"),
+            )
+            .filter(Review.business_id.in_(biz_ids))
+            .group_by(Review.business_id)
+            .all()
+        )
+        review_stats = {r.business_id: (float(r.avg or 0), int(r.cnt or 0)) for r in rows}
+
+    def _haversine(la1: float, ln1: float, la2: float, ln2: float) -> float:
+        from math import asin, cos, radians, sin, sqrt
+        r = 6371.0
+        la1, ln1, la2, ln2 = map(radians, [la1, ln1, la2, ln2])
+        dlat = la2 - la1
+        dlng = ln2 - ln1
+        a = sin(dlat / 2) ** 2 + cos(la1) * cos(la2) * sin(dlng / 2) ** 2
+        return 2 * r * asin(sqrt(a))
+
+    enriched = []
+    for b in items:
+        avg, cnt = review_stats.get(b.id, (0.0, 0))
+        if min_rating is not None and avg < float(min_rating):
+            continue
+        distance_km: float | None = None
+        if lat is not None and lng is not None and b.latitude is not None and b.longitude is not None:
+            distance_km = round(_haversine(lat, lng, b.latitude, b.longitude), 2)
+        enriched.append(
+            {
+                "id": str(b.id),
+                "name": b.name,
+                "slug": b.slug,
+                "category": b.category.value if hasattr(b.category, "value") else str(b.category),
+                "description": b.description,
+                "address": b.address,
+                "phone": b.phone,
+                "logo_url": b.logo_url,
+                "language": b.language.value if hasattr(b.language, "value") else str(b.language),
+                "viloyat": b.viloyat or "",
+                "tuman": b.tuman or "",
+                "latitude": b.latitude,
+                "longitude": b.longitude,
+                "rating": round(avg, 2),
+                "reviews_count": cnt,
+                "distance_km": distance_km,
+            }
+        )
+
+    if sort == "rating":
+        enriched.sort(key=lambda x: (-x["rating"], -x["reviews_count"], x["name"]))
+    elif sort == "distance":
+        enriched.sort(
+            key=lambda x: (
+                x["distance_km"] if x["distance_km"] is not None else float("inf"),
+                x["name"],
+            )
+        )
+
+    return enriched[offset : offset + limit]
 
 
 @router.get("/{slug}", response_model=BusinessPublic)
