@@ -7,10 +7,6 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/:path*",
-        destination: `${BACKEND_LOCAL}/api/:path*`,
-      },
-      {
         source: "/webhook/:path*",
         destination: `${BACKEND_LOCAL}/webhook/:path*`,
       },
