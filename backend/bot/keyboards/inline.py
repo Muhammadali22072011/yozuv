@@ -15,7 +15,12 @@ def role_choice_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def business_menu_kb(slug: str, owner_view: bool = False, app_url: str = "") -> InlineKeyboardMarkup:
+def business_menu_kb(
+    slug: str,
+    owner_view: bool = False,
+    app_url: str = "",
+    can_review: bool = False,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(text="📅 Yozilish", callback_data=f"book:{slug}"),
@@ -23,6 +28,10 @@ def business_menu_kb(slug: str, owner_view: bool = False, app_url: str = "") -> 
         ],
         [InlineKeyboardButton(text="📞 Kontaktlar", callback_data=f"contacts:{slug}")],
     ]
+    if can_review:
+        rows.append(
+            [InlineKeyboardButton(text="⭐ Baho berish", callback_data=f"qrev:{slug}")]
+        )
     if owner_view and app_url.startswith("https://"):
         rows.insert(
             0,

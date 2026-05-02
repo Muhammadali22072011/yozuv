@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,10 @@ class Business(Base):
     )
     description: Mapped[str] = mapped_column(Text, default="")
     address: Mapped[str] = mapped_column(String(512), default="")
+    viloyat: Mapped[str] = mapped_column(String(64), default="", index=True)
+    tuman: Mapped[str] = mapped_column(String(128), default="", index=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     phone: Mapped[str] = mapped_column(String(32), default="")
     logo_url: Mapped[str] = mapped_column(String(1024), default="")
     welcome_text: Mapped[str] = mapped_column(Text, default="")

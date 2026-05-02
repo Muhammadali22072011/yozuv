@@ -19,6 +19,7 @@ from app.routers import (
     business,
     clients,
     files,
+    geo,
     payments,
     promo,
     reviews,
@@ -142,6 +143,7 @@ app.include_router(subscription.router, prefix="/api")
 app.include_router(promo.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(geo.router, prefix="/api")
 app.include_router(business.router, prefix="/api")
 app.include_router(bookings.router, prefix="/api")
 app.include_router(bookings.public_router, prefix="/api")

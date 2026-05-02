@@ -32,4 +32,8 @@ export interface BusinessMe {
   language: string;
   is_active: boolean;
   created_at: string;
+  viloyat?: string;
+  tuman?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
