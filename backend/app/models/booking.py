@@ -33,6 +33,13 @@ class Booking(Base):
     payment_amount: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.utcnow())
+    # Set when the 1-hour-before reminder is delivered. Used by
+    # send_hourly_reminders to skip rows already notified — Celery beat
+    # runs every minute, so without dedup the same booking can fall in
+    # two windows and the client gets the reminder twice.
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     business: Mapped["Business"] = relationship("Business", back_populates="bookings")
     service: Mapped["Service | None"] = relationship("Service", back_populates="bookings")
