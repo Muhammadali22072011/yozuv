@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Plus, Trash2 } from "lucide-react";
+import { Clock, Pencil, Plus, Trash2 } from "lucide-react";
 import { ScreenHeader, fmtSum, useToast } from "@/components/yz";
 import {
   SheetBody,
@@ -31,6 +31,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", price: "", duration_minutes: "30" });
   const [err, setErr] = useState("");
@@ -59,7 +60,25 @@ export default function ServicesPage() {
     load();
   }, []);
 
-  async function addSvc(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm({ name: "", price: "", duration_minutes: "30" });
+    setErr("");
+    setFormOpen(true);
+  }
+
+  function openEdit(s: Svc) {
+    setEditingId(s.id);
+    setForm({
+      name: s.name,
+      price: String(s.price),
+      duration_minutes: String(s.duration_minutes),
+    });
+    setErr("");
+    setFormOpen(true);
+  }
+
+  async function saveSvc(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     if (!form.name.trim()) {
@@ -68,18 +87,27 @@ export default function ServicesPage() {
     }
     setSaving(true);
     try {
-      await apiFetch("/api/business/me/services", {
-        method: "POST",
-        body: JSON.stringify({
-          name: form.name.trim(),
-          price: parseInt(form.price || "0", 10) || 0,
-          duration_minutes: parseInt(form.duration_minutes || "30", 10) || 30,
-          order: rows.length,
-        }),
-      });
+      const payload = {
+        name: form.name.trim(),
+        price: parseInt(form.price || "0", 10) || 0,
+        duration_minutes: parseInt(form.duration_minutes || "30", 10) || 30,
+      };
+      if (editingId) {
+        await apiFetch(`/api/business/me/services/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        toast("Xizmat yangilandi");
+      } else {
+        await apiFetch("/api/business/me/services", {
+          method: "POST",
+          body: JSON.stringify({ ...payload, order: rows.length }),
+        });
+        toast("Xizmat qo‘shildi");
+      }
       setForm({ name: "", price: "", duration_minutes: "30" });
+      setEditingId(null);
       setFormOpen(false);
-      toast("Xizmat qo‘shildi");
       await load();
     } catch (e) {
       setErr((e as Error).message || "Xatolik");
@@ -105,7 +133,7 @@ export default function ServicesPage() {
         subtitle={`${rows.length} ta xizmat`}
         right={
           <button
-            onClick={() => setFormOpen(true)}
+            onClick={openCreate}
             className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-900 text-white tap"
           >
             <Plus className="h-5 w-5" strokeWidth={2.6} />
@@ -159,13 +187,22 @@ export default function ServicesPage() {
                 </div>
                 <div className="text-[10px] font-semibold text-ink-400">so‘m</div>
               </div>
-              <button
-                onClick={() => removeSvc(s.id)}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
-                aria-label="O‘chirish"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex flex-col gap-1.5">
+                <button
+                  onClick={() => openEdit(s)}
+                  className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-700 tap"
+                  aria-label="Tahrirlash"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => removeSvc(s.id)}
+                  className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
+                  aria-label="O‘chirish"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -173,8 +210,8 @@ export default function ServicesPage() {
 
       <SheetRoot open={formOpen} onOpenChange={setFormOpen}>
         <SheetContent>
-          <SheetHeader title="Yangi xizmat" />
-          <form id="svc-form" onSubmit={addSvc}>
+          <SheetHeader title={editingId ? "Xizmatni tahrirlash" : "Yangi xizmat"} />
+          <form id="svc-form" onSubmit={saveSvc}>
             <SheetBody className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-ink-500">Xizmat nomi</label>
