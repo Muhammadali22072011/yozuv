@@ -137,19 +137,32 @@ def list_businesses(
         .limit(min(max(1, limit), 500))
         .all()
     )
-    out = []
-    for b in rows:
-        sub = (
+    biz_ids = [b.id for b in rows]
+    owner_ids = [b.owner_id for b in rows if b.owner_id]
+    subs_by_biz: dict = {}
+    if biz_ids:
+        sub_rows = (
             db.query(Subscription)
             .filter(
-                Subscription.business_id == b.id,
+                Subscription.business_id.in_(biz_ids),
                 Subscription.status == SubscriptionStatus.ACTIVE,
                 Subscription.expires_at > now,
             )
             .order_by(Subscription.expires_at.desc())
-            .first()
+            .all()
         )
-        owner = db.query(User).filter(User.id == b.owner_id).first()
+        # First match per business wins (already ordered by expires_at desc).
+        for s in sub_rows:
+            subs_by_biz.setdefault(s.business_id, s)
+    owners_by_id: dict = {}
+    if owner_ids:
+        owners_by_id = {
+            u.id: u for u in db.query(User).filter(User.id.in_(owner_ids)).all()
+        }
+    out = []
+    for b in rows:
+        sub = subs_by_biz.get(b.id)
+        owner = owners_by_id.get(b.owner_id) if b.owner_id else None
         out.append(
             {
                 "id": str(b.id),
@@ -356,9 +369,15 @@ def list_payments(
         .limit(min(max(1, limit), 500))
         .all()
     )
+    biz_ids = {tx.business_id for tx in rows if tx.business_id}
+    biz_by_id: dict = {}
+    if biz_ids:
+        biz_by_id = {
+            b.id: b for b in db.query(Business).filter(Business.id.in_(biz_ids)).all()
+        }
     out = []
     for tx in rows:
-        biz = db.query(Business).filter(Business.id == tx.business_id).first()
+        biz = biz_by_id.get(tx.business_id)
         out.append(
             {
                 "id": str(tx.id),

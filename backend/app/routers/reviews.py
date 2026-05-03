@@ -107,13 +107,19 @@ def list_reviews(
         .limit(200)
         .all()
     )
+    client_ids = {r.client_id for r in rows if r.client_id}
+    clients_by_id: dict = {}
+    if client_ids:
+        clients_by_id = {
+            c.id: c
+            for c in db.query(Client).filter(Client.id.in_(client_ids)).all()
+        }
     out: list[ReviewOut] = []
     for r in rows:
         name = "Mijoz"
-        if r.client_id:
-            c = db.query(Client).filter(Client.id == r.client_id).first()
-            if c:
-                name = f"{c.first_name or ''} {c.last_name or ''}".strip() or "Mijoz"
+        c = clients_by_id.get(r.client_id) if r.client_id else None
+        if c:
+            name = f"{c.first_name or ''} {c.last_name or ''}".strip() or "Mijoz"
         out.append(
             ReviewOut(
                 id=str(r.id),
