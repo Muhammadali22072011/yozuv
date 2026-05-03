@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -46,3 +47,9 @@ class BookingRead(BaseModel):
 
 class BookingCancelBody(BaseModel):
     reason: str = Field(default="", max_length=512)
+
+
+class BookingUpdate(BaseModel):
+    service_id: Optional[UUID] = None
+    date: Optional[date] = None
+    start_time: Optional[time] = None
