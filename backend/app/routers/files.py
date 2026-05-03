@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_owned_business, get_owned_business_download
 from app.models import Business, Service
 from app.services.pdf_service import build_brochure_pdf
 from app.services.qr_service import generate_qr
@@ -33,7 +33,7 @@ def qr_png(
 @router.get("/brochure")
 def brochure_pdf(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_owned_business_download),
 ):
     services = (
         db.query(Service)

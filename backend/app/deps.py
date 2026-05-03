@@ -32,6 +32,32 @@ def get_owned_business(
     return b
 
 
+def get_owned_business_download(
+    token: str | None = None,
+    creds: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db),
+) -> Business:
+    """Auth for endpoints meant to be opened directly in a browser tab
+    (e.g. PDF download from a Telegram WebApp). Accepts the access
+    token via Authorization header *or* `?token=` query param so the
+    URL alone is enough to trigger a download — mobile WebApps can't
+    inject custom headers when navigating to a link."""
+    raw: str | None = None
+    if creds and creds.scheme.lower() == "bearer":
+        raw = creds.credentials
+    elif token:
+        raw = token
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    user = get_user_from_token(db, raw)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user")
+    b = db.query(Business).filter(Business.owner_id == user.id).first()
+    if not b:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+    return b
+
+
 def _admin_telegram_ids() -> set[int]:
     raw = get_settings().admin_telegram_ids or ""
     ids: set[int] = set()
