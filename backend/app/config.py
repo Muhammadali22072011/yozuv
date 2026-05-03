@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:3000"
     cors_origins: str = "http://localhost:3000"
 
-    next_public_bot_username: str = "YozuvBot"
+    next_public_bot_username: str = "Yozuv_cl_bot"
 
     admin_telegram_ids: str = ""
     uploads_dir: str = "/tmp/yozuv_uploads"

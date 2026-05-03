@@ -1,32 +1,28 @@
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
 import qrcode
-from PIL import Image
+from PIL import Image, ImageDraw
 from qrcode.constants import ERROR_CORRECT_H
-from qrcode.image.styledpil import StyledPilImage
-from qrcode.image.styles.colormasks import SolidFillColorMask
-from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 
 # Brand colours that match the YzLogo gradient.
 _FILL = (72, 83, 245)  # #4853F5 — indigo
-_BG = (255, 255, 255)  # white card behind the QR
+_BG = (255, 255, 255)  # white
 
 _LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
 
 
-def _logo_image() -> Image.Image | None:
-    """Logo on a solid-white square plate for the QR centre. The white
-    plate keeps scan reliability high because the data modules under it
-    end up uniformly covered, not partially dimmed by transparent
-    pixels."""
+@lru_cache(maxsize=1)
+def _logo_plate(side: int = 220) -> Image.Image | None:
+    """Logo on a solid-white square plate. Loaded from disk once and
+    cached for the lifetime of the process — the file never changes."""
     if not _LOGO_PATH.exists():
         return None
     try:
         src = Image.open(_LOGO_PATH).convert("RGBA")
     except Exception:
         return None
-    side = 220
     plate = Image.new("RGBA", (side, side), (255, 255, 255, 255))
     fitted = src.copy()
     fitted.thumbnail((side - 16, side - 16), Image.LANCZOS)
@@ -36,30 +32,59 @@ def _logo_image() -> Image.Image | None:
     return plate
 
 
-def generate_qr(business_slug: str, bot_username: str | None = None) -> bytes:
-    username = bot_username or "YozuvBot"
-    url = f"https://t.me/{username}?start={business_slug}"
-    # ERROR_CORRECT_H tolerates ~30% damage — needed because we paint a
-    # logo on top, which would otherwise corrupt the data modules.
+def _render_qr(url: str) -> Image.Image:
+    """Hand-rolled rounded-module renderer. The qrcode library's
+    StyledPilImage was taking 2-7 seconds per QR; PIL primitives bring
+    that down to ~25ms with the same look."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECT_H,
-        box_size=14,
-        border=2,
+        box_size=1,
+        border=0,
     )
     qr.add_data(url)
     qr.make(fit=True)
+    matrix = qr.get_matrix()
+    n = len(matrix)
 
-    logo = _logo_image()
-    kwargs = dict(
-        image_factory=StyledPilImage,
-        module_drawer=RoundedModuleDrawer(radius_ratio=0.85),
-        color_mask=SolidFillColorMask(front_color=_FILL, back_color=_BG),
-    )
+    box = 14
+    border_modules = 2
+    side_px = (n + border_modules * 2) * box
+    img = Image.new("RGB", (side_px, side_px), _BG)
+    draw = ImageDraw.Draw(img)
+    radius = int(box * 0.42)
+    for r, row in enumerate(matrix):
+        for col, on in enumerate(row):
+            if not on:
+                continue
+            x0 = (col + border_modules) * box
+            y0 = (r + border_modules) * box
+            draw.rounded_rectangle(
+                (x0, y0, x0 + box - 1, y0 + box - 1),
+                radius=radius,
+                fill=_FILL,
+            )
+
+    logo = _logo_plate()
     if logo is not None:
-        kwargs["embeded_image"] = logo
-    img = qr.make_image(**kwargs).convert("RGBA")
+        # Embed area is ~22% of the QR side — well within H-level
+        # error-correction tolerance.
+        embed_side = int(side_px * 0.22)
+        scaled = logo.resize((embed_side, embed_side), Image.LANCZOS)
+        ox = (side_px - embed_side) // 2
+        oy = (side_px - embed_side) // 2
+        img.paste(scaled, (ox, oy), scaled)
+    return img
 
+
+@lru_cache(maxsize=512)
+def _generate_qr_cached(business_slug: str, bot_username: str) -> bytes:
+    url = f"https://t.me/{bot_username}?start={business_slug}"
+    img = _render_qr(url)
     buffer = BytesIO()
-    img.save(buffer, format="PNG")
+    img.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
+
+
+def generate_qr(business_slug: str, bot_username: str | None = None) -> bytes:
+    return _generate_qr_cached(business_slug, bot_username or "Yozuv_cl_bot")
