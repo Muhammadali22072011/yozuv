@@ -13,6 +13,7 @@ from app.models import Business, Service, User
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
+from app.utils.clock import local_today
 from app.utils.slots import (
     get_available_slots,
     get_schedule_for_weekday,
@@ -52,7 +53,7 @@ def _format_uz_date(d: date) -> str:
         11: "noy",
         12: "dek",
     }
-    today = date.today()
+    today = local_today()
     tomorrow = today + timedelta(days=1)
     if d == today:
         prefix = "Bugun"

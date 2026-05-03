@@ -8,12 +8,13 @@ from app.database import get_db
 from app.deps import get_owned_business
 from app.models import Booking, BookingStatus, Business, Service
 from app.schemas.analytics import BookingsPoint, PopularService, RevenuePoint, SummaryAnalytics
+from app.utils.clock import local_today
 
 router = APIRouter(prefix="/business/me/analytics", tags=["analytics"])
 
 
 def _period_start(period: str) -> date:
-    today = date.today()
+    today = local_today()
     if period == "today":
         return today
     if period == "week":
@@ -32,7 +33,7 @@ def summary(
     business: Business = Depends(get_owned_business),
 ):
     start_d = _period_start(period)
-    today = date.today()
+    today = local_today()
     bookings_count = (
         db.query(func.count(Booking.id))
         .filter(
@@ -79,7 +80,7 @@ def revenue_chart(
     business: Business = Depends(get_owned_business),
 ):
     out: list[RevenuePoint] = []
-    today = date.today()
+    today = local_today()
     for i in range(days - 1, -1, -1):
         d = today - timedelta(days=i)
         amt = (
@@ -103,7 +104,7 @@ def bookings_by_day(
     business: Business = Depends(get_owned_business),
 ):
     out: list[BookingsPoint] = []
-    today = date.today()
+    today = local_today()
     for i in range(days - 1, -1, -1):
         d = today - timedelta(days=i)
         cnt = (

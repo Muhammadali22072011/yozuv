@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.models.enums import BusinessCategory
 from app.schemas.business import BusinessCreate, BusinessMe, BusinessPublic, BusinessUpdate
+from app.utils.clock import local_today
 
 router = APIRouter(prefix="/business", tags=["business"])
 
@@ -98,7 +99,7 @@ def my_dashboard(
     business: Business = Depends(get_owned_business),
 ):
     """One-shot payload that replaces ~10 calls from the dashboard page."""
-    today = date.today()
+    today = local_today()
     week_start = today - timedelta(days=7)
 
     active_bookings = ~(Booking.status == BookingStatus.CANCELLED)

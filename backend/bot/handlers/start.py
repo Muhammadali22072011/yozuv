@@ -1,5 +1,3 @@
-from datetime import date as _date
-
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
@@ -10,6 +8,7 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Review, Service, User
 from app.models.enums import BusinessCategory
+from app.utils.clock import local_today
 from app.utils.uz_geo import list_tumans, list_viloyats
 from bot.keyboards.inline import back_to_menu_kb, business_menu_kb, role_choice_kb
 from bot.utils import safe_edit_text
@@ -31,7 +30,7 @@ def _user_can_review(db: Session, business_id, telegram_id: int | None) -> bool:
             Booking.client_id == client.id,
             Booking.business_id == business_id,
             Booking.status == BookingStatus.COMPLETED,
-            Booking.date <= _date.today(),
+            Booking.date <= local_today(),
         )
         .first()
     )
@@ -413,7 +412,7 @@ async def qr_review_pick_booking(cb: CallbackQuery):
                 Booking.client_id == client.id,
                 Booking.business_id == b.id,
                 Booking.status == BookingStatus.COMPLETED,
-                Booking.date <= _date.today(),
+                Booking.date <= local_today(),
             )
             .order_by(Booking.date.desc(), Booking.start_time.desc())
             .limit(10)
