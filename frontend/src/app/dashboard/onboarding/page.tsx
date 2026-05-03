@@ -95,6 +95,10 @@ export default function OnboardingPage() {
         setErr("Biznes nomi va URL-slug majburiy");
         return;
       }
+      if (!biz.phone.trim()) {
+        setErr("Telefon raqamingizni kiriting");
+        return;
+      }
       setStep(2);
       return;
     }
