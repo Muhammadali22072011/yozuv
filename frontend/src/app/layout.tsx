@@ -13,6 +13,11 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Yozuv — Telegram orqali onlayn yozilish",
   description: "Kichik biznes uchun yozilishlar, eslatmalar va analitika.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

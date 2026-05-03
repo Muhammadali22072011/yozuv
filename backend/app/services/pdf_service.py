@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 from reportlab.lib.colors import HexColor
 from reportlab.lib.units import mm
@@ -6,6 +7,19 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from app.models import Business, Service
+
+# Brand logo lives next to the PDF service so it ships with the backend
+# image and doesn't need to be re-fetched at runtime.
+_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
+
+
+def _logo_reader() -> ImageReader | None:
+    try:
+        if _LOGO_PATH.exists():
+            return ImageReader(str(_LOGO_PATH))
+    except Exception:
+        pass
+    return None
 
 
 # ───────── Design system ─────────
@@ -130,13 +144,31 @@ def generate_brochure(
     name_baseline = header_y + 25 * mm
     sub_baseline = header_y + 17 * mm
 
-    # Left — YOZUV wordmark + tagline
+    # Left — brand logo (transparent PNG); falls back to a wordmark if
+    # the file is missing so the PDF never crashes.
     left_x = 10 * mm
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 28)
-    c.drawString(left_x, name_baseline, "YOZUV")
-    c.setFont("Helvetica", 8)
-    c.drawString(left_x, sub_baseline, _ascii_safe("Mijozlar uchun aqlli yozilish"))
+    logo = _logo_reader()
+    logo_size = 22 * mm
+    logo_y = (header_y + (header_h - logo_size) / 2)
+    if logo is not None:
+        try:
+            c.drawImage(
+                logo,
+                left_x,
+                logo_y,
+                logo_size,
+                logo_size,
+                mask="auto",
+                preserveAspectRatio=True,
+            )
+        except Exception:
+            logo = None
+    if logo is None:
+        c.setFillColor(WHITE)
+        c.setFont("Helvetica-Bold", 28)
+        c.drawString(left_x, name_baseline, "YOZUV")
+        c.setFont("Helvetica", 8)
+        c.drawString(left_x, sub_baseline, _ascii_safe("Mijozlar uchun aqlli yozilish"))
 
     # Right — business name + category (right-aligned, same baselines)
     right_x = PAGE_W - 10 * mm
