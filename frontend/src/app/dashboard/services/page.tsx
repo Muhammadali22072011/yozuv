@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Pencil, Plus, Trash2 } from "lucide-react";
-import { ScreenHeader, fmtSum, useToast } from "@/components/yz";
+import { ScreenHeader, useToast } from "@/components/yz";
 import {
   SheetBody,
   SheetContent,
@@ -17,10 +17,21 @@ type Svc = {
   id: string;
   name: string;
   price: number;
+  price_max: number | null;
+  description: string | null;
   duration_minutes: number;
   is_active: boolean;
   order: number;
 };
+
+function formatPriceRange(price: number, priceMax: number | null | undefined): string {
+  const base = price.toLocaleString("ru-RU").replace(/,/g, " ");
+  if (priceMax != null && priceMax > price) {
+    const upper = priceMax.toLocaleString("ru-RU").replace(/,/g, " ");
+    return `${base}–${upper}`;
+  }
+  return base;
+}
 
 const SWATCHES = ["#C7CCFF", "#A3AAFF", "#FFC94A", "#FF9FB5", "#FF7A6B", "#22C8A8", "#7BC6FF", "#B8A6FF"];
 
@@ -33,7 +44,13 @@ export default function ServicesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", price: "", duration_minutes: "30" });
+  const [form, setForm] = useState({
+    name: "",
+    price: "",
+    price_max: "",
+    description: "",
+    duration_minutes: "30",
+  });
   const [err, setErr] = useState("");
 
   async function load() {
@@ -62,7 +79,7 @@ export default function ServicesPage() {
 
   function openCreate() {
     setEditingId(null);
-    setForm({ name: "", price: "", duration_minutes: "30" });
+    setForm({ name: "", price: "", price_max: "", description: "", duration_minutes: "30" });
     setErr("");
     setFormOpen(true);
   }
@@ -72,6 +89,8 @@ export default function ServicesPage() {
     setForm({
       name: s.name,
       price: String(s.price),
+      price_max: s.price_max != null ? String(s.price_max) : "",
+      description: s.description || "",
       duration_minutes: String(s.duration_minutes),
     });
     setErr("");
@@ -85,11 +104,24 @@ export default function ServicesPage() {
       setErr("Nom kiriting");
       return;
     }
+    const priceVal = parseInt(form.price || "0", 10) || 0;
+    const priceMaxRaw = form.price_max.trim();
+    const priceMaxVal = priceMaxRaw ? parseInt(priceMaxRaw, 10) : null;
+    if (priceMaxVal != null && Number.isNaN(priceMaxVal)) {
+      setErr("Maks. narx noto‘g‘ri");
+      return;
+    }
+    if (priceMaxVal != null && priceMaxVal > 0 && priceMaxVal <= priceVal) {
+      setErr("Maks. narx asosiy narxdan katta bo‘lishi kerak");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         name: form.name.trim(),
-        price: parseInt(form.price || "0", 10) || 0,
+        price: priceVal,
+        price_max: priceMaxVal && priceMaxVal > 0 ? priceMaxVal : null,
+        description: form.description.trim() || null,
         duration_minutes: parseInt(form.duration_minutes || "30", 10) || 30,
       };
       if (editingId) {
@@ -105,7 +137,7 @@ export default function ServicesPage() {
         });
         toast("Xizmat qo‘shildi");
       }
-      setForm({ name: "", price: "", duration_minutes: "30" });
+      setForm({ name: "", price: "", price_max: "", description: "", duration_minutes: "30" });
       setEditingId(null);
       setFormOpen(false);
       await load();
@@ -165,6 +197,11 @@ export default function ServicesPage() {
                 <div className="truncate font-display text-[15px] font-bold text-ink-900">
                   {s.name}
                 </div>
+                {s.description && (
+                  <div className="mt-0.5 line-clamp-1 text-xs text-ink-500">
+                    {s.description}
+                  </div>
+                )}
                 <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-ink-500">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-ink-400" />
@@ -182,8 +219,8 @@ export default function ServicesPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-display text-[15px] font-extrabold text-ink-900">
-                  {fmtSum(s.price)}
+                <div className="font-display text-[13px] font-extrabold text-ink-900">
+                  {formatPriceRange(s.price, s.price_max)}
                 </div>
                 <div className="text-[10px] font-semibold text-ink-400">so‘m</div>
               </div>
@@ -234,16 +271,40 @@ export default function ServicesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink-500">Daqiqa</label>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Maks. narxi <span className="font-normal text-ink-400">(ixtiyoriy)</span>
+                  </label>
                   <input
                     type="number"
-                    value={form.duration_minutes}
-                    onChange={(e) =>
-                      setForm({ ...form, duration_minutes: e.target.value })
-                    }
+                    value={form.price_max}
+                    onChange={(e) => setForm({ ...form, price_max: e.target.value })}
+                    placeholder="70000"
                     className="yz-input mt-1"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">Daqiqa</label>
+                <input
+                  type="number"
+                  value={form.duration_minutes}
+                  onChange={(e) =>
+                    setForm({ ...form, duration_minutes: e.target.value })
+                  }
+                  className="yz-input mt-1"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">
+                  Izoh <span className="font-normal text-ink-400">(ixtiyoriy)</span>
+                </label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Qo‘shimcha ma’lumot, masalan: soch uzunligiga qarab narx farqlanadi"
+                  rows={3}
+                  className="yz-input mt-1 resize-none"
+                />
               </div>
               {err && <p className="text-sm text-[#C93A2A]">{err}</p>}
             </SheetBody>
