@@ -65,6 +65,18 @@ export default function QrPage() {
     setDownloading(true);
     try {
       const token = getToken();
+      // In Telegram WebApp (especially mobile) blob downloads don't
+      // trigger the OS save dialog. Hand off to the system browser via
+      // WebApp.openLink with a token-in-query URL.
+      type TgWebApp = { openLink?: (u: string, opts?: { try_instant_view?: boolean }) => void };
+      const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
+      if (tg?.openLink && token) {
+        const url = `${apiBase()}/api/business/me/brochure?token=${encodeURIComponent(token)}`;
+        tg.openLink(url, { try_instant_view: false });
+        toast("Brauzerda ochilmoqda…");
+        return;
+      }
+      // Plain browser path — blob + <a download> works.
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${apiBase()}/api/business/me/brochure`, { headers });
       if (!res.ok) throw new Error(await res.text());
