@@ -41,7 +41,7 @@ def brochure_pdf(
         .order_by(Service.order.asc(), Service.name.asc())
         .all()
     )
-    bot_username = settings.next_public_bot_username or "YozuvBot"
+    bot_username = settings.next_public_bot_username or "Yozuv_cl_bot"
     qr_bytes = generate_qr(business.slug, bot_username)
     pdf = build_brochure_pdf(business, services, qr_bytes, bot_username=bot_username)
 

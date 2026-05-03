@@ -17,7 +17,7 @@ $env:PUBLIC_APP_URL = $NgrokUrl
 $env:PUBLIC_API_URL = $NgrokUrl
 $env:CORS_ORIGINS = "http://localhost:3000,$NgrokUrl"
 $env:NEXT_PUBLIC_API_URL = "http://localhost:8000"
-$env:NEXT_PUBLIC_BOT_USERNAME = "YozuvBot"
+$env:NEXT_PUBLIC_BOT_USERNAME = "Yozuv_cl_bot"
 $env:UPLOADS_DIR = "D:/yozuv/uploads"
 if ($AdminTelegramIds) { $env:ADMIN_TELEGRAM_IDS = $AdminTelegramIds }
 

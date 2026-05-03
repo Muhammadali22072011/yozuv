@@ -90,7 +90,7 @@ def _format_price(value) -> str:
     return f"{n:,}".replace(",", " ") + " so'm"
 
 
-def _generate_qr_bytes(slug: str, bot_username: str = "YozuvBot") -> bytes:
+def _generate_qr_bytes(slug: str, bot_username: str = "Yozuv_cl_bot") -> bytes:
     import qrcode
 
     url = f"https://t.me/{bot_username}?start={slug}"
@@ -112,7 +112,7 @@ def generate_brochure(
     phone: str = "",
     schedule_text: str = "",
     qr_image_bytes: bytes | None = None,
-    bot_username: str = "YozuvBot",
+    bot_username: str = "Yozuv_cl_bot",
 ) -> bytes:
     """Render single-page A5 brochure for a business. Returns PDF bytes."""
     buffer = BytesIO()
@@ -418,7 +418,7 @@ def build_brochure_pdf(
     business: Business,
     services: list[Service],
     qr_png_bytes: bytes,
-    bot_username: str = "YozuvBot",
+    bot_username: str = "Yozuv_cl_bot",
 ) -> bytes:
     """Adapter used by the FastAPI router — flattens DB models into generate_brochure args."""
     schedule_text = _format_schedule(getattr(business, "schedules", None))
