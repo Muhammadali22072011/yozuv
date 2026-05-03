@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
@@ -18,6 +18,10 @@ export const metadata: Metadata = {
     shortcut: "/logo.png",
     apple: "/logo.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4853F5",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

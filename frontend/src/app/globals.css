@@ -39,6 +39,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The Telegram WebApp panel can show a sliver of the page root behind
+   the rendered content (rounded corners, viewport-vs-content mismatch
+   on desktop). Painting <html> in the brand indigo makes any sliver
+   blend with the hero gradient instead of showing as a white line. */
+html {
+  background: #4853f5;
+}
+
 body {
   @apply bg-ink-50 text-ink-900 antialiased;
   font-feature-settings: "ss01", "cv11";
