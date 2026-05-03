@@ -61,7 +61,7 @@ def create_public_booking(
     if business and business.owner_id and client:
         owner = db.query(User).filter(User.id == business.owner_id).first()
         if owner:
-            from app.bot.locales import t
+            from bot.locales import t
 
             lang = str(business.language)
             text = t(lang, "new_booking_owner").format(
