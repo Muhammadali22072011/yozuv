@@ -16,7 +16,10 @@ import { apiFetch } from "@/lib/api";
 import type { BookingRow, BookingStatus } from "@/types";
 import { cn } from "@/lib/utils";
 
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 8); // 08..19
+// Default daytime hours; the actual range is widened below if a booking
+// falls outside it, so 21:00 / 07:00 bookings don't disappear from the
+// day timeline.
+const DEFAULT_HOURS = Array.from({ length: 12 }, (_, i) => i + 8); // 08..19
 const STATUS_FILTERS: { key: "ALL" | BookingStatus; label: string }[] = [
   { key: "ALL", label: "Hammasi" },
   { key: "PENDING", label: "Kutilmoqda" },
@@ -89,6 +92,15 @@ export default function BookingsPage() {
 
   const today = new Date();
   const isToday = (d: Date) => isoFor(d) === isoFor(today);
+
+  const hours = useMemo(() => {
+    const set = new Set<number>(DEFAULT_HOURS);
+    for (const b of visible) {
+      const h = parseInt(b.start_time, 10);
+      if (!Number.isNaN(h)) set.add(h);
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [visible]);
 
   return (
     <div>
@@ -206,7 +218,7 @@ export default function BookingsPage() {
       <div className="mt-4 px-4 md:px-0">
         {view === "day" ? (
           <div>
-            {HOURS.map((h) => {
+            {hours.map((h) => {
               const hStr = `${String(h).padStart(2, "0")}:00`;
               const matching = visible.filter((b) => parseInt(b.start_time) === h);
               return (
