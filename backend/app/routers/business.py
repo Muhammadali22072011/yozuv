@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -227,6 +227,108 @@ def my_dashboard(
             else None
         ),
     }
+
+
+@router.get("/me/notifications")
+def my_notifications(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    items: list[dict] = []
+
+    recent_bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.business_id == business.id,
+            Booking.created_at >= week_ago,
+        )
+        .order_by(Booking.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    client_ids = [b.client_id for b in recent_bookings if b.client_id]
+    clients_by_id: dict = {}
+    if client_ids:
+        clients_by_id = {
+            c.id: c
+            for c in db.query(Client).filter(Client.id.in_(client_ids)).all()
+        }
+    for b in recent_bookings:
+        client = clients_by_id.get(b.client_id) if b.client_id else None
+        client_name = (
+            f"{client.first_name or ''} {client.last_name or ''}".strip()
+            if client
+            else "Mijoz"
+        )
+        is_cancel = b.status == BookingStatus.CANCELLED
+        items.append(
+            {
+                "id": f"booking:{b.id}",
+                "type": "booking_cancelled" if is_cancel else "booking_new",
+                "title": "Bron bekor qilindi" if is_cancel else "Yangi bron",
+                "body": f"{client_name} · {b.date.isoformat()} {b.start_time.strftime('%H:%M')}",
+                "created_at": b.created_at.isoformat() if b.created_at else now.isoformat(),
+                "link": "/dashboard/bookings",
+            }
+        )
+
+    recent_reviews = (
+        db.query(Review)
+        .filter(
+            Review.business_id == business.id,
+            Review.created_at >= week_ago,
+        )
+        .order_by(Review.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    for r in recent_reviews:
+        items.append(
+            {
+                "id": f"review:{r.id}",
+                "type": "review_new",
+                "title": f"Yangi izoh ({int(r.rating or 0)}★)",
+                "body": (r.text or "")[:120] or "Izohsiz baho",
+                "created_at": r.created_at.isoformat() if r.created_at else now.isoformat(),
+                "link": "/dashboard/reviews",
+            }
+        )
+
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.business_id == business.id)
+        .order_by(Subscription.expires_at.desc())
+        .first()
+    )
+    if sub and sub.expires_at:
+        days_left = (sub.expires_at - now).days
+        if 0 <= days_left <= 7:
+            items.append(
+                {
+                    "id": f"sub:{sub.id}",
+                    "type": "subscription_expiring",
+                    "title": "Obuna tugayapti",
+                    "body": f"{days_left} kun qoldi · {sub.expires_at.date().isoformat()}",
+                    "created_at": now.isoformat(),
+                    "link": "/dashboard/settings",
+                }
+            )
+        elif days_left < 0:
+            items.append(
+                {
+                    "id": f"sub:{sub.id}",
+                    "type": "subscription_expired",
+                    "title": "Obuna tugagan",
+                    "body": f"{sub.expires_at.date().isoformat()} dan beri",
+                    "created_at": now.isoformat(),
+                    "link": "/dashboard/settings",
+                }
+            )
+
+    items.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"items": items, "generated_at": now.isoformat()}
 
 
 @router.put("/me", response_model=BusinessMe)

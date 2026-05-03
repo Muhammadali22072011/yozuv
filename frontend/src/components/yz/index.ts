@@ -24,6 +24,8 @@ export { BookingSheet } from "./BookingSheet";
 export { ClientSheet } from "./ClientSheet";
 export type { ClientDetail } from "./ClientSheet";
 export { NewBookingSheet } from "./NewBookingSheet";
+export { NotificationSheet } from "./NotificationSheet";
+export type { NotificationItem } from "./NotificationSheet";
 export {
   fmtSum,
   fmtShort,

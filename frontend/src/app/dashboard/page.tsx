@@ -20,6 +20,7 @@ import {
   BookingCard,
   BookingSheet,
   HeroGradient,
+  NotificationSheet,
   SectionLabel,
   YzLoader,
   YzLogo,
@@ -31,7 +32,7 @@ import {
   todayISO,
   useToast,
 } from "@/components/yz";
-import type { ClientLite, ServiceLite } from "@/components/yz";
+import type { ClientLite, NotificationItem, ServiceLite } from "@/components/yz";
 import { StatusBadge } from "@/components/yz/StatusBadge";
 
 type Sub = { plan: string; status: string; expires_at: string | null };
@@ -51,6 +52,10 @@ export default function DashboardHome() {
   const [reviewsCount, setReviewsCount] = useState(0);
   const [svcCount, setSvcCount] = useState(0);
   const [activeBooking, setActiveBooking] = useState<BookingRow | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState<NotificationItem[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   type DashboardBundle = {
     business: BusinessMe;
@@ -94,6 +99,44 @@ export default function DashboardHome() {
     return () => window.removeEventListener("yz:bookings-changed", onChanged);
   }, [router]);
 
+  async function loadNotifications() {
+    setNotifLoading(true);
+    try {
+      const r = await apiFetch<{ items: NotificationItem[] }>(
+        "/api/business/me/notifications"
+      );
+      setNotifs(r.items || []);
+      const lastSeen = Number(
+        (typeof window !== "undefined" && localStorage.getItem("yozuv_notif_last_seen")) ||
+          0
+      );
+      const unread = (r.items || []).filter(
+        (n) => new Date(n.created_at).getTime() > lastSeen
+      ).length;
+      setUnreadCount(unread);
+    } catch {
+      // silent: notifications are non-critical
+    } finally {
+      setNotifLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!ready) return;
+    loadNotifications();
+    const id = window.setInterval(loadNotifications, 60_000);
+    return () => window.clearInterval(id);
+  }, [ready]);
+
+  function openNotifications() {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("yozuv_notif_last_seen", String(Date.now()));
+    }
+    setUnreadCount(0);
+    setNotifOpen(true);
+    loadNotifications();
+  }
+
   if (!ready || !biz) {
     return <YzLoader fullscreen />;
   }
@@ -121,10 +164,16 @@ export default function DashboardHome() {
             </div>
           </div>
           <button
-            onClick={() => toast("Bildirishnomalar tez orada")}
+            onClick={openNotifications}
             className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+            aria-label="Bildirishnomalar"
           >
             <Bell className="h-5 w-5 text-white" strokeWidth={2} />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -299,6 +348,13 @@ export default function DashboardHome() {
         services={services}
         clients={clients}
         onChanged={load}
+      />
+
+      <NotificationSheet
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        items={notifs}
+        loading={notifLoading}
       />
     </div>
   );
