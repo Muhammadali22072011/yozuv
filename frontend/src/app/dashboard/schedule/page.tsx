@@ -85,6 +85,15 @@ export default function SchedulePage() {
   }
 
   async function save() {
+    const bad = rows.find(
+      (d) => d.is_working && toHM(d.start_time) >= toHM(d.end_time)
+    );
+    if (bad) {
+      toast(
+        `${DAY_NAMES[bad.day_of_week]}: boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak`
+      );
+      return;
+    }
     setSaving(true);
     try {
       await apiFetch("/api/business/me/schedule", {

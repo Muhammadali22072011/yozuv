@@ -51,14 +51,24 @@ export default function PromoPage() {
       setErr("Kod kiriting");
       return;
     }
+    const pct = parseInt(form.discount_percent || "0", 10) || 0;
+    const amt = parseInt(form.discount_amount || "0", 10) || 0;
+    if (pct <= 0 && amt <= 0) {
+      setErr("Foiz yoki summa chegirmasidan birini kiriting");
+      return;
+    }
+    if (pct < 0 || pct > 100) {
+      setErr("Chegirma foizi 1 dan 100 gacha bo'lishi kerak");
+      return;
+    }
     setSaving(true);
     try {
       await apiFetch("/api/business/me/promo-codes", {
         method: "POST",
         body: JSON.stringify({
           code: form.code.trim().toUpperCase(),
-          discount_percent: parseInt(form.discount_percent || "0", 10) || 0,
-          discount_amount: parseInt(form.discount_amount || "0", 10) || 0,
+          discount_percent: pct,
+          discount_amount: amt,
           max_uses: parseInt(form.max_uses || "0", 10) || 0,
         }),
       });
