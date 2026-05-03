@@ -12,12 +12,20 @@ declare global {
         initDataUnsafe?: unknown;
         ready?: () => void;
         expand?: () => void;
+        setHeaderColor?: (color: string) => void;
+        setBackgroundColor?: (color: string) => void;
         version?: string;
         platform?: string;
       };
     };
   }
 }
+
+// Brand indigo (matches the YzLogo gradient and the dashboard hero).
+// Setting this on the WebApp header gets rid of Telegram's default
+// black bar at the top and the white sliver between the WebApp and
+// the system chrome on desktop.
+const BRAND_BG = "#4853F5";
 
 export function AuthBootstrap({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<"checking" | "ready" | "failed">("checking");
@@ -28,8 +36,11 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
     async function exchangeInitData(): Promise<boolean> {
       try {
-        window.Telegram?.WebApp?.ready?.();
-        window.Telegram?.WebApp?.expand?.();
+        const wa = window.Telegram?.WebApp;
+        wa?.ready?.();
+        wa?.expand?.();
+        wa?.setHeaderColor?.(BRAND_BG);
+        wa?.setBackgroundColor?.(BRAND_BG);
       } catch {
         // noop
       }

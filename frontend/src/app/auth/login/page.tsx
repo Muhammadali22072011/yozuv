@@ -15,6 +15,8 @@ declare global {
         initDataUnsafe?: unknown;
         ready?: () => void;
         expand?: () => void;
+        setHeaderColor?: (color: string) => void;
+        setBackgroundColor?: (color: string) => void;
         version?: string;
         platform?: string;
       };
