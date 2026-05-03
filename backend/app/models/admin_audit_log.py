@@ -1,0 +1,23 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import BigInteger, DateTime, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.database import Base
+
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    admin_name: Mapped[str] = mapped_column(String(255), default="")
+    action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(64), default="", index=True)
+    target_id: Mapped[str] = mapped_column(String(64), default="")
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.utcnow(), index=True
+    )

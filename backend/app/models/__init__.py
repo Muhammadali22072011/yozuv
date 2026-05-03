@@ -1,4 +1,6 @@
+from app.models.admin_audit_log import AdminAuditLog
 from app.models.booking import Booking
+from app.models.broadcast_message import BroadcastMessage
 from app.models.business import Business
 from app.models.client import Client
 from app.models.enums import (
@@ -22,6 +24,8 @@ from app.models.subscription import Subscription
 from app.models.user import User
 
 __all__ = [
+    "AdminAuditLog",
+    "BroadcastMessage",
     "User",
     "Business",
     "Service",
