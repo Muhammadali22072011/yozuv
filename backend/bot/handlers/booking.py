@@ -6,10 +6,18 @@ from uuid import UUID
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 
 from app.database import SessionLocal
-from app.models import Business, Service, User
+from app.models import Business, Client, Service, User
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
@@ -36,6 +44,50 @@ router = Router()
 
 class BookingPromoStates(StatesGroup):
     waiting_for_code = State()
+
+
+class BookingPhoneStates(StatesGroup):
+    waiting_for_phone = State()
+
+
+def _request_contact_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📞 Telefon yuborish", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def _client_has_phone(telegram_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        c = db.query(Client).filter(Client.telegram_id == telegram_id).first()
+        return bool(c and c.phone and c.phone.strip())
+    finally:
+        db.close()
+
+
+def _save_client_phone(telegram_id: int, phone: str, first_name: str = "", last_name: str = "") -> None:
+    db = SessionLocal()
+    try:
+        c = db.query(Client).filter(Client.telegram_id == telegram_id).first()
+        if c:
+            c.phone = phone
+            if first_name and not c.first_name:
+                c.first_name = first_name
+            if last_name and not c.last_name:
+                c.last_name = last_name
+        else:
+            c = Client(
+                telegram_id=telegram_id,
+                first_name=first_name or "",
+                last_name=last_name or "",
+                phone=phone,
+            )
+            db.add(c)
+        db.commit()
+    finally:
+        db.close()
 
 
 def _format_uz_date(d: date) -> str:
@@ -399,48 +451,50 @@ async def promo_received(message: Message, state: FSMContext):
         db.close()
 
 
-@router.callback_query(F.data.startswith("confirm:"))
-async def confirm_booking(cb: CallbackQuery, state: FSMContext):
-    logger.info("confirm_booking: cb.data=%s from_user=%s", cb.data, cb.from_user.id if cb.from_user else None)
-    _, sid, d_iso, t_str = cb.data.split(":", 3)
+def _create_booking_sync(
+    user_id: int,
+    first_name: str,
+    last_name: str,
+    sid: str,
+    d_iso: str,
+    t_str: str,
+    promo_code: str,
+    phone: str,
+):
+    """Synchronous booking creation. Runs in a worker thread."""
     d = date.fromisoformat(d_iso)
     h, m = t_str.split(":")
     t = time(int(h), int(m))
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            return None, "Biznes topilmadi"
+        payload = BookingCreatePublic(
+            business_id=b.id,
+            service_id=UUID(sid),
+            client_telegram_id=user_id,
+            client_first_name=first_name or "",
+            client_last_name=last_name or "",
+            client_phone=phone or "",
+            date=d,
+            start_time=t,
+            promo_code=promo_code,
+        )
+        booking = booking_service.create_booking(db, payload)
+        db.commit()
 
-    state_data = await state.get_data()
-    promo_code = str(state_data.get("promo_code") or "")
-    await state.clear()
+        owner = db.query(User).filter(User.id == b.owner_id).first()
+        owner_tg = None
+        if owner and owner.telegram_id:
+            try:
+                owner_tg = int(owner.telegram_id)
+            except (TypeError, ValueError):
+                owner_tg = None
 
-    def _work():
-        db = SessionLocal()
-        try:
-            service = db.query(Service).filter(Service.id == UUID(sid)).first()
-            b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
-            if not b or not service:
-                return None, "Biznes topilmadi"
-            payload = BookingCreatePublic(
-                business_id=b.id,
-                service_id=UUID(sid),
-                client_telegram_id=cb.from_user.id,
-                client_first_name=cb.from_user.first_name or "",
-                client_last_name=cb.from_user.last_name or "",
-                client_phone="",
-                date=d,
-                start_time=t,
-                promo_code=promo_code,
-            )
-            booking = booking_service.create_booking(db, payload)
-            db.commit()
-
-            owner = db.query(User).filter(User.id == b.owner_id).first()
-            owner_tg = None
-            if owner and owner.telegram_id:
-                try:
-                    owner_tg = int(owner.telegram_id)
-                except (TypeError, ValueError):
-                    owner_tg = None
-
-            info = {
+        return (
+            {
                 "booking_id": str(booking.id),
                 "service_name": service.name,
                 "service_price": int(service.price),
@@ -450,86 +504,206 @@ async def confirm_booking(cb: CallbackQuery, state: FSMContext):
                 "business_slug": b.slug,
                 "status": str(booking.status),
                 "owner_telegram_id": owner_tg,
-            }
-            return info, None
-        except Exception as e:
-            db.rollback()
-            logger.exception("confirm_booking failed")
-            return None, str(e)
-        finally:
-            db.close()
+            },
+            None,
+        )
+    except Exception as e:
+        db.rollback()
+        logger.exception("create booking failed")
+        return None, str(e)
+    finally:
+        db.close()
 
-    info, err = await asyncio.to_thread(_work)
-    if info is None:
-        raw = str(err or "")
-        low = raw.lower()
-        if "subscription" in low:
-            msg = "❌ Bu biznes obunasi tugagan. Iltimos, keyinroq urinib ko'ring."
-        elif "no longer available" in low or "slot" in low:
-            msg = "⏰ Bu vaqt allaqachon band. Iltimos, boshqa vaqt tanlang."
-        elif "service not found" in low:
-            msg = "❌ Xizmat topilmadi yoki o'chirilgan."
-        elif "business not found" in low:
-            msg = "❌ Biznes topilmadi."
-        else:
-            msg = f"❌ Xatolik: {raw}" if raw else "❌ Kutilmagan xatolik."
-        await cb.answer(msg, show_alert=True)
+
+def _booking_error_text(err: str | None) -> str:
+    raw = str(err or "")
+    low = raw.lower()
+    if "subscription" in low:
+        return "❌ Bu biznes obunasi tugagan. Iltimos, keyinroq urinib ko'ring."
+    if "no longer available" in low or "slot" in low:
+        return "⏰ Bu vaqt allaqachon band. Iltimos, boshqa vaqt tanlang."
+    if "service not found" in low:
+        return "❌ Xizmat topilmadi yoki o'chirilgan."
+    if "business not found" in low:
+        return "❌ Biznes topilmadi."
+    return f"❌ Xatolik: {raw}" if raw else "❌ Kutilmagan xatolik."
+
+
+def _client_display_name(from_user) -> str:
+    if from_user.first_name or from_user.last_name:
+        return f"{from_user.first_name or ''} {from_user.last_name or ''}".strip()
+    if from_user.username:
+        return f"@{from_user.username}"
+    return "Mijoz"
+
+
+async def _notify_owner_of_booking(info: dict, d: date, t_str: str, from_user) -> None:
+    owner_tg_id = info.get("owner_telegram_id")
+    if not owner_tg_id:
         return
+    is_confirmed = info["status"].endswith("CONFIRMED")
+    suffix = "tasdiqlangan" if is_confirmed else "kutilmoqda (tasdiqlang)"
+    paid = info.get("payment_amount", info["service_price"])
+    price_fmt = f"{paid:,}".replace(",", " ") + " so'm"
+    if info.get("promo_code") and paid != info["service_price"]:
+        base_fmt = f"{info['service_price']:,}".replace(",", " ")
+        price_fmt = f"<s>{base_fmt}</s> {price_fmt} (promokod: {info['promo_code']})"
+    owner_markup = None
+    if not is_confirmed:
+        owner_markup = owner_decision_kb(info["booking_id"]).model_dump(exclude_none=True)
+    try:
+        await asyncio.to_thread(
+            send_telegram_message,
+            owner_tg_id,
+            (
+                f"🆕 <b>Yangi yozilish</b>\n\n"
+                f"👤 {_client_display_name(from_user)}\n"
+                f"📋 {info['service_name']}\n"
+                f"📅 {_format_uz_date(d)} · {t_str}\n"
+                f"💰 {price_fmt}\n\n"
+                f"Holati: {suffix}"
+            ),
+            owner_markup,
+        )
+    except Exception:
+        logger.exception("owner notify failed")
 
-    # Message to client
+
+def _success_text(info: dict, d: date, t_str: str) -> str:
     is_confirmed = info["status"].endswith("CONFIRMED")
     status_line = (
         "✅ Yozildingiz!"
         if is_confirmed
         else "⏳ So'rov yuborildi — biznes egasi tasdiqlashini kuting."
     )
+    return (
+        f"{status_line}\n\n"
+        f"📋 {info['service_name']}\n"
+        f"📅 {_format_uz_date(d)} soat {t_str} da\n"
+        f"📍 {info['business_name']}\n\n"
+        "🔔 1 soat oldin eslatma yuboramiz"
+    )
+
+
+@router.callback_query(F.data.startswith("confirm:"))
+async def confirm_booking(cb: CallbackQuery, state: FSMContext):
+    logger.info("confirm_booking: cb.data=%s from_user=%s", cb.data, cb.from_user.id if cb.from_user else None)
+    _, sid, d_iso, t_str = cb.data.split(":", 3)
+    d = date.fromisoformat(d_iso)
+
+    state_data = await state.get_data()
+    promo_code = str(state_data.get("promo_code") or "")
+
+    # First booking? Ask the client to share their phone before creating
+    # anything — owners need a way to call them, and Telegram-only @username
+    # contact is unreliable.
+    has_phone = await asyncio.to_thread(_client_has_phone, cb.from_user.id)
+    if not has_phone:
+        await state.set_state(BookingPhoneStates.waiting_for_phone)
+        await state.update_data(
+            sid=sid, d_iso=d_iso, t_str=t_str, promo_code=promo_code
+        )
+        try:
+            await cb.message.answer(
+                "📱 Birinchi marta yozilyapsiz — telefon raqamingizni yuboring.\n"
+                "Biznes egasi siz bilan bog'lanishi uchun kerak.",
+                reply_markup=_request_contact_kb(),
+            )
+        except Exception:
+            logger.exception("ask for phone failed")
+        await cb.answer()
+        return
+
+    await state.clear()
+    info, err = await asyncio.to_thread(
+        _create_booking_sync,
+        cb.from_user.id,
+        cb.from_user.first_name or "",
+        cb.from_user.last_name or "",
+        sid,
+        d_iso,
+        t_str,
+        promo_code,
+        "",  # phone already on Client row
+    )
+    if info is None:
+        await cb.answer(_booking_error_text(err), show_alert=True)
+        return
+
     await safe_edit_text(
         cb,
-        (
-            f"{status_line}\n\n"
-            f"📋 {info['service_name']}\n"
-            f"📅 {_format_uz_date(d)} soat {t_str} da\n"
-            f"📍 {info['business_name']}\n\n"
-            "🔔 1 soat oldin eslatma yuboramiz"
-        ),
+        _success_text(info, d, t_str),
         reply_markup=back_to_menu_kb(info["business_slug"]),
     )
     try:
         await cb.answer("✅ Yozildingiz")
     except Exception:
         pass
+    await _notify_owner_of_booking(info, d, t_str, cb.from_user)
 
-    # Notify owner
-    owner_tg_id = info["owner_telegram_id"]
-    if owner_tg_id:
-        if cb.from_user.first_name or cb.from_user.last_name:
-            client_name = f"{cb.from_user.first_name or ''} {cb.from_user.last_name or ''}".strip()
-        elif cb.from_user.username:
-            client_name = f"@{cb.from_user.username}"
-        else:
-            client_name = "Mijoz"
-        suffix = "kutilmoqda (tasdiqlang)" if not is_confirmed else "tasdiqlangan"
-        paid = info.get("payment_amount", info["service_price"])
-        price_fmt = f"{paid:,}".replace(",", " ") + " so'm"
-        if info.get("promo_code") and paid != info["service_price"]:
-            base_fmt = f"{info['service_price']:,}".replace(",", " ")
-            price_fmt = f"<s>{base_fmt}</s> {price_fmt} (promokod: {info['promo_code']})"
-        owner_markup = None
-        if not is_confirmed:
-            owner_markup = owner_decision_kb(info["booking_id"]).model_dump(exclude_none=True)
-        try:
-            await asyncio.to_thread(
-                send_telegram_message,
-                owner_tg_id,
-                (
-                    f"🆕 <b>Yangi yozilish</b>\n\n"
-                    f"👤 {client_name}\n"
-                    f"📋 {info['service_name']}\n"
-                    f"📅 {_format_uz_date(d)} · {t_str}\n"
-                    f"💰 {price_fmt}\n\n"
-                    f"Holati: {suffix}"
-                ),
-                owner_markup,
-            )
-        except Exception:
-            logger.exception("owner notify failed")
+
+@router.message(F.contact, BookingPhoneStates.waiting_for_phone)
+async def receive_phone_for_booking(message: Message, state: FSMContext):
+    contact = message.contact
+    if not contact or not contact.phone_number:
+        await message.answer(
+            "Telefon raqamini ulashishni unutdingiz. Iltimos, tugmadan foydalaning.",
+            reply_markup=_request_contact_kb(),
+        )
+        return
+    if contact.user_id and contact.user_id != message.from_user.id:
+        await message.answer(
+            "❌ Faqat o'zingizning raqamingizni yuboring.",
+            reply_markup=_request_contact_kb(),
+        )
+        return
+
+    phone = contact.phone_number
+    if not phone.startswith("+"):
+        phone = f"+{phone}"
+
+    await asyncio.to_thread(
+        _save_client_phone,
+        message.from_user.id,
+        phone,
+        message.from_user.first_name or "",
+        message.from_user.last_name or "",
+    )
+
+    data = await state.get_data()
+    sid = str(data.get("sid") or "")
+    d_iso = str(data.get("d_iso") or "")
+    t_str = str(data.get("t_str") or "")
+    promo_code = str(data.get("promo_code") or "")
+    await state.clear()
+
+    if not sid or not d_iso or not t_str:
+        await message.answer(
+            "✅ Raqam saqlandi. Yozilishni qaytadan boshlang.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    await message.answer("✅ Raqam saqlandi.", reply_markup=ReplyKeyboardRemove())
+
+    info, err = await asyncio.to_thread(
+        _create_booking_sync,
+        message.from_user.id,
+        message.from_user.first_name or "",
+        message.from_user.last_name or "",
+        sid,
+        d_iso,
+        t_str,
+        promo_code,
+        phone,
+    )
+    if info is None:
+        await message.answer(_booking_error_text(err))
+        return
+
+    d = date.fromisoformat(d_iso)
+    await message.answer(
+        _success_text(info, d, t_str),
+        reply_markup=back_to_menu_kb(info["business_slug"]),
+    )
+    await _notify_owner_of_booking(info, d, t_str, message.from_user)
