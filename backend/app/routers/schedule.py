@@ -81,6 +81,19 @@ def put_schedule(
     return {"ok": True}
 
 
+@router.get("/holidays", response_model=list[HolidayOut])
+def list_holidays(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    return (
+        db.query(HolidayDate)
+        .filter(HolidayDate.business_id == business.id)
+        .order_by(HolidayDate.date.asc())
+        .all()
+    )
+
+
 @router.post("/holidays", response_model=HolidayOut)
 def add_holiday(
     body: HolidayCreate,
