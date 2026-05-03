@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Phone, MessageSquare, Pencil } from "lucide-react";
 import type { BookingRow } from "@/types";
 import { apiFetch } from "@/lib/api";
@@ -67,6 +67,22 @@ export function BookingSheet({
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editServiceId, setEditServiceId] = useState<string>("");
+  const [editDate, setEditDate] = useState<string>("");
+  const [editTime, setEditTime] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) {
+      setEditing(false);
+      return;
+    }
+    if (booking) {
+      setEditServiceId(booking.service_id || "");
+      setEditDate(booking.date);
+      setEditTime(hm(booking.start_time));
+    }
+  }, [open, booking]);
 
   if (!booking) return null;
 
@@ -110,6 +126,32 @@ export function BookingSheet({
     }
   };
 
+  const saveEdit = async () => {
+    if (!editServiceId || !editDate || !editTime) {
+      toast("Barcha maydonlarni to'ldiring");
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiFetch(`/api/business/me/bookings/${booking.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          service_id: editServiceId,
+          date: editDate,
+          start_time: `${editTime}:00`,
+        }),
+      });
+      toast("Yozilish yangilandi ✓");
+      setEditing(false);
+      onChanged?.();
+      onOpenChange(false);
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <SheetRoot open={open} onOpenChange={onOpenChange}>
       <SheetContent>
@@ -128,44 +170,97 @@ export function BookingSheet({
             </div>
           </div>
 
-          <div className="mt-5 flex gap-2.5">
-            <ActionBtn
-              icon={<Phone className="h-5 w-5" />}
-              label="Qo'ng'iroq"
-              onClick={() => callPhone(cli?.phone)}
-            />
-            <ActionBtn
-              icon={<MessageSquare className="h-5 w-5" />}
-              label="Xabar"
-              onClick={() => {
-                if (cli?.telegram_id) {
-                  messageTelegramUser(cli.telegram_id);
-                } else {
-                  toast("Mijoz Telegram orqali bog'lanmagan");
-                }
-              }}
-            />
-            <ActionBtn
-              icon={<Pencil className="h-5 w-5" />}
-              label="Tahrir"
-              onClick={() => toast("Tahrir rejimi tez orada")}
-            />
-          </div>
+          {!editing && (
+            <div className="mt-5 flex gap-2.5">
+              <ActionBtn
+                icon={<Phone className="h-5 w-5" />}
+                label="Qo'ng'iroq"
+                onClick={() => callPhone(cli?.phone)}
+              />
+              <ActionBtn
+                icon={<MessageSquare className="h-5 w-5" />}
+                label="Xabar"
+                onClick={() => {
+                  if (cli?.telegram_id) {
+                    messageTelegramUser(cli.telegram_id);
+                  } else {
+                    toast("Mijoz Telegram orqali bog'lanmagan");
+                  }
+                }}
+              />
+              <ActionBtn
+                icon={<Pencil className="h-5 w-5" />}
+                label="Tahrir"
+                onClick={() => setEditing(true)}
+              />
+            </div>
+          )}
 
-          <div
-            className="mt-4 rounded-[22px] p-4"
-            style={{ background: "linear-gradient(135deg,#EEF0FF,#F8F9FC)" }}
-          >
-            <Row label="Vaqt" value={`${shortDate(booking.date)} · ${hm(booking.start_time)}`} />
-            <Row label="Davomiyligi" value={`${dur} daqiqa`} />
-            <Row label="Xizmat" value={svc?.name || "—"} />
-            {booking.notes && <Row label="Izoh" value={booking.notes} />}
-            <div className="my-3 h-px bg-ink-900/10" />
-            <Row label="Narx" value={`${fmtSum(booking.payment_amount)} so‘m`} bold />
-          </div>
+          {editing ? (
+            <div className="mt-5 rounded-[22px] border-[1.5px] border-indigo-100 bg-white p-4">
+              <label className="block text-xs font-semibold text-ink-500">Xizmat</label>
+              <select
+                value={editServiceId}
+                onChange={(e) => setEditServiceId(e.target.value)}
+                className="yz-input mt-1 w-full"
+              >
+                {services.length === 0 && <option value="">—</option>}
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">Sana</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="yz-input mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">Vaqt</label>
+                  <input
+                    type="time"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    className="yz-input mt-1 w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="mt-4 rounded-[22px] p-4"
+              style={{ background: "linear-gradient(135deg,#EEF0FF,#F8F9FC)" }}
+            >
+              <Row label="Vaqt" value={`${shortDate(booking.date)} · ${hm(booking.start_time)}`} />
+              <Row label="Davomiyligi" value={`${dur} daqiqa`} />
+              <Row label="Xizmat" value={svc?.name || "—"} />
+              {booking.notes && <Row label="Izoh" value={booking.notes} />}
+              <div className="my-3 h-px bg-ink-900/10" />
+              <Row label="Narx" value={`${fmtSum(booking.payment_amount)} so‘m`} bold />
+            </div>
+          )}
         </SheetBody>
         <SheetFooter>
-          {booking.status === "PENDING" || booking.status === "CONFIRMED" ? (
+          {editing ? (
+            <>
+              <button
+                onClick={() => setEditing(false)}
+                disabled={busy}
+                className="flex-1 rounded-2xl bg-ink-100 px-4 py-3.5 font-display text-sm font-bold text-ink-900 tap"
+              >
+                Bekor
+              </button>
+              <button onClick={saveEdit} disabled={busy} className="btn-primary flex-[2]">
+                {busy ? "Saqlanmoqda…" : "Saqlash"}
+              </button>
+            </>
+          ) : booking.status === "PENDING" || booking.status === "CONFIRMED" ? (
             <>
               <button
                 onClick={cancel}

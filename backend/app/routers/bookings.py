@@ -21,6 +21,7 @@ from app.schemas.booking import (
     BookingCreateOwner,
     BookingCreatePublic,
     BookingRead,
+    BookingUpdate,
 )
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
@@ -174,6 +175,79 @@ def list_bookings(
     if status:
         q = q.filter(Booking.status == status)
     return q.order_by(Booking.date.desc(), Booking.start_time.desc()).offset(offset).limit(limit).all()
+
+
+@me_router.patch("/bookings/{booking_id}", response_model=BookingRead)
+def update_booking(
+    booking_id: UUID,
+    body: BookingUpdate,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner edit: change service / date / start_time. Recomputes end_time
+    and price (only when service changed) and re-validates the slot."""
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id, Booking.business_id == business.id)
+        .first()
+    )
+    if not booking:
+        raise HTTPException(404, "Not found")
+    if booking.status == BookingStatus.CANCELLED:
+        raise HTTPException(400, "Bekor qilingan yozilishni tahrirlab bo'lmaydi")
+
+    new_service = booking.service
+    if body.service_id is not None and body.service_id != booking.service_id:
+        new_service = (
+            db.query(Service)
+            .filter(
+                Service.id == body.service_id,
+                Service.business_id == business.id,
+                Service.is_active.is_(True),
+            )
+            .first()
+        )
+        if not new_service:
+            raise HTTPException(404, "Service not found")
+    new_date = body.date if body.date is not None else booking.date
+    new_start = body.start_time if body.start_time is not None else booking.start_time
+    duration = (
+        new_service.duration_minutes
+        if new_service is not None
+        else (
+            booking.end_time.hour * 60
+            + booking.end_time.minute
+            - booking.start_time.hour * 60
+            - booking.start_time.minute
+        )
+    )
+    new_end = (datetime.combine(new_date, new_start) + timedelta(minutes=duration)).time()
+
+    conflict = (
+        db.query(Booking)
+        .filter(
+            Booking.business_id == business.id,
+            Booking.id != booking.id,
+            Booking.date == new_date,
+            Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+            Booking.start_time < new_end,
+            Booking.end_time > new_start,
+        )
+        .with_for_update()
+        .first()
+    )
+    if conflict:
+        raise HTTPException(400, "Vaqt band")
+
+    booking.date = new_date
+    booking.start_time = new_start
+    booking.end_time = new_end
+    if body.service_id is not None and new_service is not None:
+        booking.service_id = new_service.id
+        booking.payment_amount = int(new_service.price)
+    db.commit()
+    db.refresh(booking)
+    return booking
 
 
 @me_router.put("/bookings/{booking_id}/confirm", response_model=BookingRead)
