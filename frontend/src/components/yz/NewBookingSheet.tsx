@@ -38,12 +38,14 @@ export function NewBookingSheet({
   onOpenChange,
   defaultDate,
   defaultTime,
+  defaultClientId,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   defaultDate?: string;
   defaultTime?: string;
+  defaultClientId?: string;
   onCreated?: () => void;
 }) {
   const toast = useToast();
@@ -72,8 +74,15 @@ export function NewBookingSheet({
     ]).then(([cl, sv]) => {
       setClients(cl);
       setServices(sv);
+      if (defaultClientId) {
+        const preset = cl.find((c) => c.id === defaultClientId);
+        if (preset) {
+          setClient(preset);
+          setStep(1);
+        }
+      }
     });
-  }, [open, defaultDate, defaultTime]);
+  }, [open, defaultDate, defaultTime, defaultClientId]);
 
   useEffect(() => {
     if (!open) return;

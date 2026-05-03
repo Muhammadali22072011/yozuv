@@ -43,10 +43,12 @@ export function ClientSheet({
   open,
   onOpenChange,
   client,
+  onNewBooking,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   client: ClientDetail | null;
+  onNewBooking?: (client: ClientDetail) => void;
 }) {
   const toast = useToast();
   if (!client) return null;
@@ -88,7 +90,14 @@ export function ClientSheet({
             <ActionBtn
               icon={<Plus className="h-5 w-5" />}
               label="Yozilish"
-              onClick={() => toast("Yangi yozilish")}
+              onClick={() => {
+                if (onNewBooking) {
+                  onNewBooking(client);
+                  onOpenChange(false);
+                } else {
+                  toast("Yangi yozilish");
+                }
+              }}
             />
           </div>
 
