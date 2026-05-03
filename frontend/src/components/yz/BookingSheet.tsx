@@ -15,7 +15,7 @@ import {
 } from "./Sheet";
 import type { ClientLite, ServiceLite } from "./BookingCard";
 import { useToast } from "./Toast";
-import { fmtSum, hm, shortDate } from "./utils";
+import { callPhone, fmtSum, hm, shortDate } from "./utils";
 
 function Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
   return (
@@ -132,7 +132,7 @@ export function BookingSheet({
             <ActionBtn
               icon={<Phone className="h-5 w-5" />}
               label="Qo'ng'iroq"
-              onClick={() => cli?.phone && (window.location.href = `tel:${cli.phone}`)}
+              onClick={() => callPhone(cli?.phone)}
             />
             <ActionBtn
               icon={<MessageSquare className="h-5 w-5" />}

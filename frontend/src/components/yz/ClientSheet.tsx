@@ -4,7 +4,7 @@ import { Phone, MessageSquare, Plus } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { SheetBody, SheetContent, SheetHeader, SheetRoot } from "./Sheet";
 import { useToast } from "./Toast";
-import { fmtSum } from "./utils";
+import { callPhone, fmtSum } from "./utils";
 
 export type ClientDetail = {
   id: string;
@@ -71,7 +71,7 @@ export function ClientSheet({
             <ActionBtn
               icon={<Phone className="h-5 w-5" />}
               label="Qo'ng'iroq"
-              onClick={() => client.phone && (window.location.href = `tel:${client.phone}`)}
+              onClick={() => callPhone(client.phone)}
             />
             <ActionBtn
               icon={<MessageSquare className="h-5 w-5" />}
