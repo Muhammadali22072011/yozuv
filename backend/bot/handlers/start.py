@@ -429,8 +429,8 @@ async def back_to_menu(cb: CallbackQuery):
 
 @router.callback_query(F.data.startswith("qrev:"))
 async def qr_review_pick_booking(cb: CallbackQuery):
-    """List COMPLETED bookings of this user in this business; clicking one
-    triggers the existing rev:{booking_id} flow handled in my_bookings.py."""
+    """Show COMPLETED bookings of this user in this business plus a
+    ``standalone`` option so a client can rate even without a visit."""
     slug = cb.data.split(":", 1)[1]
     db = SessionLocal()
     try:
@@ -439,30 +439,26 @@ async def qr_review_pick_booking(cb: CallbackQuery):
             await cb.answer("Biznes topilmadi", show_alert=True)
             return
         tg_id = cb.from_user.id if cb.from_user else None
-        client = db.query(Client).filter(Client.telegram_id == tg_id).first() if tg_id else None
-        if not client:
-            await cb.answer("Yozilish topilmadi", show_alert=True)
-            return
-        bookings = (
-            db.query(Booking)
-            .filter(
-                Booking.client_id == client.id,
-                Booking.business_id == b.id,
-                Booking.status == BookingStatus.COMPLETED,
-                Booking.date <= local_today(),
-            )
-            .order_by(Booking.date.desc(), Booking.start_time.desc())
-            .limit(10)
-            .all()
+        client = (
+            db.query(Client).filter(Client.telegram_id == tg_id).first()
+            if tg_id
+            else None
         )
-        if not bookings:
-            await safe_edit_text(
-                cb,
-                "Tashriflar tarixi yo'q. Avval xizmatdan foydalaning.",
-                reply_markup=back_to_menu_kb(slug),
+        bookings = []
+        if client:
+            bookings = (
+                db.query(Booking)
+                .filter(
+                    Booking.client_id == client.id,
+                    Booking.business_id == b.id,
+                    Booking.status == BookingStatus.COMPLETED,
+                    Booking.date <= local_today(),
+                )
+                .order_by(Booking.date.desc(), Booking.start_time.desc())
+                .limit(10)
+                .all()
             )
-            await cb.answer()
-            return
+
         rows: list[list[InlineKeyboardButton]] = []
         for bk in bookings:
             svc = db.query(Service).filter(Service.id == bk.service_id).first()
@@ -474,10 +470,38 @@ async def qr_review_pick_booking(cb: CallbackQuery):
             rows.append(
                 [InlineKeyboardButton(text=label, callback_data=f"rev:{bk.id}")]
             )
+
+        # Standalone review: the client rates the business without tying it
+        # to a specific past visit. One per (business, client).
+        existing_standalone = None
+        if client:
+            existing_standalone = (
+                db.query(Review)
+                .filter(
+                    Review.business_id == b.id,
+                    Review.client_id == client.id,
+                    Review.booking_id.is_(None),
+                )
+                .first()
+            )
+        sa_label = (
+            f"💬 Umumiy baho ({'⭐' * existing_standalone.rating})"
+            if existing_standalone
+            else "💬 Umumiy baho berish"
+        )
+        rows.append(
+            [InlineKeyboardButton(text=sa_label, callback_data=f"qrevs:{slug}")]
+        )
         rows.append([InlineKeyboardButton(text="🏠 Bosh menyu", callback_data=f"menu:{slug}")])
+
+        prompt = (
+            f"<b>{b.name}</b>\nQaysi tashrifga baho berasiz?"
+            if bookings
+            else f"<b>{b.name}</b>\nXohlasangiz biznesga umumiy baho qoldiring:"
+        )
         await safe_edit_text(
             cb,
-            f"<b>{b.name}</b>\nQaysi tashrifga baho berasiz?",
+            prompt,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         )
     finally:

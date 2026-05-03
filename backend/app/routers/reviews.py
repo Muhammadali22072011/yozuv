@@ -24,7 +24,7 @@ class ReviewCreate(BaseModel):
 
 class ReviewOut(BaseModel):
     id: str
-    booking_id: str
+    booking_id: str | None
     rating: int
     comment: str
     client_name: str
@@ -86,7 +86,7 @@ def submit_review(body: ReviewCreate, db: Session = Depends(get_db)):
             client_name = f"{c.first_name or ''} {c.last_name or ''}".strip() or "Mijoz"
     return ReviewOut(
         id=str(review.id),
-        booking_id=str(review.booking_id),
+        booking_id=str(review.booking_id) if review.booking_id else None,
         rating=review.rating,
         comment=review.comment,
         client_name=client_name,
@@ -122,7 +122,7 @@ def list_reviews(
         out.append(
             ReviewOut(
                 id=str(r.id),
-                booking_id=str(r.booking_id),
+                booking_id=str(r.booking_id) if r.booking_id else None,
                 rating=r.rating,
                 comment=r.comment,
                 client_name=name,
