@@ -18,24 +18,30 @@ def _session() -> Session:
     return SessionLocal()
 
 
+TZ = ZoneInfo("Asia/Tashkent")
+
+
 @celery_app.task(name="app.tasks.reminders.send_hourly_reminders")
 def send_hourly_reminders() -> None:
     db = _session()
     try:
-        now = datetime.utcnow()
+        # Booking date+time are stored as the owner's local Tashkent time, so
+        # the "now" we compare against has to be local too. Using utcnow()
+        # made the reminder fire ~5 hours late.
+        now_local = datetime.now(TZ).replace(tzinfo=None)
 
         bookings = (
             db.query(Booking)
             .filter(
                 Booking.status.in_([BookingStatus.CONFIRMED, BookingStatus.PENDING]),
-                Booking.date >= date.today(),
+                Booking.date >= now_local.date(),
                 Booking.reminder_sent_at.is_(None),
             )
             .all()
         )
         for b in bookings:
             bt = datetime.combine(b.date, b.start_time)
-            minutes_until = (bt - now).total_seconds() / 60.0
+            minutes_until = (bt - now_local).total_seconds() / 60.0
             if not (REMINDER_WINDOW_MIN <= minutes_until <= REMINDER_WINDOW_MAX):
                 continue
             client = db.query(Client).filter(Client.id == b.client_id).first()
@@ -50,7 +56,7 @@ def send_hourly_reminders() -> None:
                 send_telegram_message(int(client.telegram_id), text)
             # Mark sent even when client/business is missing — otherwise the
             # broken row would re-enter the window every minute forever.
-            b.reminder_sent_at = datetime.now(ZoneInfo("Asia/Tashkent"))
+            b.reminder_sent_at = datetime.now(TZ)
             db.commit()
     finally:
         db.close()
@@ -60,7 +66,9 @@ def send_hourly_reminders() -> None:
 def trial_expiry_warnings() -> None:
     db = _session()
     try:
-        tomorrow = date.today() + timedelta(days=1)
+        # Use local-Tashkent "tomorrow" so a UTC midnight cron doesn't
+        # silently look at the wrong calendar day.
+        tomorrow = (datetime.now(TZ).date()) + timedelta(days=1)
         subs = (
             db.query(Subscription)
             .filter(
@@ -70,7 +78,10 @@ def trial_expiry_warnings() -> None:
             .all()
         )
         for s in subs:
-            if s.expires_at.date() != tomorrow:
+            expires_local = s.expires_at
+            if expires_local.tzinfo is not None:
+                expires_local = expires_local.astimezone(TZ)
+            if expires_local.date() != tomorrow:
                 continue
             business = db.query(Business).filter(Business.id == s.business_id).first()
             if not business:
