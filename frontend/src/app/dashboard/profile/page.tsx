@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScreenHeader, YzLoader, YzLogo, useToast } from "@/components/yz";
 import { MapPicker } from "@/components/yz/MapPicker";
-import { apiFetch } from "@/lib/api";
+import { apiBase, apiFetch } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 
 type Sub = { plan: string; status: string; expires_at: string | null };
@@ -13,6 +13,8 @@ export default function ProfilePage() {
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [sub, setSub] = useState<Sub | null>(null);
   const [saving, setSaving] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -94,6 +96,48 @@ export default function ProfilePage() {
     }
   }
 
+  async function uploadLogo(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast("Faqat rasm yuklash mumkin");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast("Rasm hajmi 4 MB dan oshmasin");
+      return;
+    }
+    setLogoBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await apiFetch<{ logo_url: string }>("/api/business/me/logo", {
+        method: "POST",
+        body: fd,
+      });
+      setBiz((prev) => (prev ? { ...prev, logo_url: res.logo_url } : prev));
+      toast("Logotip yangilandi");
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    } finally {
+      setLogoBusy(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  async function removeLogo() {
+    setLogoBusy(true);
+    try {
+      await apiFetch<{ logo_url: string }>("/api/business/me/logo", {
+        method: "DELETE",
+      });
+      setBiz((prev) => (prev ? { ...prev, logo_url: "" } : prev));
+      toast("Logotip o'chirildi");
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
   if (!biz) {
     return <YzLoader />;
   }
@@ -112,8 +156,17 @@ export default function ProfilePage() {
 
       <div className="mt-2 px-4 md:px-0">
         <div className="card-soft p-5 text-center">
-          <div className="mx-auto grid place-items-center">
-            <YzLogo size={80} />
+          <div className="mx-auto grid h-20 w-20 place-items-center overflow-hidden rounded-2xl bg-ink-50">
+            {biz.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`${apiBase()}${biz.logo_url}`}
+                alt={biz.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <YzLogo size={80} />
+            )}
           </div>
           <div className="mt-3 font-display text-[22px] font-extrabold tracking-tight text-ink-900">
             {biz.name}
@@ -124,6 +177,37 @@ export default function ProfilePage() {
               💎 {sub.plan} · {sub.status}
             </div>
           )}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadLogo(f);
+            }}
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoBusy}
+              className="rounded-full bg-indigo-600 px-3.5 py-1.5 text-[12px] font-bold text-white tap disabled:opacity-50"
+            >
+              {logoBusy ? "…" : biz.logo_url ? "Logotipni almashtirish" : "Logotip yuklash"}
+            </button>
+            {biz.logo_url && (
+              <button
+                type="button"
+                onClick={removeLogo}
+                disabled={logoBusy}
+                className="rounded-full bg-ink-100 px-3.5 py-1.5 text-[12px] font-bold text-ink-700 tap disabled:opacity-50"
+              >
+                O'chirish
+              </button>
+            )}
+          </div>
+          <div className="mt-1.5 text-[11px] text-ink-400">JPG / PNG / WEBP, 4 MB gacha</div>
         </div>
 
         <div className="mt-3 space-y-2.5">

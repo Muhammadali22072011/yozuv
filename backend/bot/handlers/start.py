@@ -1,6 +1,17 @@
+import logging
+import os
+from pathlib import Path
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.types import (
+    CallbackQuery,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    WebAppInfo,
+)
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -12,6 +23,24 @@ from app.utils.clock import local_today
 from app.utils.uz_geo import list_tumans, list_viloyats
 from bot.keyboards.inline import back_to_menu_kb, business_menu_kb, role_choice_kb
 from bot.utils import safe_edit_text
+
+logger = logging.getLogger("bot.start")
+
+
+def _logo_local_path(logo_url: str) -> Path | None:
+    """If logo_url points to our own /api/business/logos/<file>, resolve the
+    on-disk path so we can send it via FSInputFile (avoids exposing internal
+    URLs to Telegram and works even when the API isn't publicly reachable yet)."""
+    if not logo_url:
+        return None
+    prefix = "/api/business/logos/"
+    if not logo_url.startswith(prefix):
+        return None
+    fname = os.path.basename(logo_url[len(prefix):])
+    if not fname:
+        return None
+    p = Path(get_settings().uploads_dir) / "logos" / fname
+    return p if p.exists() and p.is_file() else None
 
 router = Router()
 settings = get_settings()
@@ -67,6 +96,14 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
             if tg_id:
                 owner = db.query(User).filter(User.id == b.owner_id).first()
                 is_owner = bool(owner and owner.telegram_id == tg_id)
+            # Send the business logo first (if any) as a separate photo so the
+            # text+menu below stays editable for subsequent navigation steps.
+            logo_path = _logo_local_path(b.logo_url)
+            if logo_path is not None:
+                try:
+                    await message.answer_photo(FSInputFile(str(logo_path)))
+                except Exception:
+                    logger.exception("send logo failed for biz=%s", b.slug)
             await message.answer(
                 text,
                 reply_markup=business_menu_kb(
