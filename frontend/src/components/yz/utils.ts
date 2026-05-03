@@ -76,3 +76,16 @@ export function isoFor(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+// Trigger the OS phone dialer. `window.location.href = "tel:..."` is
+// ignored inside the Telegram WebApp WebView; clicking an anchor with
+// the same href is the path the system honours.
+export function callPhone(phone: string | null | undefined) {
+  if (!phone || typeof document === "undefined") return;
+  const a = document.createElement("a");
+  a.href = `tel:${phone}`;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}

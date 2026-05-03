@@ -34,4 +34,5 @@ export {
   weekdayShort,
   todayISO,
   isoFor,
+  callPhone,
 } from "./utils";

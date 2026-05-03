@@ -23,6 +23,7 @@ import {
   SectionLabel,
   YzLoader,
   YzLogo,
+  callPhone,
   fmtShort,
   fmtSum,
   hm,
@@ -196,8 +197,7 @@ export default function DashboardHome() {
             <span
               onClick={(e) => {
                 e.stopPropagation();
-                const phone = clients.find((c) => c.id === next.client_id)?.phone;
-                if (phone) window.location.href = `tel:${phone}`;
+                callPhone(clients.find((c) => c.id === next.client_id)?.phone);
               }}
               className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50"
             >
