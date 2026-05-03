@@ -33,6 +33,7 @@ from bot.keyboards.inline import (
     confirm_kb,
     dates_kb,
     owner_decision_kb,
+    service_detail_kb,
     services_kb,
     times_kb,
 )
@@ -116,6 +117,30 @@ def _format_uz_date(d: date) -> str:
     return f"{prefix}, {d.day}-{months[d.month]}"
 
 
+def _format_price(price: int, price_max: int | None) -> str:
+    base = f"{int(price):,}".replace(",", " ")
+    if price_max and int(price_max) > int(price):
+        upper = f"{int(price_max):,}".replace(",", " ")
+        return f"{base}–{upper} so'm"
+    return f"{base} so'm"
+
+
+def _service_button_label(s: Service) -> str:
+    return f"{s.name} — {_format_price(s.price, s.price_max)} — {s.duration_minutes} daq"
+
+
+def _service_detail_text(s: Service) -> str:
+    lines = [
+        f"📋 <b>{s.name}</b>",
+        f"💰 {_format_price(s.price, s.price_max)}",
+        f"⏱ {s.duration_minutes} daq",
+    ]
+    desc = (s.description or "").strip()
+    if desc:
+        lines.append(f"\n📝 {desc}")
+    return "\n".join(lines)
+
+
 @router.callback_query(F.data.startswith("book:"))
 async def book_start(cb: CallbackQuery):
     slug = cb.data.split(":", 1)[1]
@@ -131,10 +156,7 @@ async def book_start(cb: CallbackQuery):
             .order_by(Service.order.asc())
             .all()
         )
-        items = []
-        for s in services:
-            label = f"{s.name} — {s.price:,} so'm — {s.duration_minutes} daq".replace(",", " ")
-            items.append((str(s.id), label))
+        items = [(str(s.id), _service_button_label(s)) for s in services]
         if not items:
             await safe_edit_text(
                 cb,
@@ -150,6 +172,26 @@ async def book_start(cb: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("svc:"))
+async def show_service_detail(cb: CallbackQuery):
+    _, sid = cb.data.split(":", 1)
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        await safe_edit_text(
+            cb,
+            _service_detail_text(service),
+            reply_markup=service_detail_kb(b.slug, sid),
+        )
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("svcok:"))
 async def pick_service(cb: CallbackQuery):
     _, sid = cb.data.split(":", 1)
     db = SessionLocal()

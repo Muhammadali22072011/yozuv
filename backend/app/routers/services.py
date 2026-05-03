@@ -14,6 +14,8 @@ router = APIRouter(prefix="/business/me", tags=["services"])
 class ServiceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     price: int = 0
+    price_max: int | None = None
+    description: str | None = None
     duration_minutes: int = 30
     order: int = 0
 
@@ -21,6 +23,8 @@ class ServiceCreate(BaseModel):
 class ServiceUpdate(BaseModel):
     name: str | None = None
     price: int | None = None
+    price_max: int | None = None
+    description: str | None = None
     duration_minutes: int | None = None
     order: int | None = None
 
@@ -29,6 +33,8 @@ class ServiceOut(BaseModel):
     id: UUID
     name: str
     price: int
+    price_max: int | None = None
+    description: str | None = None
     duration_minutes: int
     is_active: bool
     order: int
@@ -60,6 +66,8 @@ def create_service(
         business_id=business.id,
         name=body.name,
         price=body.price,
+        price_max=body.price_max,
+        description=body.description,
         duration_minutes=body.duration_minutes,
         order=body.order,
     )

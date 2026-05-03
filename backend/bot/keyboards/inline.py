@@ -53,6 +53,18 @@ def services_kb(slug: str, items: list[tuple[str, str]]) -> InlineKeyboardMarkup
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def service_detail_kb(slug: str, sid: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Davom etish", callback_data=f"svcok:{sid}")],
+            [
+                InlineKeyboardButton(text="◀️ Xizmatlar", callback_data=f"book:{slug}"),
+                InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{slug}"),
+            ],
+        ]
+    )
+
+
 def dates_kb(slug: str, sid: str, items: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     rows = []
     for d_iso, label in items:
@@ -78,7 +90,7 @@ def times_kb(slug: str, sid: str, d_iso: str, times: list[str]) -> InlineKeyboar
         rows.append(row)
     rows.append(
         [
-            InlineKeyboardButton(text="◀️ Sanalar", callback_data=f"svc:{sid}"),
+            InlineKeyboardButton(text="◀️ Sanalar", callback_data=f"svcok:{sid}"),
             InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{slug}"),
         ]
     )
