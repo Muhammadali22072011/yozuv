@@ -35,5 +35,5 @@ export {
   todayISO,
   isoFor,
   callPhone,
-  messageTelegramUser,
+  messageTelegram,
 } from "./utils";

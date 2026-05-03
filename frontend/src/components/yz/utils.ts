@@ -95,11 +95,29 @@ export function callPhone(phone: string | null | undefined) {
   _openExternalScheme(`tel:${phone}`);
 }
 
-// Open the Telegram chat with this user. Uses tg://user?id= deep link,
-// which Telegram Desktop and mobile both resolve into a chat as long as
-// the current account has previously interacted with the target user
-// (the owner has, because the bot delivered them the booking alert).
-export function messageTelegramUser(telegramId: number | string | null | undefined) {
-  if (!telegramId) return;
-  _openExternalScheme(`tg://user?id=${telegramId}`);
+// Open a Telegram chat with the client by phone number.
+// Uses https://t.me/+<digits> which Telegram resolves to the chat of
+// whoever owns that phone. Works because clients share their phone via
+// the bot's request_contact prompt at first booking.
+//
+// Inside the Telegram WebApp the tg:// scheme is blocked, so we have
+// to go through Telegram.WebApp.openTelegramLink(). Outside the WebApp
+// (regular browser tab) we fall back to a real anchor click.
+export function messageTelegram(phone: string | null | undefined) {
+  if (!phone) return;
+  const digits = String(phone).replace(/\D/g, "");
+  if (!digits) return;
+  const url = `https://t.me/+${digits}`;
+  if (typeof window === "undefined") return;
+  type TgWebApp = { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void };
+  const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(url);
+    return;
+  }
+  if (tg?.openLink) {
+    tg.openLink(url);
+    return;
+  }
+  _openExternalScheme(url);
 }
