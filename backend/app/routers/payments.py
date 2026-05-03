@@ -25,6 +25,7 @@ from app.models import (
     SubscriptionPlan,
     User,
 )
+from app.services.audit_service import log_admin_action
 from app.services.notification_service import send_telegram_photo
 from app.services.payment_service import (
     approve_card_payment,
@@ -335,6 +336,14 @@ def approve(
         tx = approve_card_payment(db, body.transaction_id, str(admin.telegram_id))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    log_admin_action(
+        db,
+        admin,
+        "payment.approve",
+        "PaymentTransaction",
+        tx.id,
+        {"amount": int(tx.amount), "business_id": str(tx.business_id)},
+    )
     db.commit()
     return {"transaction_id": str(tx.id), "status": str(tx.status)}
 
@@ -349,6 +358,14 @@ def reject(
         tx = reject_card_payment(db, body.transaction_id, str(admin.telegram_id), body.reason)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    log_admin_action(
+        db,
+        admin,
+        "payment.reject",
+        "PaymentTransaction",
+        tx.id,
+        {"reason": body.reason, "business_id": str(tx.business_id)},
+    )
     db.commit()
     return {"transaction_id": str(tx.id), "status": str(tx.status)}
 
@@ -482,6 +499,14 @@ def refund(
         tx = refund_transaction(db, body.transaction_id, tx.business_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    log_admin_action(
+        db,
+        admin,
+        "payment.refund",
+        "PaymentTransaction",
+        tx.id,
+        {"amount": int(tx.amount), "business_id": str(tx.business_id)},
+    )
     db.commit()
     return {
         "transaction_id": str(tx.id),

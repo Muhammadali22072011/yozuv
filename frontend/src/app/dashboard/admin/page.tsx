@@ -6,10 +6,15 @@ import {
   BarChart3,
   Building2,
   Check,
+  ClipboardList,
   CreditCard,
   Database,
   Megaphone,
+  Pencil,
+  Plus,
+  RotateCcw,
   Shield,
+  Trash2,
   Wallet,
   X,
 } from "lucide-react";
@@ -36,8 +41,59 @@ type Biz = {
   category: string;
   is_active: boolean;
   created_at: string;
+  deleted_at: string | null;
   owner: { telegram_id: number | null; name: string };
   subscription: { plan: string | null; expires_at: string | null } | null;
+};
+
+const BIZ_CATEGORIES = [
+  "barbershop",
+  "salon",
+  "dentist",
+  "tutor",
+  "photo",
+  "massage",
+  "fitness",
+  "clinic",
+  "other",
+] as const;
+
+type BizFormState = {
+  id: string | null;
+  name: string;
+  slug: string;
+  category: string;
+  owner_telegram_id: string;
+  owner_first_name: string;
+  owner_phone: string;
+  description: string;
+  address: string;
+  phone: string;
+};
+
+const SUB_PLANS = ["TRIAL", "MONTHLY", "YEARLY"] as const;
+const SUB_STATUSES = ["ACTIVE", "EXPIRED", "CANCELLED"] as const;
+
+type SubFormState = {
+  business_id: string;
+  business_name: string;
+  subscription_id: string;
+  plan: string;
+  status: string;
+  expires_at: string;
+};
+
+const EMPTY_BIZ_FORM: BizFormState = {
+  id: null,
+  name: "",
+  slug: "",
+  category: "other",
+  owner_telegram_id: "",
+  owner_first_name: "",
+  owner_phone: "",
+  description: "",
+  address: "",
+  phone: "",
 };
 
 type Pending = {
@@ -54,7 +110,25 @@ type Pending = {
 
 type CardInfo = { card_number: string; card_holder: string; payment_comment: string };
 
-type Tab = "summary" | "businesses" | "payments" | "broadcast" | "settings" | "backup";
+type AdminPayment = {
+  id: string;
+  business_name: string;
+  business_id: string;
+  provider: string;
+  amount: number;
+  plan: string;
+  status: string;
+  created_at: string;
+};
+
+type Tab =
+  | "summary"
+  | "businesses"
+  | "payments"
+  | "broadcast"
+  | "settings"
+  | "backup"
+  | "audit";
 
 const TABS: { k: Tab; label: string; icon: typeof Shield }[] = [
   { k: "summary", label: "Statistika", icon: BarChart3 },
@@ -63,7 +137,43 @@ const TABS: { k: Tab; label: string; icon: typeof Shield }[] = [
   { k: "settings", label: "Karta", icon: CreditCard },
   { k: "broadcast", label: "Xabar", icon: Megaphone },
   { k: "backup", label: "Backup", icon: Database },
+  { k: "audit", label: "Tarix", icon: ClipboardList },
 ];
+
+type AuditEntry = {
+  id: string;
+  admin_telegram_id: number;
+  admin_name: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+type BroadcastHistory = {
+  id: string;
+  sent_by_telegram_id: number;
+  sent_by_name: string;
+  text: string;
+  filters: Record<string, unknown>;
+  sent_count: number;
+  failed_count: number;
+  failed_recipients: number[];
+  created_at: string;
+};
+
+type BroadcastFiltersState = {
+  category: string;
+  plan: string;
+  subscription_status: string;
+};
+
+const EMPTY_BROADCAST_FILTERS: BroadcastFiltersState = {
+  category: "",
+  plan: "",
+  subscription_status: "",
+};
 
 export default function AdminPage() {
   const toast = useToast();
@@ -72,6 +182,8 @@ export default function AdminPage() {
   const [sum, setSum] = useState<Summary | null>(null);
   const [biz, setBiz] = useState<Biz[]>([]);
   const [pending, setPending] = useState<Pending[]>([]);
+  const [recent, setRecent] = useState<AdminPayment[]>([]);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [card, setCard] = useState<CardInfo>({ card_number: "", card_holder: "", payment_comment: "" });
   const [broadcastText, setBroadcastText] = useState("");
@@ -79,6 +191,18 @@ export default function AdminPage() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [savingCard, setSavingCard] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [bizForm, setBizForm] = useState<BizFormState | null>(null);
+  const [bizSaving, setBizSaving] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [subForm, setSubForm] = useState<SubFormState | null>(null);
+  const [subSaving, setSubSaving] = useState(false);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [auditFilter, setAuditFilter] = useState<string>("");
+  const [broadcastFilters, setBroadcastFilters] = useState<BroadcastFiltersState>(
+    EMPTY_BROADCAST_FILTERS
+  );
+  const [broadcastHistory, setBroadcastHistory] = useState<BroadcastHistory[]>([]);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<{ is_admin?: boolean }>("/api/auth/me")
@@ -95,12 +219,13 @@ export default function AdminPage() {
   }, [toast]);
 
   const loadBusinesses = useCallback(async () => {
+    const qs = showDeleted ? "?include_deleted=true" : "";
     try {
-      setBiz(await apiFetch<Biz[]>("/api/admin/businesses"));
+      setBiz(await apiFetch<Biz[]>(`/api/admin/businesses${qs}`));
     } catch (e) {
       toast(`Bizneslar yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
     }
-  }, [toast]);
+  }, [toast, showDeleted]);
 
   const loadPending = useCallback(async () => {
     let list: Pending[] = [];
@@ -140,13 +265,51 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadRecent = useCallback(async () => {
+    try {
+      setRecent(await apiFetch<AdminPayment[]>("/api/admin/payments?limit=50"));
+    } catch (e) {
+      toast(`Tarix yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
+    }
+  }, [toast]);
+
+  const loadAudit = useCallback(async () => {
+    const qs = auditFilter ? `?action=${encodeURIComponent(auditFilter)}` : "";
+    try {
+      setAudit(await apiFetch<AuditEntry[]>(`/api/admin/audit-log${qs}`));
+    } catch (e) {
+      toast(`Tarix yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
+    }
+  }, [toast, auditFilter]);
+
+  const loadBroadcastHistory = useCallback(async () => {
+    try {
+      setBroadcastHistory(
+        await apiFetch<BroadcastHistory[]>("/api/admin/broadcasts?limit=30")
+      );
+    } catch (e) {
+      toast(`Tarix yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
+    }
+  }, [toast]);
+
   useEffect(() => {
     if (!isAdmin) return;
     loadSummary();
     loadBusinesses();
     loadPending();
+    loadRecent();
     loadCard();
-  }, [isAdmin, loadSummary, loadBusinesses, loadPending, loadCard]);
+  }, [isAdmin, loadSummary, loadBusinesses, loadPending, loadRecent, loadCard]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "audit") return;
+    loadAudit();
+  }, [isAdmin, tab, loadAudit]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "broadcast") return;
+    loadBroadcastHistory();
+  }, [isAdmin, tab, loadBroadcastHistory]);
 
   // Free blob URLs on unmount to avoid memory leak when admin navigates away.
   useEffect(() => {
@@ -184,6 +347,184 @@ export default function AdminPage() {
     }
   }
 
+  function openCreateBiz() {
+    setBizForm({ ...EMPTY_BIZ_FORM });
+  }
+
+  async function openEditBiz(b: Biz) {
+    try {
+      const detail = await apiFetch<{
+        id: string;
+        name: string;
+        slug: string;
+        category: string;
+        description: string;
+        address: string;
+        phone: string;
+        owner: { telegram_id: number | null; phone: string };
+      }>(`/api/admin/businesses/${b.id}`);
+      setBizForm({
+        id: detail.id,
+        name: detail.name,
+        slug: detail.slug,
+        category: detail.category,
+        owner_telegram_id: String(detail.owner.telegram_id ?? ""),
+        owner_first_name: "",
+        owner_phone: detail.owner.phone || "",
+        description: detail.description,
+        address: detail.address,
+        phone: detail.phone,
+      });
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Yuklanmadi");
+    }
+  }
+
+  async function saveBiz() {
+    if (!bizForm) return;
+    if (!bizForm.name.trim()) {
+      toast("Nom kerak");
+      return;
+    }
+    setBizSaving(true);
+    try {
+      if (bizForm.id) {
+        await apiFetch(`/api/admin/businesses/${bizForm.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: bizForm.name,
+            category: bizForm.category,
+            description: bizForm.description,
+            address: bizForm.address,
+            phone: bizForm.phone,
+          }),
+        });
+        toast("Saqlandi");
+      } else {
+        const tg = Number(bizForm.owner_telegram_id);
+        if (!tg || tg <= 0) {
+          toast("Egasining Telegram ID kerak");
+          setBizSaving(false);
+          return;
+        }
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(bizForm.slug)) {
+          toast("Slug: faqat a-z 0-9 va '-'");
+          setBizSaving(false);
+          return;
+        }
+        await apiFetch("/api/admin/businesses", {
+          method: "POST",
+          body: JSON.stringify({
+            name: bizForm.name,
+            slug: bizForm.slug,
+            category: bizForm.category,
+            owner_telegram_id: tg,
+            owner_first_name: bizForm.owner_first_name || null,
+            owner_phone: bizForm.owner_phone || null,
+            description: bizForm.description || null,
+            address: bizForm.address || null,
+            phone: bizForm.phone || null,
+          }),
+        });
+        toast("Yaratildi");
+      }
+      setBizForm(null);
+      await loadBusinesses();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 120) || "Saqlash xatolik");
+    } finally {
+      setBizSaving(false);
+    }
+  }
+
+  async function openSubForm(b: Biz) {
+    try {
+      const detail = await apiFetch<{
+        subscription: {
+          id: string;
+          plan: string;
+          status: string;
+          expires_at: string | null;
+        } | null;
+      }>(`/api/admin/businesses/${b.id}`);
+      if (!detail.subscription) {
+        toast("Obuna yo‘q. Avval +7 yoki +30 kun bilan yarating");
+        return;
+      }
+      setSubForm({
+        business_id: b.id,
+        business_name: b.name,
+        subscription_id: detail.subscription.id,
+        plan: detail.subscription.plan,
+        status: detail.subscription.status,
+        expires_at: (detail.subscription.expires_at || "").slice(0, 10),
+      });
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Yuklanmadi");
+    }
+  }
+
+  async function saveSub() {
+    if (!subForm) return;
+    setSubSaving(true);
+    try {
+      const expIso = subForm.expires_at
+        ? new Date(`${subForm.expires_at}T23:59:59Z`).toISOString()
+        : null;
+      await apiFetch(`/api/admin/subscriptions/${subForm.subscription_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          plan: subForm.plan,
+          status: subForm.status,
+          expires_at: expIso,
+        }),
+      });
+      toast("Obuna yangilandi");
+      setSubForm(null);
+      await loadBusinesses();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 120) || "Saqlash xatolik");
+    } finally {
+      setSubSaving(false);
+    }
+  }
+
+  async function deleteBiz(b: Biz) {
+    const isDeleted = !!b.deleted_at;
+    if (isDeleted) {
+      if (
+        !window.confirm(
+          `BUTUNLAY o‘chirish: "${b.name}".\n\n` +
+            "Bu qaytarib bo‘lmaydi. Faqat aktiv bronlari yo‘q bo‘lsa o‘chiriladi."
+        )
+      )
+        return;
+      try {
+        await apiFetch(`/api/admin/businesses/${b.id}?hard=true`, {
+          method: "DELETE",
+        });
+        toast("O‘chirildi");
+        await loadBusinesses();
+      } catch (e) {
+        toast((e as Error).message?.slice(0, 120) || "O‘chirishda xatolik");
+      }
+      return;
+    }
+    if (
+      !window.confirm(
+        `Arxivga ko‘chirish: "${b.name}". Biznes "BLOK" qilinadi va ro‘yxatdan yashiriladi.`
+      )
+    )
+      return;
+    try {
+      await apiFetch(`/api/admin/businesses/${b.id}`, { method: "DELETE" });
+      toast("Arxivlandi");
+      await loadBusinesses();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 120) || "Xatolik");
+    }
+  }
+
   async function approve(txId: string) {
     try {
       await apiFetch("/api/payments/approve", {
@@ -191,9 +532,34 @@ export default function AdminPage() {
         body: JSON.stringify({ transaction_id: txId }),
       });
       toast("Tasdiqlandi");
-      await loadPending();
+      await Promise.all([loadPending(), loadRecent()]);
     } catch (e) {
       toast((e as Error).message?.slice(0, 80) || "Tasdiqlash xatolik");
+    }
+  }
+
+  async function refund(txId: string, businessName: string, amount: number) {
+    if (
+      !window.confirm(
+        `Pulni qaytarish: ${businessName} (${fmtSum(amount)} so‘m).\n\n` +
+          "Tranzaksiya REFUNDED bo‘ladi va biznesning faol obunasi BEKOR qilinadi.\n\n" +
+          "Davom etasizmi?"
+      )
+    ) {
+      return;
+    }
+    setRefundingId(txId);
+    try {
+      await apiFetch("/api/payments/refund", {
+        method: "POST",
+        body: JSON.stringify({ transaction_id: txId }),
+      });
+      toast("Pul qaytarildi, obuna bekor qilindi");
+      await Promise.all([loadRecent(), loadBusinesses(), loadSummary()]);
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Qaytarishda xatolik");
+    } finally {
+      setRefundingId(null);
     }
   }
 
@@ -312,18 +678,45 @@ export default function AdminPage() {
       toast("Kamida 3 ta belgi");
       return;
     }
+    const filters: Record<string, string> = {};
+    if (broadcastFilters.category) filters.category = broadcastFilters.category;
+    if (broadcastFilters.plan) filters.plan = broadcastFilters.plan;
+    if (broadcastFilters.subscription_status)
+      filters.subscription_status = broadcastFilters.subscription_status;
     try {
       const r = await apiFetch<{ sent: number; failed: number; total: number }>(
         "/api/admin/broadcast",
         {
           method: "POST",
-          body: JSON.stringify({ text: broadcastText, only_active: true }),
+          body: JSON.stringify({
+            text: broadcastText,
+            only_active: true,
+            filters: Object.keys(filters).length ? filters : null,
+          }),
         }
       );
       toast(`Yuborildi: ${r.sent}/${r.total}`);
       setBroadcastText("");
+      setBroadcastFilters(EMPTY_BROADCAST_FILTERS);
+      await loadBroadcastHistory();
     } catch (e) {
       toast((e as Error).message || "Xatolik");
+    }
+  }
+
+  async function retryBroadcast(id: string) {
+    setRetryingId(id);
+    try {
+      const r = await apiFetch<{ sent: number; failed: number; retried: number }>(
+        `/api/admin/broadcasts/${id}/retry`,
+        { method: "POST" }
+      );
+      toast(`Qayta yuborildi: ${r.sent}/${r.retried}`);
+      await loadBroadcastHistory();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Xatolik");
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -420,24 +813,55 @@ export default function AdminPage() {
         )}
 
         {tab === "businesses" && (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-ink-600">
+                <input
+                  type="checkbox"
+                  checked={showDeleted}
+                  onChange={(e) => setShowDeleted(e.target.checked)}
+                  className="h-4 w-4 rounded border-ink-300"
+                />
+                O‘chirilganlarni ko‘rsatish
+              </label>
+              <button
+                onClick={openCreateBiz}
+                className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.6} />
+                Yangi biznes
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
             {biz.length === 0 && (
               <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-8 text-center text-sm text-ink-400 md:col-span-2">
                 Bizneslar yo‘q
               </div>
             )}
             {biz.map((b) => (
-              <div key={b.id} className="card-soft p-5">
+              <div
+                key={b.id}
+                className={cn(
+                  "card-soft p-5",
+                  b.deleted_at && "opacity-60"
+                )}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <div className="truncate font-display text-base font-extrabold text-ink-900">
                         {b.name}
                       </div>
-                      {!b.is_active && (
-                        <span className="shrink-0 rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-[#C93A2A]">
-                          BLOK
+                      {b.deleted_at ? (
+                        <span className="shrink-0 rounded-full bg-ink-200 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-ink-700">
+                          ARXIV
                         </span>
+                      ) : (
+                        !b.is_active && (
+                          <span className="shrink-0 rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-[#C93A2A]">
+                            BLOK
+                          </span>
+                        )
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
@@ -472,37 +896,74 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  {!b.deleted_at && (
+                    <>
+                      <button
+                        onClick={() => extend(b.id, 7)}
+                        className="rounded-xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                      >
+                        +7 kun
+                      </button>
+                      <button
+                        onClick={() => extend(b.id, 30)}
+                        className="rounded-xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                      >
+                        +30 kun
+                      </button>
+                      <button
+                        onClick={() => openSubForm(b)}
+                        className="rounded-xl bg-indigo-50 px-3 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                        title="Reja/holat"
+                      >
+                        Reja
+                      </button>
+                      <button
+                        onClick={() => openEditBiz(b)}
+                        className="inline-flex items-center gap-1 rounded-xl bg-ink-100 px-3 py-2 text-[13px] font-bold text-ink-700 tap hover:bg-ink-200"
+                        title="Tahrirlash"
+                      >
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={2.6} />
+                      </button>
+                      <button
+                        onClick={() => toggleBiz(b.id, !b.is_active)}
+                        className={cn(
+                          "ml-auto rounded-xl px-3.5 py-2 text-[13px] font-bold tap",
+                          b.is_active
+                            ? "bg-[#FFE7E3] text-[#C93A2A] hover:bg-[#FCD7CE]"
+                            : "bg-[#E6FAF3] text-[#0E9577] hover:bg-[#CFF1E1]"
+                        )}
+                      >
+                        {b.is_active ? "Bloklash" : "Yoqish"}
+                      </button>
+                    </>
+                  )}
                   <button
-                    onClick={() => extend(b.id, 7)}
-                    className="rounded-xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
-                  >
-                    +7 kun
-                  </button>
-                  <button
-                    onClick={() => extend(b.id, 30)}
-                    className="rounded-xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
-                  >
-                    +30 kun
-                  </button>
-                  <button
-                    onClick={() => toggleBiz(b.id, !b.is_active)}
+                    onClick={() => deleteBiz(b)}
                     className={cn(
-                      "ml-auto rounded-xl px-3.5 py-2 text-[13px] font-bold tap",
-                      b.is_active
-                        ? "bg-[#FFE7E3] text-[#C93A2A] hover:bg-[#FCD7CE]"
-                        : "bg-[#E6FAF3] text-[#0E9577] hover:bg-[#CFF1E1]"
+                      "inline-flex items-center gap-1 rounded-xl px-3 py-2 text-[13px] font-bold tap",
+                      b.deleted_at
+                        ? "ml-auto bg-[#FFE7E3] text-[#C93A2A] hover:bg-[#FCD7CE]"
+                        : "bg-ink-100 text-ink-600 hover:bg-ink-200"
                     )}
+                    title={b.deleted_at ? "Butunlay o‘chirish" : "Arxivga"}
                   >
-                    {b.is_active ? "Bloklash" : "Yoqish"}
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2.6} />
+                    {b.deleted_at && <span>O‘chirish</span>}
                   </button>
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
 
         {tab === "payments" && (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-5">
+            <div>
+              <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-ink-400">
+                Tasdiqlash kutmoqda
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
             {pending.length === 0 && (
               <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-8 text-center text-sm text-ink-400 md:col-span-2">
                 Hozircha kutilayotgan to‘lov yo‘q
@@ -583,11 +1044,86 @@ export default function AdminPage() {
                 </div>
               </div>
             ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-ink-400">
+                Oxirgi to‘lovlar
+              </div>
+              <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
+                {recent.length === 0 && (
+                  <div className="p-6 text-center text-sm text-ink-400">
+                    Hali to‘lov yo‘q
+                  </div>
+                )}
+                {recent.map((tx) => {
+                  const status = (tx.status || "").toUpperCase();
+                  const isCompleted = status.includes("COMPLETED");
+                  const isRefunded = status.includes("REFUNDED");
+                  const isRejected = status.includes("REJECTED");
+                  const statusStyle = isCompleted
+                    ? "bg-[#E6FAF3] text-[#0E9577]"
+                    : isRefunded
+                      ? "bg-ink-100 text-ink-600"
+                      : isRejected
+                        ? "bg-[#FFE7E3] text-[#C93A2A]"
+                        : "bg-[#FFF3DA] text-[#A8751A]";
+                  return (
+                    <div
+                      key={tx.id}
+                      className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-display text-sm font-extrabold text-ink-900">
+                          {tx.business_name}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-500">
+                          <span className="font-mono">
+                            {tx.created_at.replace("T", " ").slice(0, 16)}
+                          </span>
+                          <span className="text-ink-300">·</span>
+                          <span>{tx.provider}</span>
+                          <span className="text-ink-300">·</span>
+                          <span>{tx.plan}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-display text-sm font-extrabold tracking-[-0.01em] text-ink-900">
+                          {fmtSum(tx.amount)}
+                        </div>
+                        <span
+                          className={cn(
+                            "mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                            statusStyle
+                          )}
+                        >
+                          {status.replace(/^.*\./, "")}
+                        </span>
+                      </div>
+                      {isCompleted && (
+                        <button
+                          onClick={() =>
+                            refund(tx.id, tx.business_name, tx.amount)
+                          }
+                          disabled={refundingId === tx.id}
+                          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#FFE7E3] px-3 py-2 text-[12px] font-bold text-[#C93A2A] tap hover:bg-[#FCD7CE] disabled:opacity-50"
+                          title="Pulni qaytarish va obunani bekor qilish"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
+                          {refundingId === tx.id ? "..." : "Qaytarish"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
         {tab === "broadcast" && (
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-2xl space-y-4">
             <div className="card-soft p-5 md:p-6">
               <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#FFF3DA] text-[#A8751A]">
@@ -595,13 +1131,83 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-extrabold text-ink-900">
-                    Barcha egalariga xabar
+                    Egalariga xabar
                   </h3>
                   <p className="mt-1 text-xs text-ink-500">
-                    Faqat faol bizneslarning Telegram egalariga yuboriladi.
+                    Faol bizneslarning Telegram egalariga yuboriladi. Filtrlar bilan torajting.
                   </p>
                 </div>
               </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+                    Kategoriya
+                  </label>
+                  <select
+                    value={broadcastFilters.category}
+                    onChange={(e) =>
+                      setBroadcastFilters({
+                        ...broadcastFilters,
+                        category: e.target.value,
+                      })
+                    }
+                    className="yz-input mt-1 py-2 text-sm"
+                  >
+                    <option value="">Hammasi</option>
+                    {BIZ_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+                    Reja
+                  </label>
+                  <select
+                    value={broadcastFilters.plan}
+                    onChange={(e) =>
+                      setBroadcastFilters({
+                        ...broadcastFilters,
+                        plan: e.target.value,
+                      })
+                    }
+                    className="yz-input mt-1 py-2 text-sm"
+                  >
+                    <option value="">Hammasi</option>
+                    {SUB_PLANS.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+                    Obuna holati
+                  </label>
+                  <select
+                    value={broadcastFilters.subscription_status}
+                    onChange={(e) =>
+                      setBroadcastFilters({
+                        ...broadcastFilters,
+                        subscription_status: e.target.value,
+                      })
+                    }
+                    className="yz-input mt-1 py-2 text-sm"
+                  >
+                    <option value="">Hammasi</option>
+                    {SUB_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <textarea
                 rows={8}
                 value={broadcastText}
@@ -619,6 +1225,68 @@ export default function AdminPage() {
                 <Megaphone className="mr-2 h-4 w-4" />
                 Yuborish
               </button>
+            </div>
+
+            <div>
+              <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-ink-400">
+                Tarix
+              </div>
+              <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
+                {broadcastHistory.length === 0 && (
+                  <div className="p-6 text-center text-sm text-ink-400">
+                    Hali rassılka yo‘q
+                  </div>
+                )}
+                {broadcastHistory.map((h) => (
+                  <div key={h.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="font-mono text-[11px] text-ink-400">
+                        {h.created_at.replace("T", " ").slice(0, 16)}
+                      </span>
+                      <span className="rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-extrabold text-[#0E9577]">
+                        ✓ {h.sent_count}
+                      </span>
+                      {h.failed_count > 0 && (
+                        <span className="rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold text-[#C93A2A]">
+                          ✕ {h.failed_count}
+                        </span>
+                      )}
+                      <span className="ml-auto text-[11px] text-ink-500">
+                        {h.sent_by_name || h.sent_by_telegram_id}
+                      </span>
+                    </div>
+                    <div className="mt-2 line-clamp-3 whitespace-pre-wrap text-[13px] text-ink-700">
+                      {h.text}
+                    </div>
+                    {Object.keys(h.filters).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {Object.entries(h.filters)
+                          .filter(([, v]) => v !== null && v !== "" && v !== false)
+                          .map(([k, v]) => (
+                            <span
+                              key={k}
+                              className="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-700"
+                            >
+                              {k}={String(v)}
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                    {h.failed_count > 0 && (
+                      <button
+                        onClick={() => retryBroadcast(h.id)}
+                        disabled={retryingId === h.id}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
+                        {retryingId === h.id
+                          ? "..."
+                          : `Tushib qolganlarga (${h.failed_count})`}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -778,6 +1446,362 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {tab === "audit" && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={auditFilter}
+                onChange={(e) => setAuditFilter(e.target.value)}
+                className="yz-input w-auto py-2 text-sm"
+              >
+                <option value="">Hammasi</option>
+                <option value="business.create">business.create</option>
+                <option value="business.update">business.update</option>
+                <option value="business.toggle">business.toggle</option>
+                <option value="business.soft_delete">business.soft_delete</option>
+                <option value="business.hard_delete">business.hard_delete</option>
+                <option value="subscription.extend">subscription.extend</option>
+                <option value="subscription.patch">subscription.patch</option>
+                <option value="payment.approve">payment.approve</option>
+                <option value="payment.reject">payment.reject</option>
+                <option value="payment.refund">payment.refund</option>
+                <option value="broadcast.send">broadcast.send</option>
+                <option value="backup.import">backup.import</option>
+              </select>
+              <button
+                onClick={loadAudit}
+                className="rounded-xl bg-ink-100 px-3 py-2 text-sm font-bold text-ink-700 tap hover:bg-ink-200"
+              >
+                Yangilash
+              </button>
+              <span className="ml-auto text-[11px] font-semibold text-ink-400">
+                {audit.length} yozuv
+              </span>
+            </div>
+            <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
+              {audit.length === 0 && (
+                <div className="p-6 text-center text-sm text-ink-400">
+                  Hech qanday harakat qayd etilmagan
+                </div>
+              )}
+              {audit.map((e) => (
+                <div key={e.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-indigo-700">
+                      {e.action}
+                    </span>
+                    {e.target_type && (
+                      <span className="text-[11px] text-ink-500">
+                        {e.target_type}
+                        {e.target_id && (
+                          <span className="ml-1 font-mono text-ink-400">
+                            {e.target_id.slice(0, 8)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    <span className="ml-auto font-mono text-[11px] text-ink-400">
+                      {e.created_at.replace("T", " ").slice(0, 19)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[12px] text-ink-700">
+                    👤 {e.admin_name || "—"}{" "}
+                    <span className="font-mono text-ink-400">
+                      ({e.admin_telegram_id})
+                    </span>
+                  </div>
+                  {e.payload && Object.keys(e.payload).length > 0 && (
+                    <pre className="mt-1.5 overflow-x-auto rounded-lg bg-ink-50 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-ink-700">
+                      {JSON.stringify(e.payload, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {bizForm && (
+        <BusinessFormModal
+          form={bizForm}
+          onChange={setBizForm}
+          onClose={() => setBizForm(null)}
+          onSave={saveBiz}
+          saving={bizSaving}
+        />
+      )}
+      {subForm && (
+        <SubscriptionFormModal
+          form={subForm}
+          onChange={setSubForm}
+          onClose={() => setSubForm(null)}
+          onSave={saveSub}
+          saving={subSaving}
+        />
+      )}
+    </div>
+  );
+}
+
+function SubscriptionFormModal({
+  form,
+  onChange,
+  onClose,
+  onSave,
+  saving,
+}: {
+  form: SubFormState;
+  onChange: (next: SubFormState) => void;
+  onClose: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const set = (patch: Partial<SubFormState>) => onChange({ ...form, ...patch });
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="card-soft w-full max-w-md overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+          <div>
+            <div className="font-display text-lg font-extrabold text-ink-900">
+              Obunani boshqarish
+            </div>
+            <div className="mt-0.5 truncate text-xs text-ink-500">{form.business_name}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 hover:bg-ink-100"
+            aria-label="Yopish"
+          >
+            <X className="h-4 w-4" strokeWidth={2.6} />
+          </button>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Reja</label>
+            <select
+              value={form.plan}
+              onChange={(e) => set({ plan: e.target.value })}
+              className="yz-input mt-1"
+            >
+              {SUB_PLANS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Holat</label>
+            <select
+              value={form.status}
+              onChange={(e) => set({ status: e.target.value })}
+              className="yz-input mt-1"
+            >
+              {SUB_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">
+              Tugash sanasi
+            </label>
+            <input
+              type="date"
+              value={form.expires_at}
+              onChange={(e) => set({ expires_at: e.target.value })}
+              className="yz-input mt-1"
+            />
+          </div>
+          <div className="rounded-xl bg-ink-50 px-3 py-2 text-[11px] text-ink-500">
+            Egaga Telegram orqali xabar yuboriladi.
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-ink-100 px-5 py-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="btn-soft px-4 py-2 text-sm"
+          >
+            Bekor
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="btn-primary px-4 py-2 text-sm"
+          >
+            {saving ? "Saqlanmoqda…" : "Saqlash"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BusinessFormModal({
+  form,
+  onChange,
+  onClose,
+  onSave,
+  saving,
+}: {
+  form: BizFormState;
+  onChange: (next: BizFormState) => void;
+  onClose: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const isEdit = !!form.id;
+  const set = (patch: Partial<BizFormState>) => onChange({ ...form, ...patch });
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="card-soft w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+          <div className="font-display text-lg font-extrabold text-ink-900">
+            {isEdit ? "Biznesni tahrirlash" : "Yangi biznes"}
+          </div>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 hover:bg-ink-100"
+            aria-label="Yopish"
+          >
+            <X className="h-4 w-4" strokeWidth={2.6} />
+          </button>
+        </div>
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto px-5 py-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Nom *</label>
+            <input
+              value={form.name}
+              onChange={(e) => set({ name: e.target.value })}
+              className="yz-input mt-1"
+              placeholder="Salon nomi"
+            />
+          </div>
+          {!isEdit && (
+            <div>
+              <label className="block text-xs font-semibold text-ink-500">
+                Slug * (faqat a-z 0-9 va &lsquo;-&rsquo;)
+              </label>
+              <input
+                value={form.slug}
+                onChange={(e) => set({ slug: e.target.value.toLowerCase() })}
+                className="yz-input mt-1 font-mono"
+                placeholder="my-salon"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Kategoriya</label>
+            <select
+              value={form.category}
+              onChange={(e) => set({ category: e.target.value })}
+              className="yz-input mt-1"
+            >
+              {BIZ_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          {!isEdit && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">
+                  Ega Telegram ID *
+                </label>
+                <input
+                  value={form.owner_telegram_id}
+                  onChange={(e) =>
+                    set({ owner_telegram_id: e.target.value.replace(/\D/g, "") })
+                  }
+                  className="yz-input mt-1 font-mono"
+                  placeholder="123456789"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Egasi ismi
+                  </label>
+                  <input
+                    value={form.owner_first_name}
+                    onChange={(e) => set({ owner_first_name: e.target.value })}
+                    className="yz-input mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Egasi tel.
+                  </label>
+                  <input
+                    value={form.owner_phone}
+                    onChange={(e) => set({ owner_phone: e.target.value })}
+                    className="yz-input mt-1"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Telefon</label>
+            <input
+              value={form.phone}
+              onChange={(e) => set({ phone: e.target.value })}
+              className="yz-input mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Manzil</label>
+            <input
+              value={form.address}
+              onChange={(e) => set({ address: e.target.value })}
+              className="yz-input mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink-500">Tavsif</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => set({ description: e.target.value })}
+              rows={3}
+              className="yz-input mt-1"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-ink-100 px-5 py-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="btn-soft px-4 py-2 text-sm"
+          >
+            Bekor
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="btn-primary px-4 py-2 text-sm"
+          >
+            {saving ? "Saqlanmoqda…" : isEdit ? "Saqlash" : "Yaratish"}
+          </button>
+        </div>
       </div>
     </div>
   );

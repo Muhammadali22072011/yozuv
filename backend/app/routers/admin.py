@@ -14,7 +14,12 @@ from sqlalchemy.orm import Session
 from app.database import Base, get_db
 from app.deps import get_admin_user
 from app.models import (
+    AdminAuditLog,
+    Booking,
+    BroadcastMessage,
     Business,
+    BusinessCategory,
+    BookingStatus,
     PaymentRecordStatus,
     PaymentTransaction,
     Subscription,
@@ -22,6 +27,7 @@ from app.models import (
     SubscriptionStatus,
     User,
 )
+from app.services.audit_service import log_admin_action
 from app.services.notification_service import send_telegram_message
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -128,12 +134,17 @@ def admin_summary(db: Session = Depends(get_db), _=Depends(get_admin_user)):
 
 @router.get("/businesses")
 def list_businesses(
-    db: Session = Depends(get_db), _=Depends(get_admin_user), limit: int = 100
+    db: Session = Depends(get_db),
+    _=Depends(get_admin_user),
+    limit: int = 100,
+    include_deleted: bool = False,
 ):
     now = datetime.now(timezone.utc)
+    q = db.query(Business)
+    if not include_deleted:
+        q = q.filter(Business.deleted_at.is_(None))
     rows = (
-        db.query(Business)
-        .order_by(Business.created_at.desc())
+        q.order_by(Business.created_at.desc())
         .limit(min(max(1, limit), 500))
         .all()
     )
@@ -171,6 +182,7 @@ def list_businesses(
                 "category": str(getattr(b.category, "value", b.category)),
                 "is_active": b.is_active,
                 "created_at": b.created_at.isoformat() if b.created_at else "",
+                "deleted_at": b.deleted_at.isoformat() if b.deleted_at else None,
                 "owner": {
                     "telegram_id": owner.telegram_id if owner else None,
                     "name": f"{owner.first_name or ''} {owner.last_name or ''}".strip() if owner else "",
@@ -186,6 +198,219 @@ def list_businesses(
     return out
 
 
+def _serialize_business_detail(b: Business, owner: User | None, sub: Subscription | None) -> dict:
+    return {
+        "id": str(b.id),
+        "name": b.name,
+        "slug": b.slug,
+        "category": str(getattr(b.category, "value", b.category)),
+        "description": b.description or "",
+        "address": b.address or "",
+        "viloyat": b.viloyat or "",
+        "tuman": b.tuman or "",
+        "phone": b.phone or "",
+        "is_active": b.is_active,
+        "created_at": b.created_at.isoformat() if b.created_at else "",
+        "deleted_at": b.deleted_at.isoformat() if b.deleted_at else None,
+        "owner": {
+            "telegram_id": owner.telegram_id if owner else None,
+            "name": f"{owner.first_name or ''} {owner.last_name or ''}".strip() if owner else "",
+            "phone": owner.phone if owner else "",
+        },
+        "subscription": (
+            {
+                "id": str(sub.id),
+                "plan": getattr(sub.plan, "value", str(sub.plan)),
+                "status": getattr(sub.status, "value", str(sub.status)),
+                "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+            }
+            if sub
+            else None
+        ),
+    }
+
+
+@router.get("/businesses/{business_id}")
+def business_detail(
+    business_id: UUID, db: Session = Depends(get_db), _=Depends(get_admin_user)
+):
+    b = db.query(Business).filter(Business.id == business_id).first()
+    if not b:
+        raise HTTPException(404, "Business not found")
+    owner = db.query(User).filter(User.id == b.owner_id).first() if b.owner_id else None
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.business_id == b.id)
+        .order_by(Subscription.expires_at.desc())
+        .first()
+    )
+    return _serialize_business_detail(b, owner, sub)
+
+
+def _validate_category(value: str | None) -> BusinessCategory:
+    if not value:
+        return BusinessCategory.OTHER
+    try:
+        return BusinessCategory(value)
+    except ValueError as exc:
+        valid = ", ".join(c.value for c in BusinessCategory)
+        raise HTTPException(400, f"Invalid category. Allowed: {valid}") from exc
+
+
+class BusinessCreateBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    slug: str = Field(..., min_length=2, max_length=128, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    category: str | None = None
+    owner_telegram_id: int = Field(..., gt=0)
+    owner_first_name: str | None = None
+    owner_phone: str | None = None
+    description: str | None = None
+    address: str | None = None
+    phone: str | None = None
+
+
+@router.post("/businesses", status_code=201)
+def create_business(
+    body: BusinessCreateBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    if db.query(Business).filter(Business.slug == body.slug).first():
+        raise HTTPException(409, "Slug already in use")
+    category = _validate_category(body.category)
+
+    owner = db.query(User).filter(User.telegram_id == body.owner_telegram_id).first()
+    if owner is None:
+        owner = User(
+            telegram_id=body.owner_telegram_id,
+            first_name=body.owner_first_name or "",
+            phone=body.owner_phone or "",
+        )
+        db.add(owner)
+        db.flush()
+    elif owner.business is not None and owner.business.deleted_at is None:
+        raise HTTPException(409, "Owner already has a business")
+
+    b = Business(
+        owner_id=owner.id,
+        name=body.name,
+        slug=body.slug,
+        category=category,
+        description=body.description or "",
+        address=body.address or "",
+        phone=body.phone or "",
+    )
+    db.add(b)
+    db.flush()
+    log_admin_action(
+        db,
+        admin,
+        "business.create",
+        "Business",
+        b.id,
+        {"name": b.name, "slug": b.slug, "owner_telegram_id": int(owner.telegram_id)},
+    )
+    db.commit()
+    db.refresh(b)
+    return _serialize_business_detail(b, owner, None)
+
+
+class BusinessUpdateBody(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    category: str | None = None
+    description: str | None = None
+    address: str | None = None
+    phone: str | None = None
+
+
+@router.put("/businesses/{business_id}")
+def update_business(
+    business_id: UUID,
+    body: BusinessUpdateBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    b = db.query(Business).filter(Business.id == business_id).first()
+    if not b:
+        raise HTTPException(404, "Business not found")
+    if b.deleted_at is not None:
+        raise HTTPException(409, "Business is deleted; restore it first")
+    changed: dict[str, object] = {}
+    if body.name is not None and body.name != b.name:
+        changed["name"] = body.name
+        b.name = body.name
+    if body.category is not None:
+        new_cat = _validate_category(body.category)
+        if new_cat != b.category:
+            changed["category"] = new_cat.value
+            b.category = new_cat
+    if body.description is not None and body.description != b.description:
+        changed["description"] = "<changed>"
+        b.description = body.description
+    if body.address is not None and body.address != b.address:
+        changed["address"] = body.address
+        b.address = body.address
+    if body.phone is not None and body.phone != b.phone:
+        changed["phone"] = body.phone
+        b.phone = body.phone
+    if changed:
+        log_admin_action(db, admin, "business.update", "Business", b.id, changed)
+    db.commit()
+    db.refresh(b)
+    owner = db.query(User).filter(User.id == b.owner_id).first() if b.owner_id else None
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.business_id == b.id)
+        .order_by(Subscription.expires_at.desc())
+        .first()
+    )
+    return _serialize_business_detail(b, owner, sub)
+
+
+@router.delete("/businesses/{business_id}")
+def delete_business(
+    business_id: UUID,
+    hard: bool = False,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    b = db.query(Business).filter(Business.id == business_id).first()
+    if not b:
+        raise HTTPException(404, "Business not found")
+    if hard:
+        active_bookings = (
+            db.query(func.count(Booking.id))
+            .filter(
+                Booking.business_id == b.id,
+                Booking.status.in_(
+                    [BookingStatus.PENDING, BookingStatus.CONFIRMED]
+                ),
+            )
+            .scalar()
+            or 0
+        )
+        if active_bookings:
+            raise HTTPException(
+                409,
+                f"Cannot hard-delete: {active_bookings} active booking(s) exist",
+            )
+        log_admin_action(
+            db, admin, "business.hard_delete", "Business", b.id, {"name": b.name}
+        )
+        db.delete(b)
+        db.commit()
+        return {"ok": True, "hard": True, "id": str(business_id)}
+    if b.deleted_at is not None:
+        return {"ok": True, "hard": False, "id": str(business_id), "already": True}
+    b.deleted_at = datetime.now(timezone.utc)
+    b.is_active = False
+    log_admin_action(
+        db, admin, "business.soft_delete", "Business", b.id, {"name": b.name}
+    )
+    db.commit()
+    return {"ok": True, "hard": False, "id": str(business_id)}
+
+
 class ExtendBody(BaseModel):
     business_id: UUID
     days: int = Field(..., ge=1, le=365)
@@ -193,7 +418,9 @@ class ExtendBody(BaseModel):
 
 @router.post("/subscription/extend")
 def extend_subscription(
-    body: ExtendBody, db: Session = Depends(get_db), _=Depends(get_admin_user)
+    body: ExtendBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
 ):
     b = db.query(Business).filter(Business.id == body.business_id).first()
     if not b:
@@ -221,6 +448,14 @@ def extend_subscription(
             amount_paid=0,
         )
         db.add(sub)
+    log_admin_action(
+        db,
+        admin,
+        "subscription.extend",
+        "Business",
+        b.id,
+        {"days": body.days},
+    )
     db.commit()
     # Notify owner
     owner = db.query(User).filter(User.id == b.owner_id).first()
@@ -239,6 +474,89 @@ def extend_subscription(
     }
 
 
+class SubscriptionPatchBody(BaseModel):
+    plan: str | None = None
+    status: str | None = None
+    expires_at: datetime | None = None
+
+
+def _validate_plan(value: str) -> SubscriptionPlan:
+    try:
+        return SubscriptionPlan(value)
+    except ValueError as exc:
+        valid = ", ".join(p.value for p in SubscriptionPlan)
+        raise HTTPException(400, f"Invalid plan. Allowed: {valid}") from exc
+
+
+def _validate_sub_status(value: str) -> SubscriptionStatus:
+    try:
+        return SubscriptionStatus(value)
+    except ValueError as exc:
+        valid = ", ".join(s.value for s in SubscriptionStatus)
+        raise HTTPException(400, f"Invalid status. Allowed: {valid}") from exc
+
+
+@router.patch("/subscriptions/{subscription_id}")
+def patch_subscription(
+    subscription_id: UUID,
+    body: SubscriptionPatchBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    sub = db.query(Subscription).filter(Subscription.id == subscription_id).first()
+    if not sub:
+        raise HTTPException(404, "Subscription not found")
+    changes: list[str] = []
+    if body.plan is not None:
+        new_plan = _validate_plan(body.plan)
+        if new_plan != sub.plan:
+            sub.plan = new_plan
+            changes.append(f"plan→{new_plan.value}")
+    if body.status is not None:
+        new_status = _validate_sub_status(body.status)
+        if new_status != sub.status:
+            sub.status = new_status
+            changes.append(f"status→{new_status.value}")
+    if body.expires_at is not None:
+        ts = body.expires_at
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if ts != sub.expires_at:
+            sub.expires_at = ts
+            changes.append(f"expires_at→{ts.date().isoformat()}")
+    if changes:
+        log_admin_action(
+            db,
+            admin,
+            "subscription.patch",
+            "Subscription",
+            sub.id,
+            {"changes": changes, "business_id": str(sub.business_id)},
+        )
+    db.commit()
+    db.refresh(sub)
+    if changes:
+        biz = db.query(Business).filter(Business.id == sub.business_id).first()
+        owner = (
+            db.query(User).filter(User.id == biz.owner_id).first() if biz else None
+        )
+        if owner and owner.telegram_id:
+            try:
+                send_telegram_message(
+                    int(owner.telegram_id),
+                    "ℹ️ Obunangiz yangilandi: " + ", ".join(changes),
+                )
+            except Exception:
+                pass
+    return {
+        "id": str(sub.id),
+        "plan": getattr(sub.plan, "value", str(sub.plan)),
+        "status": getattr(sub.status, "value", str(sub.status)),
+        "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+        "changes": changes,
+    }
+
+
 class ToggleBody(BaseModel):
     business_id: UUID
     is_active: bool
@@ -246,32 +564,81 @@ class ToggleBody(BaseModel):
 
 @router.post("/business/toggle")
 def toggle_business(
-    body: ToggleBody, db: Session = Depends(get_db), _=Depends(get_admin_user)
+    body: ToggleBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
 ):
     b = db.query(Business).filter(Business.id == body.business_id).first()
     if not b:
         raise HTTPException(404, "Business not found")
     b.is_active = body.is_active
+    log_admin_action(
+        db,
+        admin,
+        "business.toggle",
+        "Business",
+        b.id,
+        {"is_active": body.is_active, "name": b.name},
+    )
     db.commit()
     return {"ok": True, "is_active": b.is_active}
+
+
+class BroadcastFilters(BaseModel):
+    category: str | None = None
+    plan: str | None = None
+    subscription_status: str | None = None
+    is_active: bool | None = None
 
 
 class BroadcastBody(BaseModel):
     text: str = Field(..., min_length=1, max_length=4000)
     only_active: bool = True
+    filters: BroadcastFilters | None = None
 
 
-@router.post("/broadcast")
-def broadcast(
-    body: BroadcastBody, db: Session = Depends(get_db), _=Depends(get_admin_user)
-):
+def _select_broadcast_recipients(
+    db: Session, only_active: bool, filters: BroadcastFilters | None
+) -> list[tuple[Business, User]]:
     q = db.query(Business, User).join(User, User.id == Business.owner_id)
-    if body.only_active:
+    if only_active:
         q = q.filter(Business.is_active.is_(True))
-    rows = q.all()
+    if filters:
+        if filters.is_active is not None:
+            q = q.filter(Business.is_active.is_(filters.is_active))
+        if filters.category:
+            try:
+                cat = BusinessCategory(filters.category)
+            except ValueError as exc:
+                raise HTTPException(400, f"Invalid category: {filters.category}") from exc
+            q = q.filter(Business.category == cat)
+        if filters.plan or filters.subscription_status:
+            q = q.join(Subscription, Subscription.business_id == Business.id)
+            if filters.plan:
+                try:
+                    plan = SubscriptionPlan(filters.plan)
+                except ValueError as exc:
+                    raise HTTPException(400, f"Invalid plan: {filters.plan}") from exc
+                q = q.filter(Subscription.plan == plan)
+            if filters.subscription_status:
+                try:
+                    st = SubscriptionStatus(filters.subscription_status)
+                except ValueError as exc:
+                    raise HTTPException(
+                        400, f"Invalid status: {filters.subscription_status}"
+                    ) from exc
+                q = q.filter(Subscription.status == st)
+    # Filter out soft-deleted businesses unconditionally.
+    q = q.filter(Business.deleted_at.is_(None))
+    return q.all()
+
+
+def _send_broadcast_to(
+    rows: list[tuple[Business, User]], text: str
+) -> tuple[int, int, list[int]]:
     sent = 0
     failed = 0
-    text = body.text
+    failed_ids: list[int] = []
     for _b, owner in rows:
         if not owner or not owner.telegram_id:
             failed += 1
@@ -281,7 +648,120 @@ def broadcast(
             sent += 1
         except Exception:
             failed += 1
-    return {"sent": sent, "failed": failed, "total": len(rows)}
+            failed_ids.append(int(owner.telegram_id))
+    return sent, failed, failed_ids
+
+
+@router.post("/broadcast")
+def broadcast(
+    body: BroadcastBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    rows = _select_broadcast_recipients(db, body.only_active, body.filters)
+    sent, failed, failed_ids = _send_broadcast_to(rows, body.text)
+
+    msg = BroadcastMessage(
+        sent_by_telegram_id=int(admin.telegram_id),
+        sent_by_name=f"{admin.first_name or ''} {admin.last_name or ''}".strip()
+        or (admin.username or ""),
+        text=body.text,
+        filters={
+            "only_active": body.only_active,
+            **(body.filters.model_dump(exclude_none=True) if body.filters else {}),
+        },
+        sent_count=sent,
+        failed_count=failed,
+        failed_recipients=failed_ids,
+    )
+    db.add(msg)
+    log_admin_action(
+        db,
+        admin,
+        "broadcast.send",
+        "BroadcastMessage",
+        msg.id,
+        {
+            "sent": sent,
+            "failed": failed,
+            "total": len(rows),
+            "preview": body.text[:120],
+        },
+    )
+    db.commit()
+    db.refresh(msg)
+    return {
+        "id": str(msg.id),
+        "sent": sent,
+        "failed": failed,
+        "total": len(rows),
+    }
+
+
+@router.get("/broadcasts")
+def list_broadcasts(
+    db: Session = Depends(get_db), _=Depends(get_admin_user), limit: int = 50
+):
+    rows = (
+        db.query(BroadcastMessage)
+        .order_by(BroadcastMessage.created_at.desc())
+        .limit(min(max(1, limit), 200))
+        .all()
+    )
+    return [
+        {
+            "id": str(r.id),
+            "sent_by_telegram_id": int(r.sent_by_telegram_id),
+            "sent_by_name": r.sent_by_name,
+            "text": r.text,
+            "filters": r.filters or {},
+            "sent_count": int(r.sent_count),
+            "failed_count": int(r.failed_count),
+            "failed_recipients": r.failed_recipients or [],
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        }
+        for r in rows
+    ]
+
+
+@router.post("/broadcasts/{broadcast_id}/retry")
+def retry_broadcast(
+    broadcast_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    msg = db.query(BroadcastMessage).filter(BroadcastMessage.id == broadcast_id).first()
+    if not msg:
+        raise HTTPException(404, "Broadcast not found")
+    if not msg.failed_recipients:
+        return {"id": str(msg.id), "sent": 0, "failed": 0, "no_failed": True}
+    targets = msg.failed_recipients
+    sent = 0
+    still_failed: list[int] = []
+    for tg in targets:
+        try:
+            send_telegram_message(int(tg), msg.text)
+            sent += 1
+        except Exception:
+            still_failed.append(int(tg))
+    msg.sent_count = int(msg.sent_count) + sent
+    msg.failed_count = len(still_failed)
+    msg.failed_recipients = still_failed
+    log_admin_action(
+        db,
+        admin,
+        "broadcast.retry",
+        "BroadcastMessage",
+        msg.id,
+        {"retried": len(targets), "sent": sent, "still_failed": len(still_failed)},
+    )
+    db.commit()
+    return {
+        "id": str(msg.id),
+        "sent": sent,
+        "failed": len(still_failed),
+        "retried": len(targets),
+    }
 
 
 @router.get("/backup/export")
@@ -311,7 +791,7 @@ def backup_export(db: Session = Depends(get_db), _=Depends(get_admin_user)):
 async def backup_import(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _=Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     contents = await file.read()
     if len(contents) > MAX_BACKUP_BYTES:
@@ -348,6 +828,14 @@ async def backup_import(
             db.execute(table.insert(), coerced)
             inserted += len(coerced)
 
+        log_admin_action(
+            db,
+            admin,
+            "backup.import",
+            "",
+            None,
+            {"inserted_rows": inserted, "tables": len(tables_in)},
+        )
         db.commit()
     except HTTPException:
         db.rollback()
@@ -357,6 +845,42 @@ async def backup_import(
         raise HTTPException(500, f"Import failed: {e}")
 
     return {"ok": True, "inserted_rows": inserted, "tables": len(tables_in)}
+
+
+@router.get("/audit-log")
+def list_audit_log(
+    db: Session = Depends(get_db),
+    _=Depends(get_admin_user),
+    limit: int = 100,
+    action: str | None = None,
+    target_type: str | None = None,
+    admin_telegram_id: int | None = None,
+):
+    q = db.query(AdminAuditLog)
+    if action:
+        q = q.filter(AdminAuditLog.action == action)
+    if target_type:
+        q = q.filter(AdminAuditLog.target_type == target_type)
+    if admin_telegram_id:
+        q = q.filter(AdminAuditLog.admin_telegram_id == admin_telegram_id)
+    rows = (
+        q.order_by(AdminAuditLog.created_at.desc())
+        .limit(min(max(1, limit), 500))
+        .all()
+    )
+    return [
+        {
+            "id": str(r.id),
+            "admin_telegram_id": int(r.admin_telegram_id),
+            "admin_name": r.admin_name,
+            "action": r.action,
+            "target_type": r.target_type,
+            "target_id": r.target_id,
+            "payload": r.payload,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        }
+        for r in rows
+    ]
 
 
 @router.get("/payments")
