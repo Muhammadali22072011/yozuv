@@ -67,14 +67,18 @@ def get_available_slots(
     current_dt = start_dt
 
     while current_dt + duration <= end_dt:
+        slot_end_dt = current_dt + duration
+
         if schedule.break_start and schedule.break_end:
             bs = _combine(d, schedule.break_start)
             be = _combine(d, schedule.break_end)
-            if bs <= current_dt < be:
+            # Skip the slot if it overlaps the break at all — not just when its
+            # start lands inside. Otherwise a 60-min service starting at 11:30
+            # would be offered against a 12:00–13:00 break.
+            if not (slot_end_dt <= bs or current_dt >= be):
                 current_dt += step
                 continue
 
-        slot_end_dt = current_dt + duration
         is_free = True
         for booking in existing_bookings:
             b_start = _combine(d, booking.start_time)
