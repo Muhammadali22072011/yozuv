@@ -19,6 +19,7 @@ def list_clients(
     rows = (
         db.query(
             Client.id,
+            Client.telegram_id,
             Client.first_name,
             Client.last_name,
             Client.phone,
@@ -27,13 +28,20 @@ def list_clients(
         )
         .join(Booking, Booking.client_id == Client.id)
         .filter(Booking.business_id == business.id)
-        .group_by(Client.id, Client.first_name, Client.last_name, Client.phone)
+        .group_by(
+            Client.id,
+            Client.telegram_id,
+            Client.first_name,
+            Client.last_name,
+            Client.phone,
+        )
         .order_by(func.max(Booking.date).desc())
         .all()
     )
     return [
         {
             "id": str(r.id),
+            "telegram_id": int(r.telegram_id) if r.telegram_id else None,
             "first_name": r.first_name,
             "last_name": r.last_name,
             "phone": r.phone,

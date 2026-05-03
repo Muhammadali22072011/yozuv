@@ -77,15 +77,29 @@ export function isoFor(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-// Trigger the OS phone dialer. `window.location.href = "tel:..."` is
-// ignored inside the Telegram WebApp WebView; clicking an anchor with
-// the same href is the path the system honours.
-export function callPhone(phone: string | null | undefined) {
-  if (!phone || typeof document === "undefined") return;
+function _openExternalScheme(href: string) {
+  if (typeof document === "undefined") return;
   const a = document.createElement("a");
-  a.href = `tel:${phone}`;
+  a.href = href;
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+// Trigger the OS phone dialer. `window.location.href = "tel:..."` is
+// ignored inside the Telegram WebApp WebView; clicking an anchor with
+// the same href is the path the system honours.
+export function callPhone(phone: string | null | undefined) {
+  if (!phone) return;
+  _openExternalScheme(`tel:${phone}`);
+}
+
+// Open the Telegram chat with this user. Uses tg://user?id= deep link,
+// which Telegram Desktop and mobile both resolve into a chat as long as
+// the current account has previously interacted with the target user
+// (the owner has, because the bot delivered them the booking alert).
+export function messageTelegramUser(telegramId: number | string | null | undefined) {
+  if (!telegramId) return;
+  _openExternalScheme(`tg://user?id=${telegramId}`);
 }
