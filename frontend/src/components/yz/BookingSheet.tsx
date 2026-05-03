@@ -95,11 +95,25 @@ export function BookingSheet({
     (parseInt(booking.end_time.slice(0, 2)) - parseInt(booking.start_time.slice(0, 2))) * 60 +
     (parseInt(booking.end_time.slice(3, 5)) - parseInt(booking.start_time.slice(3, 5)));
 
-  const complete = async () => {
+  const confirmBooking = async () => {
     setBusy(true);
     try {
       await apiFetch(`/api/business/me/bookings/${booking.id}/confirm`, { method: "PUT" });
       toast("Tasdiqlandi");
+      onChanged?.();
+      onOpenChange(false);
+    } catch {
+      toast("Xatolik");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const complete = async () => {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/business/me/bookings/${booking.id}/complete`, { method: "PUT" });
+      toast("Bajarildi ✓");
       onChanged?.();
       onOpenChange(false);
     } catch {
@@ -260,7 +274,20 @@ export function BookingSheet({
                 {busy ? "Saqlanmoqda…" : "Saqlash"}
               </button>
             </>
-          ) : booking.status === "PENDING" || booking.status === "CONFIRMED" ? (
+          ) : booking.status === "PENDING" ? (
+            <>
+              <button
+                onClick={cancel}
+                disabled={busy}
+                className="flex-1 rounded-2xl bg-[#FFE7E3] px-4 py-3.5 font-display text-sm font-bold text-[#C93A2A] tap"
+              >
+                Bekor qilish
+              </button>
+              <button onClick={confirmBooking} disabled={busy} className="btn-primary flex-[2]">
+                Tasdiqlash
+              </button>
+            </>
+          ) : booking.status === "CONFIRMED" ? (
             <>
               <button
                 onClick={cancel}

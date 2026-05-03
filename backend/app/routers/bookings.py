@@ -264,6 +264,30 @@ def confirm(
     return b
 
 
+@me_router.put("/bookings/{booking_id}/complete", response_model=BookingRead)
+def complete(
+    booking_id: UUID,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner marks a booking as actually finished. Distinct from confirm
+    (which only acknowledges a pending request) so the dashboard's
+    'Bajarildi' button means what its label says."""
+    b = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id, Booking.business_id == business.id)
+        .first()
+    )
+    if not b:
+        raise HTTPException(404, "Not found")
+    if b.status == BookingStatus.CANCELLED:
+        raise HTTPException(400, "Bekor qilingan yozilishni yakunlab bo'lmaydi")
+    b.status = BookingStatus.COMPLETED
+    db.commit()
+    db.refresh(b)
+    return b
+
+
 @me_router.put("/bookings/{booking_id}/cancel", response_model=BookingRead)
 def cancel(
     booking_id: UUID,

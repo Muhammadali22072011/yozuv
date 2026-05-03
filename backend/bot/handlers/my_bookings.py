@@ -54,14 +54,19 @@ async def cmd_mybookings(message: Message):
         for b in active:
             biz = db.query(Business).filter(Business.id == b.business_id).first()
             svc = db.query(Service).filter(Service.id == b.service_id).first()
+            existing = db.query(Review).filter(Review.booking_id == b.id).first()
             text = (
                 f"📍 {biz.name if biz else ''}\n"
                 f"📋 {svc.name if svc else ''}\n"
                 f"📅 {b.date.isoformat()} {b.start_time.strftime('%H:%M')}\n"
                 f"Holat: {b.status}"
             )
+            if existing:
+                text += f"\nSizning bahoyingiz: {'⭐' * existing.rating}"
+            review_label = "✏️ Bahoni o'zgartirish" if existing else "⭐ Baho berish"
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[
+                    [InlineKeyboardButton(text=review_label, callback_data=f"rev:{b.id}")],
                     [InlineKeyboardButton(text="Bekor qilish", callback_data=f"cxl:{b.id}")],
                 ]
             )
@@ -147,11 +152,8 @@ async def start_review(cb: CallbackQuery, state: FSMContext):
         if not booking or not client or booking.client_id != client.id:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        if booking.status != BookingStatus.COMPLETED:
-            await cb.answer("Yozilish hali tugamagan", show_alert=True)
-            return
-        if booking.date > local_today():
-            await cb.answer("Tashrif hali bo'lmagan", show_alert=True)
+        if booking.status == BookingStatus.CANCELLED:
+            await cb.answer("Yozilish bekor qilingan", show_alert=True)
             return
     finally:
         db.close()
@@ -225,7 +227,7 @@ def _save_review_from_state(data: dict, telegram_id: int, comment: str) -> bool:
         client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
         if not booking or not client or booking.client_id != client.id:
             return False
-        if booking.status != BookingStatus.COMPLETED or booking.date > local_today():
+        if booking.status == BookingStatus.CANCELLED:
             return False
         existing = db.query(Review).filter(Review.booking_id == booking.id).first()
         if existing:
