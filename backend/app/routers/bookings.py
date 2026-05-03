@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,8 +6,22 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.deps import get_owned_business
-from app.models import Booking, BookingStatus, Business, Client, Service, User
-from app.schemas.booking import BookingCancelBody, BookingCreatePublic, BookingRead
+from app.models import (
+    Booking,
+    BookingStatus,
+    Business,
+    Client,
+    PaymentStatus,
+    Service,
+    User,
+)
+from app.models.enums import ConfirmationMode
+from app.schemas.booking import (
+    BookingCancelBody,
+    BookingCreateOwner,
+    BookingCreatePublic,
+    BookingRead,
+)
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
 from app.utils.ratelimit import rate_limit
@@ -66,6 +80,78 @@ def create_public_booking(
             }
             send_telegram_message(int(owner.telegram_id), text, reply_markup=kb)
 
+    return booking
+
+
+@me_router.post("/bookings", response_model=BookingRead)
+def create_owner_booking(
+    body: BookingCreateOwner,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner-created booking from the dashboard. Picks an existing client by id
+    and bypasses the public-flow telegram_id lookup."""
+    service = (
+        db.query(Service)
+        .filter(
+            Service.id == body.service_id,
+            Service.business_id == business.id,
+            Service.is_active.is_(True),
+        )
+        .first()
+    )
+    if not service:
+        raise HTTPException(404, "Service not found")
+    client = db.query(Client).filter(Client.id == body.client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    end_dt = datetime.combine(body.date, body.start_time) + timedelta(
+        minutes=service.duration_minutes
+    )
+    end_time = end_dt.time()
+
+    conflict = (
+        db.query(Booking)
+        .filter(
+            Booking.business_id == business.id,
+            Booking.date == body.date,
+            Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+            Booking.start_time < end_time,
+            Booking.end_time > body.start_time,
+        )
+        .with_for_update()
+        .first()
+    )
+    if conflict:
+        raise HTTPException(400, "Vaqt band")
+
+    try:
+        mode = (
+            business.confirmation_mode
+            if isinstance(business.confirmation_mode, ConfirmationMode)
+            else ConfirmationMode(str(business.confirmation_mode))
+        )
+    except ValueError:
+        mode = ConfirmationMode.AUTO
+    status = (
+        BookingStatus.CONFIRMED if mode == ConfirmationMode.AUTO else BookingStatus.PENDING
+    )
+
+    booking = Booking(
+        business_id=business.id,
+        service_id=service.id,
+        client_id=client.id,
+        date=body.date,
+        start_time=body.start_time,
+        end_time=end_time,
+        status=status,
+        payment_status=PaymentStatus.UNPAID,
+        payment_amount=service.price,
+    )
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
     return booking
 
 

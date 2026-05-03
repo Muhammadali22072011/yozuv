@@ -18,6 +18,13 @@ class BookingCreatePublic(BaseModel):
     promo_code: str = ""
 
 
+class BookingCreateOwner(BaseModel):
+    client_id: UUID
+    service_id: UUID
+    date: date
+    start_time: time
+
+
 class BookingRead(BaseModel):
     id: UUID
     business_id: UUID
