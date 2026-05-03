@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api";
 
 type Review = {
   id: string;
-  booking_id: string;
+  booking_id: string | null;
   rating: number;
   comment: string;
   client_name: string;

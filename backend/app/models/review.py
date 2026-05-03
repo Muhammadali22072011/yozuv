@@ -9,7 +9,9 @@ from app.database import Base
 
 
 class Review(Base):
-    """One review per booking (client rates after the visit)."""
+    """Client review of a business. Tied to a booking when given after a visit;
+    standalone (booking_id NULL) when the client rates the business directly.
+    Uniqueness is enforced via partial indexes — see migration 011."""
 
     __tablename__ = "reviews"
 
@@ -17,8 +19,8 @@ class Review(Base):
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    booking_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    booking_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=True, index=True
     )
     client_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True
