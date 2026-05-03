@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import {
   Avatar,
   ClientSheet,
+  NewBookingSheet,
   ScreenHeader,
   fmtSum,
 } from "@/components/yz";
@@ -14,6 +15,7 @@ import { apiFetch } from "@/lib/api";
 
 type Row = {
   id: string;
+  telegram_id?: number | null;
   first_name: string;
   last_name: string;
   phone: string;
@@ -31,6 +33,7 @@ export default function ClientsPage() {
   const [filter, setFilter] = useState<"all" | "vip" | "new">("all");
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<ClientDetail | null>(null);
+  const [newBookingFor, setNewBookingFor] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<Row[]>("/api/business/me/clients")
@@ -106,6 +109,7 @@ export default function ClientsPage() {
                 onClick={() =>
                   setActive({
                     id: r.id,
+                    telegram_id: r.telegram_id ?? null,
                     first_name: r.first_name,
                     last_name: r.last_name,
                     phone: r.phone,
@@ -146,7 +150,18 @@ export default function ClientsPage() {
         )}
       </div>
 
-      <ClientSheet open={!!active} onOpenChange={(v) => !v && setActive(null)} client={active} />
+      <ClientSheet
+        open={!!active}
+        onOpenChange={(v) => !v && setActive(null)}
+        client={active}
+        onNewBooking={(c) => setNewBookingFor(c.id)}
+      />
+      <NewBookingSheet
+        open={!!newBookingFor}
+        onOpenChange={(v) => !v && setNewBookingFor(null)}
+        defaultClientId={newBookingFor || undefined}
+        onCreated={() => setNewBookingFor(null)}
+      />
     </div>
   );
 }
