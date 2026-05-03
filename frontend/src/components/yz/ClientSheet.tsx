@@ -4,10 +4,11 @@ import { Phone, MessageSquare, Plus } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { SheetBody, SheetContent, SheetHeader, SheetRoot } from "./Sheet";
 import { useToast } from "./Toast";
-import { callPhone, fmtSum } from "./utils";
+import { callPhone, fmtSum, messageTelegramUser } from "./utils";
 
 export type ClientDetail = {
   id: string;
+  telegram_id?: number | null;
   first_name: string;
   last_name: string;
   phone?: string;
@@ -76,7 +77,13 @@ export function ClientSheet({
             <ActionBtn
               icon={<MessageSquare className="h-5 w-5" />}
               label="Xabar"
-              onClick={() => toast("Chat tez orada")}
+              onClick={() => {
+                if (client.telegram_id) {
+                  messageTelegramUser(client.telegram_id);
+                } else {
+                  toast("Mijoz Telegram orqali bog'lanmagan");
+                }
+              }}
             />
             <ActionBtn
               icon={<Plus className="h-5 w-5" />}

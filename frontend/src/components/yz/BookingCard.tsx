@@ -8,6 +8,7 @@ import { fmtSum, hm, durationMin } from "./utils";
 export type ServiceLite = { id: string; name: string; price?: number };
 export type ClientLite = {
   id: string;
+  telegram_id?: number | null;
   first_name: string;
   last_name: string;
   phone?: string;

@@ -15,7 +15,7 @@ import {
 } from "./Sheet";
 import type { ClientLite, ServiceLite } from "./BookingCard";
 import { useToast } from "./Toast";
-import { callPhone, fmtSum, hm, shortDate } from "./utils";
+import { callPhone, fmtSum, hm, messageTelegramUser, shortDate } from "./utils";
 
 function Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
   return (
@@ -137,7 +137,13 @@ export function BookingSheet({
             <ActionBtn
               icon={<MessageSquare className="h-5 w-5" />}
               label="Xabar"
-              onClick={() => toast("Chat tez orada")}
+              onClick={() => {
+                if (cli?.telegram_id) {
+                  messageTelegramUser(cli.telegram_id);
+                } else {
+                  toast("Mijoz Telegram orqali bog'lanmagan");
+                }
+              }}
             />
             <ActionBtn
               icon={<Pencil className="h-5 w-5" />}

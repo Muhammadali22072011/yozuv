@@ -205,6 +205,7 @@ def my_dashboard(
         "clients": [
             {
                 "id": str(c.id),
+                "telegram_id": int(c.telegram_id) if c.telegram_id else None,
                 "first_name": c.first_name or "",
                 "last_name": c.last_name or "",
                 "phone": c.phone or "",
