@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_owned_business
 from app.models import Booking, BookingStatus, Business, Client, Review
+from app.utils.clock import local_today
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter(tags=["reviews"])
@@ -58,7 +59,7 @@ def submit_review(body: ReviewCreate, db: Session = Depends(get_db)):
     # Reviews are only allowed for past, completed visits.
     if booking.status != BookingStatus.COMPLETED:
         raise HTTPException(400, "Booking is not completed")
-    if booking.date > _date.today():
+    if booking.date > local_today():
         raise HTTPException(400, "Cannot review a booking before the visit")
 
     existing = db.query(Review).filter(Review.booking_id == booking.id).first()

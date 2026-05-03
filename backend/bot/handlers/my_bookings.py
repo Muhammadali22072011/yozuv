@@ -1,4 +1,3 @@
-from datetime import date as _date
 from uuid import UUID
 
 from aiogram import F, Router
@@ -9,6 +8,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Review, Service
+from app.utils.clock import local_today
 from bot.keyboards.inline import back_to_menu_kb
 from bot.utils import safe_edit_text
 
@@ -42,7 +42,7 @@ async def cmd_mybookings(message: Message):
             .filter(
                 Booking.client_id == client.id,
                 Booking.status == BookingStatus.COMPLETED,
-                Booking.date <= _date.today(),
+                Booking.date <= local_today(),
             )
             .order_by(Booking.date.desc(), Booking.start_time.desc())
             .limit(20)
@@ -150,7 +150,7 @@ async def start_review(cb: CallbackQuery, state: FSMContext):
         if booking.status != BookingStatus.COMPLETED:
             await cb.answer("Yozilish hali tugamagan", show_alert=True)
             return
-        if booking.date > _date.today():
+        if booking.date > local_today():
             await cb.answer("Tashrif hali bo'lmagan", show_alert=True)
             return
     finally:
@@ -225,7 +225,7 @@ def _save_review_from_state(data: dict, telegram_id: int, comment: str) -> bool:
         client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
         if not booking or not client or booking.client_id != client.id:
             return False
-        if booking.status != BookingStatus.COMPLETED or booking.date > _date.today():
+        if booking.status != BookingStatus.COMPLETED or booking.date > local_today():
             return False
         existing = db.query(Review).filter(Review.booking_id == booking.id).first()
         if existing:

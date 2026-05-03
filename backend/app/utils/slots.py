@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy.orm import Session
 
 from app.models import Booking, BookingStatus, HolidayDate, Schedule
+from app.utils.clock import local_today
 
 # Granularity of slot generation (minutes)
 SLOT_STEP_MINUTES = 30
@@ -93,7 +94,7 @@ def get_available_slots(
 
 def next_working_dates(db: Session, business_id, count: int = 7) -> list[date]:
     out: list[date] = []
-    day = date.today()
+    day = local_today()
     scanned = 0
     while len(out) < count and scanned < MAX_WORKING_DATE_SCAN:
         scanned += 1
