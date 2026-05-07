@@ -1,6 +1,7 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.celery_app import celery_app
@@ -58,6 +59,139 @@ def send_hourly_reminders() -> None:
             # broken row would re-enter the window every minute forever.
             b.reminder_sent_at = datetime.now(TZ)
             db.commit()
+    finally:
+        db.close()
+
+
+# How long since the last completed visit before we treat a client as
+# "we've lost them" and send a re-engagement nudge. 30..60 days is the
+# sweet spot — earlier feels pushy, later feels desperate.
+REENGAGE_AFTER_DAYS = 30
+REENGAGE_BEFORE_DAYS = 60
+
+# Don't send any retention message more often than this. Two weeks
+# avoids "happy birthday + come back!" overlapping into spam.
+OUTREACH_COOLDOWN_DAYS = 14
+
+
+def _under_cooldown(client: Client, now_utc: datetime) -> bool:
+    last = client.last_outreach_at
+    if last is None:
+        return False
+    if last.tzinfo is None:
+        # Legacy naive value — treat as UTC.
+        last = last.replace(tzinfo=timezone.utc)
+    return now_utc - last < timedelta(days=OUTREACH_COOLDOWN_DAYS)
+
+
+@celery_app.task(name="app.tasks.reminders.send_birthday_greetings")
+def send_birthday_greetings() -> None:
+    """Wish every client whose birthday is today, naming the most recent
+    business they've visited so the message feels personal."""
+    db = _session()
+    try:
+        today_local = datetime.now(TZ).date()
+        now_utc = datetime.now(timezone.utc)
+
+        # Clients celebrating today — match by month+day, ignore year.
+        candidates = (
+            db.query(Client)
+            .filter(
+                Client.birthday.is_not(None),
+                func.extract("month", Client.birthday) == today_local.month,
+                func.extract("day", Client.birthday) == today_local.day,
+            )
+            .all()
+        )
+        for client in candidates:
+            if _under_cooldown(client, now_utc):
+                continue
+            # Pick the most recent business they've ever booked at, so
+            # the message refers to the place they're most likely to
+            # visit again.
+            last_biz_id = (
+                db.query(Booking.business_id)
+                .filter(Booking.client_id == client.id)
+                .order_by(Booking.date.desc(), Booking.start_time.desc())
+                .limit(1)
+                .scalar()
+            )
+            if not last_biz_id:
+                continue
+            biz = db.query(Business).filter(Business.id == last_biz_id).first()
+            if not biz:
+                continue
+            name = (client.first_name or "").strip() or "Aziz mijoz"
+            send_telegram_message(
+                int(client.telegram_id),
+                f"🎂 Tug'ilgan kuningiz bilan, <b>{name}</b>!\n"
+                f"<b>{biz.name}</b> sizni har doim kutadi.",
+            )
+            client.last_outreach_at = now_utc
+        db.commit()
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.reminders.send_reengagement_nudges")
+def send_reengagement_nudges() -> None:
+    """Nudge clients we haven't seen in REENGAGE_AFTER_DAYS..REENGAGE_BEFORE_DAYS
+    so the bot stays top-of-mind without being a 365-day sender."""
+    db = _session()
+    try:
+        today_local = datetime.now(TZ).date()
+        now_utc = datetime.now(timezone.utc)
+        oldest_last_visit = today_local - timedelta(days=REENGAGE_BEFORE_DAYS)
+        newest_last_visit = today_local - timedelta(days=REENGAGE_AFTER_DAYS)
+
+        # For each client, pick their most recent COMPLETED booking date
+        # and the business it was at. We can't do an aggregate-and-fetch
+        # in one query portably, so fetch (client_id, last_date,
+        # last_business_id) by walking distinct clients with completed
+        # visits in the eligible window.
+        rows = (
+            db.query(
+                Booking.client_id,
+                func.max(Booking.date).label("last_date"),
+            )
+            .filter(Booking.status == BookingStatus.COMPLETED)
+            .group_by(Booking.client_id)
+            .all()
+        )
+        for client_id, last_date in rows:
+            if not client_id or not last_date:
+                continue
+            if last_date > newest_last_visit:
+                continue  # too recent
+            if last_date < oldest_last_visit:
+                continue  # too long ago
+            client = db.query(Client).filter(Client.id == client_id).first()
+            if client is None or _under_cooldown(client, now_utc):
+                continue
+            # Use the business of the most recent COMPLETED booking.
+            last_biz_id = (
+                db.query(Booking.business_id)
+                .filter(
+                    Booking.client_id == client_id,
+                    Booking.status == BookingStatus.COMPLETED,
+                    Booking.date == last_date,
+                )
+                .limit(1)
+                .scalar()
+            )
+            if not last_biz_id:
+                continue
+            biz = db.query(Business).filter(Business.id == last_biz_id).first()
+            if not biz:
+                continue
+            name = (client.first_name or "").strip() or "Aziz mijoz"
+            send_telegram_message(
+                int(client.telegram_id),
+                f"👋 <b>{name}</b>, ancha vaqt bo'ldi!\n"
+                f"<b>{biz.name}</b> da yozilishni unutmang. Yangi tashrifingizni kutamiz.",
+            )
+            client.last_outreach_at = now_utc
+        db.commit()
     finally:
         db.close()
 

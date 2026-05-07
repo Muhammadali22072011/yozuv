@@ -1,6 +1,8 @@
+from datetime import date as _date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,10 @@ from app.deps import get_owned_business
 from app.models import Booking, Business, Client
 
 router = APIRouter(prefix="/business/me", tags=["clients"])
+
+
+class ClientPatchBody(BaseModel):
+    birthday: _date | None = None
 
 
 @router.get("/clients")
@@ -74,6 +80,7 @@ def client_detail(
             "last_name": c.last_name,
             "phone": c.phone,
             "telegram_id": c.telegram_id,
+            "birthday": c.birthday.isoformat() if c.birthday else None,
         },
         "bookings": [
             {
@@ -84,4 +91,35 @@ def client_detail(
             }
             for b in bookings
         ],
+    }
+
+
+@router.patch("/clients/{client_id}")
+def patch_client(
+    client_id: UUID,
+    body: ClientPatchBody,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner-edit fields the client doesn't surface themselves yet —
+    currently birthday only. Restricted to clients who've actually
+    booked with this business so an owner can't enumerate the global
+    Client table."""
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(404, "Not found")
+    has_booking = (
+        db.query(Booking.id)
+        .filter(Booking.business_id == business.id, Booking.client_id == client_id)
+        .first()
+    )
+    if not has_booking:
+        raise HTTPException(404, "Not found")
+    if body.birthday is not None:
+        c.birthday = body.birthday
+    db.commit()
+    db.refresh(c)
+    return {
+        "id": str(c.id),
+        "birthday": c.birthday.isoformat() if c.birthday else None,
     }
