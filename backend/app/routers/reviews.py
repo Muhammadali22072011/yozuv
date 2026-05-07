@@ -148,3 +148,28 @@ def reviews_summary(
         .scalar()
     )
     return {"average_rating": round(float(avg or 0), 2), "count": int(cnt or 0)}
+
+
+@router.get("/business/{slug}/reviews-summary")
+def public_reviews_summary(slug: str, db: Session = Depends(get_db)):
+    """Public read used by the SEO landing page and the bot to render
+    rating without authentication. Skips the comment text — that lives
+    on the owner-only list endpoint."""
+    biz = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
+    if not biz:
+        raise HTTPException(404, "Not found")
+    avg = (
+        db.query(func.avg(Review.rating))
+        .filter(Review.business_id == biz.id)
+        .scalar()
+    )
+    cnt = (
+        db.query(func.count(Review.id))
+        .filter(Review.business_id == biz.id)
+        .scalar()
+    )
+    return {"average_rating": round(float(avg or 0), 2), "count": int(cnt or 0)}
