@@ -290,7 +290,7 @@ def my_notifications(
                 "id": f"review:{r.id}",
                 "type": "review_new",
                 "title": f"Yangi izoh ({int(r.rating or 0)}★)",
-                "body": (r.text or "")[:120] or "Izohsiz baho",
+                "body": (r.comment or "")[:120] or "Izohsiz baho",
                 "created_at": r.created_at.isoformat() if r.created_at else now.isoformat(),
                 "link": "/dashboard/reviews",
             }
