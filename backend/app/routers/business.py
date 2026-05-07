@@ -448,7 +448,13 @@ def public_business(slug: str, db: Session = Depends(get_db)):
 
 @router.get("/{slug}/services", response_model=list)
 def public_services(slug: str, db: Session = Depends(get_db)):
-    b = db.query(Business).filter(Business.slug == slug).first()
+    # Mirror the public detail endpoint above: a deactivated/soft-deleted
+    # business shouldn't keep advertising its menu.
+    b = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
     if not b:
         raise HTTPException(404, "Not found")
     services = (
