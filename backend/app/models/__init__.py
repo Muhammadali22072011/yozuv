@@ -22,6 +22,7 @@ from app.models.schedule import HolidayDate, Schedule
 from app.models.service import Service
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.models.waitlist_entry import WaitlistEntry
 
 __all__ = [
     "AdminAuditLog",
@@ -47,4 +48,5 @@ __all__ = [
     "SubscriptionStatus",
     "PaymentProvider",
     "PaymentRecordStatus",
+    "WaitlistEntry",
 ]
