@@ -24,6 +24,7 @@ from app.schemas.booking import (
     BookingUpdate,
 )
 from app.services import booking_service
+from app.services.booking_service import acquire_slot_lock
 from app.services.notification_service import send_telegram_message
 from app.utils.ratelimit import rate_limit
 from app.utils.slots import get_available_slots
@@ -111,6 +112,10 @@ def create_owner_booking(
         minutes=service.duration_minutes
     )
     end_time = end_dt.time()
+
+    # SELECT FOR UPDATE only locks existing rows; an empty slot has none.
+    # Take an advisory lock first so two parallel owner-creates serialize.
+    acquire_slot_lock(db, business.id, body.date, body.start_time)
 
     conflict = (
         db.query(Booking)
@@ -222,6 +227,12 @@ def update_booking(
         )
     )
     new_end = (datetime.combine(new_date, new_start) + timedelta(minutes=duration)).time()
+
+    # Same advisory lock the create path uses — without it, two parallel
+    # owner-edits to the same destination slot can both pass the
+    # conflict check (since the destination has no row yet) and produce
+    # an overlap.
+    acquire_slot_lock(db, business.id, new_date, new_start)
 
     conflict = (
         db.query(Booking)
