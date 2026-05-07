@@ -34,6 +34,9 @@ class BusinessUpdate(BaseModel):
     tuman: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    # 0 = no policy. 168 = 1 week — anything bigger is almost certainly
+    # a typo, so cap there to avoid silently flagging every cancel.
+    cancel_window_hours: int | None = Field(default=None, ge=0, le=168)
     # NOTE: is_active is intentionally NOT here. A blocked owner could
     # otherwise re-activate themselves via PUT /business/me. Toggling
     # is_active belongs in admin endpoints only.
@@ -78,6 +81,7 @@ class BusinessMe(BaseModel):
     tuman: str = ""
     latitude: float | None = None
     longitude: float | None = None
+    cancel_window_hours: int = 0
 
     class Config:
         from_attributes = True

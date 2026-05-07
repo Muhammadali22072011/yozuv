@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,9 @@ class Business(Base):
         String(32), default=ConfirmationMode.AUTO, nullable=False
     )
     language: Mapped[LanguageCode] = mapped_column(String(8), default=LanguageCode.UZ, nullable=False)
+    # How close to start_time a client may still cancel without it being
+    # flagged as a "late" cancel. 0 = no policy / always on time.
+    cancel_window_hours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.utcnow())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
