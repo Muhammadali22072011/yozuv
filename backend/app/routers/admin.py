@@ -3,9 +3,10 @@ import io
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
@@ -787,12 +788,31 @@ def backup_export(db: Session = Depends(get_db), _=Depends(get_admin_user)):
     )
 
 
+CONFIRM_PHRASE = "REPLACE-ALL-DATA"
+
+
 @router.post("/backup/import")
 async def backup_import(
     file: UploadFile = File(...),
+    confirm: str = Form(""),
     db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user),
 ):
+    """Restore the database from a backup JSON.
+
+    DESTRUCTIVE: every existing row in every table is deleted before the
+    backup is loaded. Requires `confirm=REPLACE-ALL-DATA` in the
+    multipart form so a misclick (or a leaked admin token) can't wipe
+    production. Before the wipe runs we also write an automatic
+    snapshot of the current state to UPLOADS_DIR/backups/auto-<ts>.json
+    so an admin who realises mid-deploy can recover.
+    """
+    if confirm != CONFIRM_PHRASE:
+        raise HTTPException(
+            400,
+            f"This endpoint replaces ALL data. Set confirm={CONFIRM_PHRASE} to proceed.",
+        )
+
     contents = await file.read()
     if len(contents) > MAX_BACKUP_BYTES:
         raise HTTPException(400, "File too large (max 50 MB)")
@@ -815,6 +835,32 @@ async def backup_import(
     if unknown:
         raise HTTPException(400, f"Unknown tables in backup: {', '.join(unknown)}")
 
+    # Snapshot current state before destruction so the admin has an
+    # undo path. Best-effort — if it fails, the import still proceeds
+    # (the audit log will reflect that no auto-backup was written).
+    snapshot_path: str | None = None
+    try:
+        from app.config import get_settings as _get_settings
+
+        backups_dir = Path(_get_settings().uploads_dir) / "backups"
+        backups_dir.mkdir(parents=True, exist_ok=True)
+        snapshot: dict = {
+            "version": BACKUP_VERSION,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "tables": {
+                table.name: [dict(r) for r in db.execute(select(table)).mappings().all()]
+                for table in Base.metadata.sorted_tables
+            },
+        }
+        snap_name = f"auto-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
+        (backups_dir / snap_name).write_text(
+            json.dumps(snapshot, default=_json_default, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        snapshot_path = str(backups_dir / snap_name)
+    except Exception:
+        snapshot_path = None
+
     try:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(delete(table))
@@ -834,7 +880,11 @@ async def backup_import(
             "backup.import",
             "",
             None,
-            {"inserted_rows": inserted, "tables": len(tables_in)},
+            {
+                "inserted_rows": inserted,
+                "tables": len(tables_in),
+                "auto_snapshot": snapshot_path,
+            },
         )
         db.commit()
     except HTTPException:
@@ -844,7 +894,12 @@ async def backup_import(
         db.rollback()
         raise HTTPException(500, f"Import failed: {e}")
 
-    return {"ok": True, "inserted_rows": inserted, "tables": len(tables_in)}
+    return {
+        "ok": True,
+        "inserted_rows": inserted,
+        "tables": len(tables_in),
+        "auto_snapshot": snapshot_path,
+    }
 
 
 @router.get("/audit-log")
