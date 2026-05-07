@@ -10,6 +10,7 @@ from app.models import (
     BookingStatus,
     Business,
     Client,
+    ClientBlock,
     PaymentStatus,
     PromoCode,
     Service,
@@ -109,6 +110,27 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
         raise ValueError("Service not found")
 
     _check_active_subscription(db, business.id)
+
+    # Refuse if this client is on the business's block list. We translate
+    # the telegram_id into a Client row first; clients with no row yet
+    # can't be blocked, by definition.
+    blocking_client = (
+        db.query(Client)
+        .filter(Client.telegram_id == payload.client_telegram_id)
+        .first()
+    )
+    if blocking_client is not None:
+        blocked = (
+            db.query(ClientBlock)
+            .filter(
+                ClientBlock.business_id == business.id,
+                ClientBlock.client_id == blocking_client.id,
+            )
+            .first()
+        )
+        if blocked is not None:
+            # Generic message — don't reveal block reason to the client.
+            raise ValueError("Booking is not allowed for this client")
 
     _acquire_slot_lock(db, business.id, payload)
 

@@ -3,6 +3,7 @@ from app.models.booking import Booking
 from app.models.broadcast_message import BroadcastMessage
 from app.models.business import Business
 from app.models.client import Client
+from app.models.client_block import ClientBlock
 from app.models.enums import (
     BookingStatus,
     BusinessCategory,
@@ -33,6 +34,7 @@ __all__ = [
     "HolidayDate",
     "Booking",
     "Client",
+    "ClientBlock",
     "Subscription",
     "PaymentTransaction",
     "PlatformSettings",
