@@ -1,11 +1,13 @@
+import json
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, get_owned_business
+from app.deps import get_current_user, get_owned_business, get_owned_business_download
 from app.models import (
     Booking,
     BookingStatus,
@@ -374,6 +376,53 @@ def my_notifications(
 
     items.sort(key=lambda x: x["created_at"], reverse=True)
     return {"items": items, "generated_at": now.isoformat()}
+
+
+@router.get("/me/notifications/stream")
+async def notifications_stream(
+    # SSE: native EventSource can't send custom headers, so we accept
+    # the access token via ?token= as well as the usual Authorization
+    # header (same pattern as the brochure download).
+    business: Business = Depends(get_owned_business_download),
+):
+    """Server-Sent Events feed for the dashboard bell.
+
+    The dashboard previously polled /notifications every 60 seconds,
+    which generated 60k requests per hour per 1k owners regardless of
+    whether anything changed. This endpoint emits one event per real
+    change (booking, review, subscription update) so the frontend
+    only re-fetches when there's actually new data.
+
+    Format: one `event:` block per kind, plus a `ping` heartbeat every
+    30s so proxies don't kill an otherwise-quiet connection.
+    """
+    from app.services.event_bus import subscribe
+
+    async def gen():
+        # Tell the client they're connected so we have something to
+        # write before the first real event — long flushes through
+        # an idle proxy can otherwise close the stream early.
+        yield "event: connected\ndata: {}\n\n"
+        try:
+            async for kind in subscribe(business.id):
+                payload = json.dumps({"kind": kind})
+                yield f"event: {kind}\ndata: {payload}\n\n"
+        except Exception:
+            # Either the client disconnected or the producer died.
+            # Either way — close cleanly so the frontend can retry.
+            return
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            # Disable proxy buffering — Render/Railway have nginx in
+            # front and it'll otherwise sit on the response for ~60s.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.put("/me", response_model=BusinessMe)
