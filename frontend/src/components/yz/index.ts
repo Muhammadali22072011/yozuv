@@ -26,6 +26,7 @@ export type { ClientDetail } from "./ClientSheet";
 export { NewBookingSheet } from "./NewBookingSheet";
 export { NotificationSheet } from "./NotificationSheet";
 export type { NotificationItem } from "./NotificationSheet";
+export { BusinessSwitcher } from "./BusinessSwitcher";
 export {
   fmtSum,
   fmtShort,

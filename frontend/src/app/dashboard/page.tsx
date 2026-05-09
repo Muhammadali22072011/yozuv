@@ -19,6 +19,7 @@ import type { BookingRow, BusinessMe } from "@/types";
 import {
   BookingCard,
   BookingSheet,
+  BusinessSwitcher,
   HeroGradient,
   NotificationSheet,
   SectionLabel,
@@ -163,18 +164,21 @@ export default function DashboardHome() {
               </div>
             </div>
           </div>
-          <button
-            onClick={openNotifications}
-            className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
-            aria-label="Bildirishnomalar"
-          >
-            <Bell className="h-5 w-5 text-white" strokeWidth={2} />
-            {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <BusinessSwitcher />
+            <button
+              onClick={openNotifications}
+              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              aria-label="Bildirishnomalar"
+            >
+              <Bell className="h-5 w-5 text-white" strokeWidth={2} />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="mt-7">
