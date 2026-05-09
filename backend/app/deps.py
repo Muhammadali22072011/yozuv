@@ -1,10 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import Business, User
+from app.models import Business, Membership, MembershipRole, User
 from app.utils.auth import decode_token, get_user_from_token
 
 security = HTTPBearer(auto_error=False)
@@ -86,3 +86,78 @@ def get_admin_user(user: User = Depends(get_current_user)) -> User:
     if not is_admin_user(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
+
+
+def get_active_business(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_business_id: str | None = Header(default=None, alias="X-Business-Id"),
+) -> Business:
+    """Membership-aware version of `get_owned_business`.
+
+    Picks the business this request is acting against by:
+
+    1. If the client sends `X-Business-Id`, validate the user has a
+       Membership for that business (any role) and use it. This is the
+       multi-business path.
+    2. Otherwise fall back to the legacy single-business case: the
+       business this user owns via Business.owner_id.
+
+    The legacy `get_owned_business` dep stays in place so existing
+    routers that haven't been migrated yet keep working unchanged.
+    Once every router has been moved over to this dep, owner_id can
+    be retired.
+    """
+    if x_business_id:
+        try:
+            from uuid import UUID as _UUID
+            biz_id = _UUID(x_business_id)
+        except ValueError:
+            raise HTTPException(400, "Invalid X-Business-Id") from None
+        membership = (
+            db.query(Membership)
+            .filter(
+                Membership.user_id == user.id,
+                Membership.business_id == biz_id,
+            )
+            .first()
+        )
+        if membership is None:
+            raise HTTPException(403, "No membership for that business")
+        b = db.query(Business).filter(Business.id == biz_id).first()
+        if b is None:
+            raise HTTPException(404, "Business not found")
+        return b
+
+    # Legacy fallback — same as get_owned_business so non-migrated
+    # callers keep working.
+    b = db.query(Business).filter(Business.owner_id == user.id).first()
+    if not b:
+        raise HTTPException(404, "Business not found")
+    return b
+
+
+def require_role(*allowed: MembershipRole):
+    """Dependency factory: require the caller's membership for the
+    active business to have one of `allowed` roles. Use after
+    `get_active_business` so the business has already been resolved.
+    """
+
+    def _dep(
+        user: User = Depends(get_current_user),
+        business: Business = Depends(get_active_business),
+        db: Session = Depends(get_db),
+    ) -> Business:
+        m = (
+            db.query(Membership)
+            .filter(
+                Membership.user_id == user.id,
+                Membership.business_id == business.id,
+            )
+            .first()
+        )
+        if m is None or m.role not in {r.value for r in allowed} | set(allowed):
+            raise HTTPException(403, "Insufficient role")
+        return business
+
+    return _dep

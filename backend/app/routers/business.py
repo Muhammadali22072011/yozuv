@@ -59,6 +59,18 @@ def create_business(
     db.add(b)
     db.flush()
 
+    # Mirror the legacy owner_id link in the new Membership graph so
+    # both code paths see this business going forward.
+    from app.models import Membership, MembershipRole
+
+    db.add(
+        Membership(
+            user_id=user.id,
+            business_id=b.id,
+            role=MembershipRole.OWNER,
+        )
+    )
+
     now = datetime.now(timezone.utc)
     trial = Subscription(
         business_id=b.id,
@@ -90,6 +102,39 @@ def create_business(
 @router.get("/me", response_model=BusinessMe)
 def my_business(business: Business = Depends(get_owned_business)):
     return business
+
+
+@router.get("/memberships")
+def list_memberships(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Every business this user has access to, with the role they hold.
+
+    Used by the upcoming "switch business" UI so an owner of three
+    salons sees all three and can pick which calendar to look at
+    (the X-Business-Id header carries the choice forward).
+    """
+    from app.models import Membership
+
+    rows = (
+        db.query(Membership, Business)
+        .join(Business, Business.id == Membership.business_id)
+        .filter(Membership.user_id == user.id, Business.deleted_at.is_(None))
+        .order_by(Business.name.asc())
+        .all()
+    )
+    return [
+        {
+            "business_id": str(b.id),
+            "name": b.name,
+            "slug": b.slug,
+            "logo_url": b.logo_url or "",
+            "role": getattr(m.role, "value", str(m.role)),
+            "is_active": bool(b.is_active),
+        }
+        for m, b in rows
+    ]
 
 
 @router.get("/me/dashboard")
