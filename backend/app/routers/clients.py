@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Booking, Business, Client
 
 router = APIRouter(prefix="/business/me", tags=["clients"])
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/business/me", tags=["clients"])
 @router.get("/clients")
 def list_clients(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = (
         db.query(
@@ -56,7 +56,7 @@ def list_clients(
 def client_detail(
     client_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:

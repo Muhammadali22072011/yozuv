@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Business, Subscription, SubscriptionPlan, SubscriptionStatus
 from app.services.payment_service import create_click_payment, create_payme_payment
 
@@ -33,7 +33,7 @@ class UpgradeOut(BaseModel):
 @router.get("", response_model=SubscriptionStatusOut)
 def subscription_status(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     sub = (
         db.query(Subscription)
@@ -54,7 +54,7 @@ def subscription_status(
 def upgrade(
     body: UpgradeBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     if body.plan not in (SubscriptionPlan.MONTHLY, SubscriptionPlan.YEARLY):
         raise HTTPException(400, "Invalid plan")

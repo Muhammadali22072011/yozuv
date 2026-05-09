@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Booking, BookingStatus, Business, Service
 from app.schemas.analytics import BookingsPoint, PopularService, RevenuePoint, SummaryAnalytics
 from app.utils.clock import local_today
@@ -30,7 +30,7 @@ def _period_start(period: str) -> date:
 def summary(
     period: str = Query("week", pattern="^(today|week|month|year)$"),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     start_d = _period_start(period)
     today = local_today()
@@ -77,7 +77,7 @@ def summary(
 def revenue_chart(
     days: int = Query(7, ge=1, le=400),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     out: list[RevenuePoint] = []
     today = local_today()
@@ -101,7 +101,7 @@ def revenue_chart(
 def bookings_by_day(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     out: list[BookingsPoint] = []
     today = local_today()
@@ -124,7 +124,7 @@ def bookings_by_day(
 @router.get("/popular-services", response_model=list[PopularService])
 def popular_services(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
     limit: int = Query(10, le=50),
 ):
     rows = (

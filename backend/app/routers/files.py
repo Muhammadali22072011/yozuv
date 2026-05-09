@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_owned_business, get_owned_business_download
+from app.deps import get_active_business, get_owned_business_download
 from app.models import Business, Service
 from app.services.pdf_service import build_brochure_pdf
 from app.services.qr_service import generate_qr
@@ -45,7 +45,7 @@ def _logo_path_from_url(logo_url: str) -> Path | None:
 @router.get("/qr")
 def qr_png(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     data = generate_qr(business.slug, settings.next_public_bot_username)
     filename = f"yozuv-{business.slug}-qr.png"
@@ -89,7 +89,7 @@ def brochure_pdf(
 async def upload_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     if file.content_type not in ALLOWED_LOGO_MIME:
         raise HTTPException(400, "Faqat JPG, PNG yoki WEBP rasm yuklash mumkin")
@@ -119,7 +119,7 @@ async def upload_logo(
 @router.delete("/logo")
 def delete_logo(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     old_path = _logo_path_from_url(business.logo_url)
     business.logo_url = ""

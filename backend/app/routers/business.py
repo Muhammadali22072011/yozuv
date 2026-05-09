@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, get_owned_business
+from app.deps import get_current_user, get_active_business
 from app.models import (
     Booking,
     BookingStatus,
@@ -100,7 +100,7 @@ def create_business(
 
 
 @router.get("/me", response_model=BusinessMe)
-def my_business(business: Business = Depends(get_owned_business)):
+def my_business(business: Business = Depends(get_active_business)):
     return business
 
 
@@ -141,7 +141,7 @@ def list_memberships(
 def my_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """One-shot payload that replaces ~10 calls from the dashboard page."""
     today = local_today()
@@ -277,7 +277,7 @@ def my_dashboard(
 @router.get("/me/notifications")
 def my_notifications(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
@@ -380,7 +380,7 @@ def my_notifications(
 def update_business(
     body: BusinessUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
