@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_owned_business
 from app.models import Booking, BookingStatus, Business, Client, Review
+from app.services.event_bus import publish as publish_event
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter(tags=["reviews"])
@@ -78,6 +79,10 @@ def submit_review(body: ReviewCreate, db: Session = Depends(get_db)):
         db.add(review)
         db.commit()
         db.refresh(review)
+
+    # Tell any open SSE streams for the reviewed business so the bell
+    # updates immediately rather than after a 60s poll cycle.
+    publish_event(review.business_id, "review_new")
 
     client_name = "Mijoz"
     if review.client_id:

@@ -24,6 +24,7 @@ from app.schemas.booking import (
     BookingUpdate,
 )
 from app.services import booking_service
+from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
 from app.utils.ratelimit import rate_limit
 from app.utils.slots import get_available_slots
@@ -80,6 +81,10 @@ def create_public_booking(
                 ]
             }
             send_telegram_message(int(owner.telegram_id), text, reply_markup=kb)
+
+    # Notify any open SSE streams for this business so the dashboard
+    # bell updates without a 60s wait.
+    publish_event(business.id, "booking_new")
 
     return booking
 
@@ -299,6 +304,7 @@ def cancel(
     if not b:
         raise HTTPException(404, "Not found")
     db.commit()
+    publish_event(business.id, "booking_cancelled")
     db.refresh(b)
     return b
 

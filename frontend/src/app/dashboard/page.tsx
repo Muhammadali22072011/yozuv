@@ -124,8 +124,48 @@ export default function DashboardHome() {
   useEffect(() => {
     if (!ready) return;
     loadNotifications();
-    const id = window.setInterval(loadNotifications, 60_000);
-    return () => window.clearInterval(id);
+
+    // Server-Sent Events: the backend pushes a tiny event whenever a
+    // notification-worthy thing happens (booking_new, booking_cancelled,
+    // review_new). Listening lets us re-fetch only when there's
+    // actually new data instead of polling every 60 seconds.
+    //
+    // Native EventSource doesn't support custom headers, so we tag the
+    // access token onto the URL — the SSE endpoint reads either header
+    // or `?token=` (same pattern get_owned_business_download already
+    // uses for PDF downloads). If the browser closes the stream we
+    // don't bother retrying — useEffect will rebuild it on the next
+    // mount, and we still keep a 5-min safety poll so a misbehaving
+    // proxy can't strand the bell.
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("yozuv_access")
+        : null;
+    let es: EventSource | null = null;
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
+      const url =
+        `${base}/api/business/me/notifications/stream` +
+        (token ? `?token=${encodeURIComponent(token)}` : "");
+      es = new EventSource(url, { withCredentials: false });
+      const onEvent = () => loadNotifications();
+      es.addEventListener("booking_new", onEvent);
+      es.addEventListener("booking_cancelled", onEvent);
+      es.addEventListener("review_new", onEvent);
+      es.addEventListener("subscription_expiring", onEvent);
+      es.addEventListener("subscription_expired", onEvent);
+    } catch {
+      // EventSource ctor can throw on iOS Telegram WebView in rare
+      // cases. Fall back to the safety poll below.
+    }
+
+    // Safety net: if SSE silently dies (proxy timeout, mobile network
+    // sleep) the user still sees fresh notifications within 5 minutes.
+    const poll = window.setInterval(loadNotifications, 5 * 60_000);
+    return () => {
+      if (es) es.close();
+      window.clearInterval(poll);
+    };
   }, [ready]);
 
   function openNotifications() {
