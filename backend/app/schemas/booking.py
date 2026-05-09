@@ -10,6 +10,11 @@ from app.models.enums import BookingStatus, PaymentStatus
 class BookingCreatePublic(BaseModel):
     business_id: UUID
     service_id: UUID
+    # Optional: when the business has multiple staff members the
+    # client picks a specific master. Omit (or pass null) to fall
+    # back to the shared-calendar interpretation used by single-
+    # resource businesses.
+    staff_id: UUID | None = None
     client_telegram_id: int
     client_first_name: str = ""
     client_last_name: str = ""
@@ -22,6 +27,7 @@ class BookingCreatePublic(BaseModel):
 class BookingCreateOwner(BaseModel):
     client_id: UUID
     service_id: UUID
+    staff_id: UUID | None = None
     date: date
     start_time: time
 
@@ -31,6 +37,7 @@ class BookingRead(BaseModel):
     business_id: UUID
     service_id: UUID | None
     client_id: UUID | None
+    staff_id: UUID | None = None
     date: date
     start_time: time
     end_time: time

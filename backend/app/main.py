@@ -25,6 +25,7 @@ from app.routers import (
     reviews,
     schedule,
     services,
+    staff,
     subscription,
 )
 
@@ -134,6 +135,8 @@ app.include_router(auth.router, prefix="/api/auth")
 # otherwise /business/{slug}/services catches /business/me/services with slug="me".
 app.include_router(services.router, prefix="/api")
 app.include_router(schedule.router, prefix="/api")
+app.include_router(staff.owner_router, prefix="/api")
+app.include_router(staff.public_router, prefix="/api")
 app.include_router(bookings.me_router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")

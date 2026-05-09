@@ -20,6 +20,7 @@ from app.models.promo_code import PromoCode
 from app.models.review import Review
 from app.models.schedule import HolidayDate, Schedule
 from app.models.service import Service
+from app.models.staff import Staff, staff_services
 from app.models.subscription import Subscription
 from app.models.user import User
 
@@ -30,6 +31,7 @@ __all__ = [
     "Business",
     "Service",
     "Schedule",
+    "Staff",
     "HolidayDate",
     "Booking",
     "Client",
