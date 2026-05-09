@@ -1,7 +1,9 @@
-from datetime import date, datetime, timedelta
+import uuid as _uuid
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -301,6 +303,185 @@ def cancel(
     db.commit()
     db.refresh(b)
     return b
+
+
+class RecurringBookingBody(BaseModel):
+    """Owner-created recurring booking series.
+
+    The recurrence is materialised: we create N concrete Booking rows
+    sharing the same recurrence_id, one for every weekly occurrence
+    counting from `start_date`. Materialising up-front (vs lazy) keeps
+    the existing slot-conflict, reminder, and notifications code paths
+    working unchanged — every occurrence is a real Booking row.
+    """
+
+    client_id: UUID
+    service_id: UUID
+    staff_id: UUID | None = None
+    start_date: date
+    start_time: time
+    # Number of weekly occurrences. We cap at 26 (half a year) because
+    # past that point owner schedules drift and the value of a "set
+    # and forget" series collapses.
+    occurrences: int = Field(..., ge=2, le=26)
+    # If a particular slot in the series collides with an existing
+    # booking, the default behaviour is "skip and continue". Setting
+    # `strict=True` aborts the entire series creation on the first
+    # conflict so the owner doesn't end up with a half-filled series.
+    strict: bool = False
+
+
+@me_router.post("/bookings/recurring")
+def create_recurring(
+    body: "RecurringBookingBody",
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    service = (
+        db.query(Service)
+        .filter(
+            Service.id == body.service_id,
+            Service.business_id == business.id,
+            Service.is_active.is_(True),
+        )
+        .first()
+    )
+    if not service:
+        raise HTTPException(404, "Service not found")
+    client = db.query(Client).filter(Client.id == body.client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    # If owner targeted a specific staff, validate.
+    staff_id = body.staff_id
+    if staff_id is not None:
+        from app.models import Staff
+
+        staff_row = (
+            db.query(Staff)
+            .filter(
+                Staff.id == staff_id,
+                Staff.business_id == business.id,
+                Staff.is_active.is_(True),
+            )
+            .first()
+        )
+        if not staff_row:
+            raise HTTPException(404, "Staff not found")
+
+    try:
+        mode = (
+            business.confirmation_mode
+            if isinstance(business.confirmation_mode, ConfirmationMode)
+            else ConfirmationMode(str(business.confirmation_mode))
+        )
+    except ValueError:
+        mode = ConfirmationMode.AUTO
+    status = (
+        BookingStatus.CONFIRMED
+        if mode == ConfirmationMode.AUTO
+        else BookingStatus.PENDING
+    )
+
+    series_id = _uuid.uuid4()
+    created: list[Booking] = []
+    skipped: list[str] = []
+
+    for i in range(body.occurrences):
+        slot_date = body.start_date + timedelta(weeks=i)
+        end_dt = datetime.combine(slot_date, body.start_time) + timedelta(
+            minutes=service.duration_minutes
+        )
+        end_time = end_dt.time()
+
+        conflict_q = (
+            db.query(Booking)
+            .filter(
+                Booking.business_id == business.id,
+                Booking.date == slot_date,
+                Booking.status.in_(
+                    [BookingStatus.PENDING, BookingStatus.CONFIRMED]
+                ),
+                Booking.start_time < end_time,
+                Booking.end_time > body.start_time,
+            )
+        )
+        if staff_id is not None:
+            conflict_q = conflict_q.filter(Booking.staff_id == staff_id)
+        conflict = conflict_q.first()
+        if conflict is not None:
+            if body.strict:
+                # Roll back partial inserts before erroring out so an
+                # owner sees an all-or-nothing result.
+                for b in created:
+                    db.delete(b)
+                db.commit()
+                raise HTTPException(
+                    400,
+                    f"Conflict on {slot_date.isoformat()} {body.start_time.strftime('%H:%M')}",
+                )
+            skipped.append(slot_date.isoformat())
+            continue
+
+        booking = Booking(
+            business_id=business.id,
+            service_id=service.id,
+            client_id=client.id,
+            staff_id=staff_id,
+            date=slot_date,
+            start_time=body.start_time,
+            end_time=end_time,
+            status=status,
+            payment_status=PaymentStatus.UNPAID,
+            payment_amount=service.price,
+            recurrence_id=series_id,
+        )
+        db.add(booking)
+        created.append(booking)
+    db.commit()
+
+    return {
+        "recurrence_id": str(series_id),
+        "created": [str(b.id) for b in created],
+        "skipped_dates": skipped,
+        "occurrences_requested": body.occurrences,
+        "occurrences_created": len(created),
+    }
+
+
+@me_router.delete("/bookings/recurring/{recurrence_id}")
+def cancel_recurring(
+    recurrence_id: UUID,
+    only_future: bool = True,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Cancel every booking in a recurrence series. By default only
+    future occurrences are cancelled (past visits already happened),
+    pass `only_future=false` to cancel the whole series including
+    historic rows."""
+    today = date.today()
+    q = (
+        db.query(Booking)
+        .filter(
+            Booking.business_id == business.id,
+            Booking.recurrence_id == recurrence_id,
+            Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+        )
+    )
+    if only_future:
+        q = q.filter(Booking.date >= today)
+    affected = q.all()
+    if not affected:
+        raise HTTPException(404, "No active bookings in series")
+    for b in affected:
+        b.status = BookingStatus.CANCELLED
+        b.cancel_reason = "series_cancelled"
+    db.commit()
+    return {
+        "recurrence_id": str(recurrence_id),
+        "cancelled": len(affected),
+    }
 
 
 @public_router.get("/{slug}/slots")

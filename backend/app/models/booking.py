@@ -32,6 +32,15 @@ class Booking(Base):
     )
     payment_amount: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # Shared id for every booking that belongs to the same recurrence
+    # series ("каждый вторник на 4 недели"). NULL for one-off bookings.
+    # We use a plain UUID rather than a Recurrence row because every
+    # booking already has the date / start_time the recurrence resolved
+    # to — there's nothing to look up at fetch time, just to delete the
+    # whole series in one DELETE WHERE recurrence_id = ?.
+    recurrence_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.utcnow())
     # Set when the 1-hour-before reminder is delivered. Used by
     # send_hourly_reminders to skip rows already notified — Celery beat
