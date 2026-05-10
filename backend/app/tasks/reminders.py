@@ -64,14 +64,54 @@ def send_hourly_reminders() -> None:
         db.close()
 
 
+# How long after a booking's end_time we wait before flipping it to
+# NO_SHOW. A grace period gives the owner time to mark COMPLETED if
+# they're slow with the dashboard. Two hours is generous for typical
+# barbershop / salon flows.
+NO_SHOW_GRACE_HOURS = 2
+
+
+@celery_app.task(name="app.tasks.reminders.flag_no_shows")
+def flag_no_shows() -> None:
+    """Auto-flag past PENDING/CONFIRMED bookings as NO_SHOW.
+
+    Runs nightly. A booking that's still PENDING or CONFIRMED N hours
+    after its end_time means the owner never marked it COMPLETED — most
+    likely the client didn't turn up.
+    """
+    db = _session()
+    try:
+        cutoff_local = (
+            datetime.now(TZ).replace(tzinfo=None) - timedelta(hours=NO_SHOW_GRACE_HOURS)
+        )
+        candidates = (
+            db.query(Booking)
+            .filter(
+                Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+                Booking.date <= cutoff_local.date(),
+            )
+            .all()
+        )
+        flipped = 0
+        for b in candidates:
+            slot_end = datetime.combine(b.date, b.end_time)
+            if slot_end > cutoff_local:
+                continue
+            b.status = BookingStatus.NO_SHOW
+            flipped += 1
+        if flipped:
+            db.commit()
+    finally:
+        db.close()
+
+
 # How long since the last completed visit before we treat a client as
-# "we've lost them" and send a re-engagement nudge. 30..60 days is the
-# sweet spot — earlier feels pushy, later feels desperate.
+# "we've lost them". 30..60 days — earlier feels pushy, later desperate.
 REENGAGE_AFTER_DAYS = 30
 REENGAGE_BEFORE_DAYS = 60
 
-# Don't send any retention message more often than this. Two weeks
-# avoids "happy birthday + come back!" overlapping into spam.
+# Don't send any retention message more often than this — two weeks so
+# birthday + re-engagement don't stack into spam.
 OUTREACH_COOLDOWN_DAYS = 14
 
 
@@ -80,21 +120,16 @@ def _under_cooldown(client: Client, now_utc: datetime) -> bool:
     if last is None:
         return False
     if last.tzinfo is None:
-        # Legacy naive value — treat as UTC.
         last = last.replace(tzinfo=timezone.utc)
     return now_utc - last < timedelta(days=OUTREACH_COOLDOWN_DAYS)
 
 
 @celery_app.task(name="app.tasks.reminders.send_birthday_greetings")
 def send_birthday_greetings() -> None:
-    """Wish every client whose birthday is today, naming the most recent
-    business they've visited so the message feels personal."""
     db = _session()
     try:
         today_local = datetime.now(TZ).date()
         now_utc = datetime.now(timezone.utc)
-
-        # Clients celebrating today — match by month+day, ignore year.
         candidates = (
             db.query(Client)
             .filter(
@@ -107,9 +142,6 @@ def send_birthday_greetings() -> None:
         for client in candidates:
             if _under_cooldown(client, now_utc):
                 continue
-            # Pick the most recent business they've ever booked at, so
-            # the message refers to the place they're most likely to
-            # visit again.
             last_biz_id = (
                 db.query(Booking.business_id)
                 .filter(Booking.client_id == client.id)
@@ -136,8 +168,6 @@ def send_birthday_greetings() -> None:
 
 @celery_app.task(name="app.tasks.reminders.send_reengagement_nudges")
 def send_reengagement_nudges() -> None:
-    """Nudge clients we haven't seen in REENGAGE_AFTER_DAYS..REENGAGE_BEFORE_DAYS
-    so the bot stays top-of-mind without being a 365-day sender."""
     db = _session()
     try:
         today_local = datetime.now(TZ).date()
@@ -145,11 +175,6 @@ def send_reengagement_nudges() -> None:
         oldest_last_visit = today_local - timedelta(days=REENGAGE_BEFORE_DAYS)
         newest_last_visit = today_local - timedelta(days=REENGAGE_AFTER_DAYS)
 
-        # For each client, pick their most recent COMPLETED booking date
-        # and the business it was at. We can't do an aggregate-and-fetch
-        # in one query portably, so fetch (client_id, last_date,
-        # last_business_id) by walking distinct clients with completed
-        # visits in the eligible window.
         rows = (
             db.query(
                 Booking.client_id,
@@ -163,13 +188,12 @@ def send_reengagement_nudges() -> None:
             if not client_id or not last_date:
                 continue
             if last_date > newest_last_visit:
-                continue  # too recent
+                continue
             if last_date < oldest_last_visit:
-                continue  # too long ago
+                continue
             client = db.query(Client).filter(Client.id == client_id).first()
             if client is None or _under_cooldown(client, now_utc):
                 continue
-            # Use the business of the most recent COMPLETED booking.
             last_biz_id = (
                 db.query(Booking.business_id)
                 .filter(
@@ -189,7 +213,7 @@ def send_reengagement_nudges() -> None:
             send_telegram_message(
                 int(client.telegram_id),
                 f"👋 <b>{name}</b>, ancha vaqt bo'ldi!\n"
-                f"<b>{biz.name}</b> da yozilishni unutmang. Yangi tashrifingizni kutamiz.",
+                f"<b>{biz.name}</b> da yozilishni unutmang.",
             )
             client.last_outreach_at = now_utc
         db.commit()
