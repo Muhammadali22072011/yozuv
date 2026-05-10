@@ -20,6 +20,7 @@ from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Review, Service, User
 from app.models.enums import BusinessCategory
 from app.utils.clock import local_today
+from app.utils.htmlsafe import h
 from app.utils.uz_geo import list_tumans, list_viloyats
 from bot.keyboards.inline import back_to_menu_kb, business_menu_kb, role_choice_kb
 from bot.utils import safe_edit_text
@@ -89,8 +90,11 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
             if not b:
                 await message.answer("Biznes topilmadi.")
                 return
-            welcome = b.welcome_text.strip() if b.welcome_text else ""
-            text = welcome or f"Xush kelibsiz! <b>{b.name}</b>\n\nQuyidagilardan tanlang:"
+            # welcome_text is owner-supplied free text. Anything we drop
+            # straight into HTML mode lets the owner inject <a href="..."> and
+            # phish their own clients, so escape it before using.
+            welcome = h(b.welcome_text).strip() if b.welcome_text else ""
+            text = welcome or f"Xush kelibsiz! <b>{h(b.name)}</b>\n\nQuyidagilardan tanlang:"
             tg_id = message.from_user.id if message.from_user else None
             is_owner = False
             if tg_id:
@@ -122,8 +126,8 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
                 biz = db.query(Business).filter(Business.owner_id == user.id).first()
                 if biz:
                     await message.answer(
-                        f"👋 Salom, <b>{user.first_name or 'usta'}</b>!\n"
-                        f"Biznesingiz: <b>{biz.name}</b>\n"
+                        f"👋 Salom, <b>{h(user.first_name or 'usta')}</b>!\n"
+                        f"Biznesingiz: <b>{h(biz.name)}</b>\n"
                         f"Mijozlar havolasi: <code>t.me/{(await message.bot.me()).username}?start={biz.slug}</code>",
                         reply_markup=_owner_kb(),
                     )
@@ -383,8 +387,8 @@ async def contacts(cb: CallbackQuery):
         if not b:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        phone = b.phone or "—"
-        address = b.address or "—"
+        phone = h(b.phone) or "—"
+        address = h(b.address) or "—"
         await safe_edit_text(
             cb,
             f"📞 {phone}\n📍 {address}",
@@ -405,8 +409,8 @@ async def back_to_menu(cb: CallbackQuery):
         if not b:
             await cb.answer("Biznes topilmadi", show_alert=True)
             return
-        welcome = b.welcome_text.strip() if b.welcome_text else ""
-        text = welcome or f"Xush kelibsiz! <b>{b.name}</b>\n\nQuyidagilardan tanlang:"
+        welcome = h(b.welcome_text).strip() if b.welcome_text else ""
+        text = welcome or f"Xush kelibsiz! <b>{h(b.name)}</b>\n\nQuyidagilardan tanlang:"
         tg_id = cb.from_user.id if cb.from_user else None
         is_owner = False
         if tg_id:
@@ -495,9 +499,9 @@ async def qr_review_pick_booking(cb: CallbackQuery):
         rows.append([InlineKeyboardButton(text="🏠 Bosh menyu", callback_data=f"menu:{slug}")])
 
         prompt = (
-            f"<b>{b.name}</b>\nQaysi tashrifga baho berasiz?"
+            f"<b>{h(b.name)}</b>\nQaysi tashrifga baho berasiz?"
             if bookings
-            else f"<b>{b.name}</b>\nXohlasangiz biznesga umumiy baho qoldiring:"
+            else f"<b>{h(b.name)}</b>\nXohlasangiz biznesga umumiy baho qoldiring:"
         )
         await safe_edit_text(
             cb,

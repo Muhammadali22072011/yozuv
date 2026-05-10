@@ -82,11 +82,16 @@ def create_public_booking(
         owner = db.query(User).filter(User.id == business.owner_id).first()
         if owner:
             from bot.locales import t
+            from app.utils.htmlsafe import h
 
             lang = str(business.language)
+            client_name = (
+                f"{client.first_name} {client.last_name}".strip()
+                or str(client.telegram_id)
+            )
             text = t(lang, "new_booking_owner").format(
-                client=f"{client.first_name} {client.last_name}".strip() or str(client.telegram_id),
-                service=service.name if service else "",
+                client=h(client_name),
+                service=h(service.name) if service else "",
                 date=booking.date.strftime("%d-%b"),
                 time=booking.start_time.strftime("%H:%M"),
             )
