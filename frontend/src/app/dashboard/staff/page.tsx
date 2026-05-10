@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Power, Trash2, UserCircle2 } from "lucide-react";
-import { ScreenHeader, Tour, YzLoader, useToast } from "@/components/yz";
+import { ScreenHeader, TourFloat, YzLoader, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 import { usePageTour } from "@/lib/use-page-tour";
@@ -187,7 +187,7 @@ export default function StaffPage() {
         />
       )}
 
-      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
+      <TourFloat tour={tour} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { ScreenHeader, Tour, useToast } from "@/components/yz";
+import { ScreenHeader, TourFloat, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import {
   SheetBody,
@@ -278,7 +278,7 @@ export default function PromoPage() {
         </SheetContent>
       </SheetRoot>
 
-      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
+      <TourFloat tour={tour} />
     </div>
   );
 }

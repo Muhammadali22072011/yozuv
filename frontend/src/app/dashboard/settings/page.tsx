@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ClipboardList,
   CreditCard,
+  GraduationCap,
   HelpCircle,
   LogOut,
   MapPin,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { Avatar, ScreenHeader, useToast } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
+import { resetTours } from "@/lib/tour-state";
 import type { BusinessMe } from "@/types";
 
 type CardCreateResp = {
@@ -147,6 +149,14 @@ export default function SettingsPage() {
       toast(next ? "Bildirishnomalar yoqildi" : "Bildirishnomalar o'chirildi");
       return next;
     });
+  }
+
+  function replayTours() {
+    // Wipe the localStorage flag so every page's tour fires again next
+    // time the user lands on it. We don't auto-navigate — the user can
+    // open whichever page they want a refresher on.
+    resetTours();
+    toast("Obuchenie qaytadan ishga tushirildi");
   }
 
   function openSupport() {
@@ -352,6 +362,13 @@ export default function SettingsPage() {
                 />
               </span>
             }
+          />
+          <Row
+            onClick={replayTours}
+            icon={<GraduationCap className="h-5 w-5 text-indigo-600" />}
+            bg="#EEF0FF"
+            label="Obuchenie qaytadan"
+            sub="Har bir sahifa o'z izohini qaytadan ko'rsatadi"
           />
           <Row
             onClick={openSupport}
