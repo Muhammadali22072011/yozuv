@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
-  CalendarRange,
   ChevronRight,
   ClipboardList,
   Home,
@@ -46,9 +45,6 @@ const tabs: Tab[] = [
 type MoreLink = { href: string; label: string; icon: LucideIcon; tone?: "indigo" | "mint" | "lemon" | "coral" | "lilac" | "sky" };
 
 const moreLinks: MoreLink[] = [
-  // Calendar week-view (PR #50/#52). Sits next to "Jadval" (the list)
-  // since they're the two ways to look at bookings.
-  { href: "/dashboard/calendar", label: "Kalendar", icon: CalendarRange, tone: "indigo" },
   { href: "/dashboard/analytics", label: "Analitika", icon: BarChart3, tone: "sky" },
   { href: "/dashboard/services", label: "Xizmatlar", icon: Scissors, tone: "indigo" },
   // Multi-staff CRUD (PR #43/#49). Visible even when no staff yet so
