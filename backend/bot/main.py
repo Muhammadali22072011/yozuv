@@ -9,7 +9,11 @@ import asyncio
 import logging
 import os
 
+from app.observability import init_sentry
 from bot.setup import build_bot_and_dispatcher, set_menu_button
+
+# Local polling entrypoint also benefits from Sentry so dev errors surface.
+init_sentry(component="bot-polling")
 
 _log_file = os.environ.get("BOT_LOG_FILE")
 _handlers: list[logging.Handler] = [logging.StreamHandler()]
