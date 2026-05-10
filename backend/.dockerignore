@@ -1,0 +1,56 @@
+# Match .gitignore intent: keep the build context small and never bake
+# secrets, dev databases or local logs into the image.
+
+# Python build artefacts
+__pycache__/
+*.py[cod]
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# Local dev databases
+*.db
+*.db-journal
+*.sqlite3
+test.db
+
+# Local logs
+*.log
+
+# Secrets / per-env config — Railway provides these as env vars
+.env
+.env.local
+.env.production
+.env.*
+!.env.example
+
+# Test outputs / brochure scratch / images we don't need at runtime
+test_output/
+test-brochure.pdf
+brochure.html
+лого.jpg
+
+# Tools / archives
+tools/
+ngrok.exe
+ngrok.zip
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Frontend tree (lives in a separate Railway service)
+../frontend/
+
+# Anthropic / Claude tooling
+.claude/
+
+# Misc
+*.tsbuildinfo

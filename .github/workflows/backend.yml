@@ -1,0 +1,54 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff>=0.5,'<1'
+
+      - name: Lint (ruff)
+        # Don't fail the build on lint yet — gives the codebase a soft
+        # ramp-in. Switch to `ruff check .` once the existing warnings
+        # are cleaned up.
+        run: ruff check . || true
+
+      - name: Run tests
+        env:
+          # conftest sets sane defaults but CI has its own DATABASE_URL,
+          # so fix to a fresh sqlite per job.
+          DATABASE_URL: 'sqlite:///./test.db'
+          SECRET_KEY: 'ci-secret-key-that-is-long-enough-32ch'
+          BOT_TOKEN: '0:test'
+          CORS_ORIGINS: 'http://localhost:3000'
+          APP_ENV: 'development'
+        run: pytest -q

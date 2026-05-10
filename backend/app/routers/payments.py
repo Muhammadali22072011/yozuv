@@ -27,6 +27,7 @@ from app.models import (
 )
 from app.services.audit_service import log_admin_action
 from app.services.notification_service import send_telegram_photo
+from app.utils.htmlsafe import h
 from app.services.payment_service import (
     approve_card_payment,
     complete_transaction_and_notify,
@@ -219,10 +220,10 @@ async def upload_receipt(
             continue
         caption = (
             f"💳 Yangi to'lov tasdiqlash uchun\n"
-            f"Biznes: <b>{business.name}</b>\n"
-            f"Reja: {tx.plan}\n"
+            f"Biznes: <b>{h(business.name)}</b>\n"
+            f"Reja: {h(tx.plan)}\n"
             f"Summa: {tx.amount:,} so'm\n"
-            f"Izoh: {tx.user_comment or '—'}\n"
+            f"Izoh: {h(tx.user_comment) or '—'}\n"
             f"ID: <code>{tx.id}</code>"
         )
         try:

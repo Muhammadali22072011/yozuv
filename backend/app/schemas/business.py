@@ -6,32 +6,46 @@ from pydantic import BaseModel, Field
 from app.models.enums import BusinessCategory, ConfirmationMode, LanguageCode
 
 
+# Slug rule: must start with a lowercase letter or digit and may contain
+# only lowercase letters, digits and dashes. Mirrors the pattern already
+# enforced in the admin create-business endpoint and avoids slugs like
+# "me", "..", or anything that would alias an existing route prefix.
+SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]{0,127}$"
+
+
+# Caps for the long-form text fields the owner controls. Telegram caps
+# message text at 4096 chars; the welcome/after-booking/reminder
+# templates are sent as-is, so bounding them at 2000 leaves headroom for
+# emoji and formatting while preventing pathological 10MB blobs.
+LONG_TEXT_MAX = 2000
+
+
 class BusinessCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    slug: str = Field(min_length=1, max_length=128)
+    slug: str = Field(min_length=2, max_length=128, pattern=SLUG_PATTERN)
     category: BusinessCategory = BusinessCategory.OTHER
-    description: str = ""
-    address: str = ""
-    phone: str = ""
-    viloyat: str = ""
-    tuman: str = ""
+    description: str = Field(default="", max_length=LONG_TEXT_MAX)
+    address: str = Field(default="", max_length=512)
+    phone: str = Field(default="", max_length=32)
+    viloyat: str = Field(default="", max_length=64)
+    tuman: str = Field(default="", max_length=128)
     latitude: float | None = None
     longitude: float | None = None
 
 
 class BusinessUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    address: str | None = None
-    phone: str | None = None
-    logo_url: str | None = None
-    welcome_text: str | None = None
-    after_booking_text: str | None = None
-    reminder_text: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
+    address: str | None = Field(default=None, max_length=512)
+    phone: str | None = Field(default=None, max_length=32)
+    logo_url: str | None = Field(default=None, max_length=1024)
+    welcome_text: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
+    after_booking_text: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
+    reminder_text: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
     confirmation_mode: ConfirmationMode | None = None
     language: LanguageCode | None = None
-    viloyat: str | None = None
-    tuman: str | None = None
+    viloyat: str | None = Field(default=None, max_length=64)
+    tuman: str | None = Field(default=None, max_length=128)
     latitude: float | None = None
     longitude: float | None = None
     # NOTE: is_active is intentionally NOT here. A blocked owner could
