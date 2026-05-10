@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import (
     Booking,
     BookingStatus,
@@ -88,7 +88,7 @@ def create_public_booking(
 def create_owner_booking(
     body: BookingCreateOwner,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner-created booking from the dashboard. Picks an existing client by id
     and bypasses the public-flow telegram_id lookup."""
@@ -159,7 +159,7 @@ def create_owner_booking(
 @me_router.get("/bookings", response_model=list[BookingRead])
 def list_bookings(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
     booking_date: date | None = None,
     status: BookingStatus | None = None,
     offset: int = 0,
@@ -182,7 +182,7 @@ def update_booking(
     booking_id: UUID,
     body: BookingUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner edit: change service / date / start_time. Recomputes end_time
     and price (only when service changed) and re-validates the slot."""
@@ -254,7 +254,7 @@ def update_booking(
 def confirm(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     b = booking_service.confirm_booking(db, booking_id, business.id)
     if not b:
@@ -268,7 +268,7 @@ def confirm(
 def complete(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner marks a booking as actually finished. Distinct from confirm
     (which only acknowledges a pending request) so the dashboard's
@@ -293,7 +293,7 @@ def cancel(
     booking_id: UUID,
     body: BookingCancelBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     b = booking_service.cancel_booking(db, booking_id, business.id, body.reason)
     if not b:

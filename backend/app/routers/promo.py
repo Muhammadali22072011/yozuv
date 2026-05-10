@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Business, PromoCode
 
 router = APIRouter(prefix="/business/me/promo-codes", tags=["promo"])
@@ -77,7 +77,7 @@ def _to_out(p: PromoCode) -> PromoOut:
 @router.get("", response_model=list[PromoOut])
 def list_promos(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = (
         db.query(PromoCode)
@@ -92,7 +92,7 @@ def list_promos(
 def create_promo(
     body: PromoCreate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     code = body.code.strip().upper()
     if not code:
@@ -123,7 +123,7 @@ def create_promo(
 def toggle_promo(
     promo_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     p = db.query(PromoCode).filter(PromoCode.id == promo_id, PromoCode.business_id == business.id).first()
     if not p:
@@ -138,7 +138,7 @@ def toggle_promo(
 def delete_promo(
     promo_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     p = db.query(PromoCode).filter(PromoCode.id == promo_id, PromoCode.business_id == business.id).first()
     if not p:
@@ -152,7 +152,7 @@ def delete_promo(
 def validate_promo(
     body: dict,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Used by bot / frontend to check a code and get discount."""
     code = str(body.get("code", "")).strip().upper()
