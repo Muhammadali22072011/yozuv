@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime, timedelta
+from datetime import date as _date, datetime, time as _time, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, text
@@ -20,24 +20,34 @@ from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
 
 
-def _slot_lock_key(business_id: UUID, payload: BookingCreatePublic) -> int:
-    raw = f"{business_id}:{payload.date.isoformat()}:{payload.start_time.isoformat()}".encode()
+def _slot_lock_key_for(business_id: UUID, slot_date: _date, slot_start: _time) -> int:
+    raw = f"{business_id}:{slot_date.isoformat()}:{slot_start.isoformat()}".encode()
     return int(hashlib.md5(raw).hexdigest()[:8], 16) & 0x7FFFFFFF
 
 
-def _acquire_slot_lock(db: Session, business_id: UUID, payload: BookingCreatePublic) -> None:
-    """Take a transaction-scoped advisory lock so concurrent bookers serialize on the same slot.
+def acquire_slot_lock(
+    db: Session, business_id: UUID, slot_date: _date, slot_start: _time
+) -> None:
+    """Take a transaction-scoped advisory lock so concurrent writes serialize on the same slot.
 
-    SELECT FOR UPDATE only locks existing rows; for an empty slot there is nothing to lock,
-    which lets two clients pass the conflict check at the same time. The advisory lock
-    serializes them on (business_id, date, start_time) until the transaction commits.
+    SELECT FOR UPDATE only locks rows that already exist; for an empty
+    slot there is nothing to lock, which lets two writers pass the
+    conflict check at the same time and both insert. The advisory lock
+    serializes them on (business_id, date, start_time) until the
+    transaction commits. No-op outside Postgres so the SQLite test DB
+    still works.
     """
     if db.bind is None or db.bind.dialect.name != "postgresql":
         return
     db.execute(
         text("SELECT pg_advisory_xact_lock(:key)"),
-        {"key": _slot_lock_key(business_id, payload)},
+        {"key": _slot_lock_key_for(business_id, slot_date, slot_start)},
     )
+
+
+def _acquire_slot_lock(db: Session, business_id: UUID, payload: BookingCreatePublic) -> None:
+    """Backwards-compatible wrapper for the public-flow service callers."""
+    acquire_slot_lock(db, business_id, payload.date, payload.start_time)
 
 
 def get_or_create_client(db: Session, data: BookingCreatePublic) -> Client:
