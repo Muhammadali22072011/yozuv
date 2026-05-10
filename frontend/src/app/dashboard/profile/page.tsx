@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ScreenHeader, Tour, YzLoader, YzLogo, useToast } from "@/components/yz";
+import { ScreenHeader, TourFloat, YzLoader, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import { MapPicker } from "@/components/yz/MapPicker";
 import { apiBase, apiFetch } from "@/lib/api";
@@ -383,6 +383,8 @@ export default function ProfilePage() {
           })}
         </div>
       </div>
+
+      <TourFloat tour={tour} />
     </div>
   );
 }

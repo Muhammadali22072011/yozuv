@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Pencil, Plus, Trash2 } from "lucide-react";
-import { ScreenHeader, Tour, useToast } from "@/components/yz";
+import { ScreenHeader, TourFloat, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import {
   SheetBody,
@@ -345,7 +345,7 @@ export default function ServicesPage() {
         </SheetContent>
       </SheetRoot>
 
-      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
+      <TourFloat tour={tour} />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import {
   ClientSheet,
   NewBookingSheet,
   ScreenHeader,
-  Tour,
+  TourFloat,
   fmtSum,
 } from "@/components/yz";
 import type { ClientDetail, TourStep } from "@/components/yz";
@@ -183,7 +183,7 @@ export default function ClientsPage() {
         onCreated={() => setNewBookingFor(null)}
       />
 
-      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
+      <TourFloat tour={tour} />
     </div>
   );
 }

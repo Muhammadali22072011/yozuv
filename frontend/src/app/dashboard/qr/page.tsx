@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileDown, Share2 } from "lucide-react";
-import { ScreenHeader, Tour, YzLogo, useToast } from "@/components/yz";
+import { ScreenHeader, TourFloat, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import type { BusinessMe } from "@/types";
@@ -202,7 +202,7 @@ export default function QrPage() {
         </div>
       </div>
 
-      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
+      <TourFloat tour={tour} />
     </div>
   );
 }

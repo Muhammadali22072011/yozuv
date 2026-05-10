@@ -7,7 +7,7 @@ import {
   NewBookingSheet,
   ScreenHeader,
   TimelineBlock,
-  Tour,
+  TourFloat,
   hm,
   isoFor,
   weekdayShort,
@@ -310,7 +310,7 @@ export default function BookingsPage() {
         }}
       />
 
-      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
+      <TourFloat tour={tour} />
     </div>
   );
 }

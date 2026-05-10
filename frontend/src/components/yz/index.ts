@@ -28,6 +28,7 @@ export { NotificationSheet } from "./NotificationSheet";
 export type { NotificationItem } from "./NotificationSheet";
 export { Tour } from "./Tour";
 export type { TourStep } from "./Tour";
+export { TourFloat } from "./TourFloat";
 export { WelcomeModal } from "./WelcomeModal";
 export { HelpDrawer } from "./HelpDrawer";
 export {
