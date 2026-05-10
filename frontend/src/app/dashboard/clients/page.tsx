@@ -7,11 +7,30 @@ import {
   ClientSheet,
   NewBookingSheet,
   ScreenHeader,
+  Tour,
   fmtSum,
 } from "@/components/yz";
-import type { ClientDetail } from "@/components/yz";
+import type { ClientDetail, TourStep } from "@/components/yz";
 import { Chip } from "@/components/yz/Chip";
 import { apiFetch } from "@/lib/api";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const CLIENTS_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='clients-search']",
+    title: "Mijozlaringiz ro'yxati",
+    body:
+      "Bu yerda har bir mijoz: tashriflar soni, oxirgi tashrif sanasi, telefon. Qidiruv orqali ism yoki raqam bo'yicha tezda topiladi.",
+    mode: "info",
+  },
+  {
+    targetSelector: "[data-tour='clients-list']",
+    title: "Kartochkani bosing",
+    body:
+      "Mijozni bossangiz uning tarixini ko'rasiz: hamma yozilishlari, NO_SHOW soni, tug'ilgan kun. O'sha yerdan blokirovka qilsangiz ham bo'ladi.",
+    mode: "info",
+  },
+];
 
 type Row = {
   id: string;
@@ -34,6 +53,7 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<ClientDetail | null>(null);
   const [newBookingFor, setNewBookingFor] = useState<string | null>(null);
+  const tour = usePageTour("clients_v1", CLIENTS_TOUR);
 
   useEffect(() => {
     apiFetch<Row[]>("/api/business/me/clients")
@@ -66,7 +86,7 @@ export default function ClientsPage() {
       <ScreenHeader title="Mijozlar" subtitle={`${rows.length} ta faol mijoz`} />
 
       <div className="mt-1 px-4 md:px-0">
-        <div className="flex items-center gap-2.5 rounded-2xl bg-white px-3.5 py-3 shadow-soft">
+        <div data-tour="clients-search" className="flex items-center gap-2.5 rounded-2xl bg-white px-3.5 py-3 shadow-soft">
           <Search className="h-5 w-5 text-ink-400" />
           <input
             value={q}
@@ -89,7 +109,7 @@ export default function ClientsPage() {
         </Chip>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 px-4 md:px-0">
+      <div data-tour="clients-list" className="mt-4 flex flex-col gap-2 px-4 md:px-0">
         {loading ? (
           <div className="rounded-[22px] bg-white p-6 text-center text-sm text-ink-400 shadow-soft">
             Yuklanmoqda…
@@ -162,6 +182,8 @@ export default function ClientsPage() {
         defaultClientId={newBookingFor || undefined}
         onCreated={() => setNewBookingFor(null)}
       />
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }

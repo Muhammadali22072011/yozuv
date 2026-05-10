@@ -7,14 +7,26 @@ import {
   NewBookingSheet,
   ScreenHeader,
   TimelineBlock,
+  Tour,
   hm,
   isoFor,
   weekdayShort,
 } from "@/components/yz";
-import type { ClientLite, ServiceLite } from "@/components/yz";
+import type { ClientLite, ServiceLite, TourStep } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 import type { BookingRow, BookingStatus } from "@/types";
 import { cn } from "@/lib/utils";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const BOOKINGS_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='bookings-list']",
+    title: "Hamma yozilishlar",
+    body:
+      "Bu yerda kun bo'yicha bronlar ro'yxati. Holatlar ranglar bilan ajratilgan: ko'k — tasdiqlangan, sariq — kutilmoqda, yashil — yakunlangan, qizil — bekor qilingan. Bron kartasini bosib batafsil ochiladi.",
+    mode: "info",
+  },
+];
 
 // Default daytime hours; the actual range is widened below if a booking
 // falls outside it, so 21:00 / 07:00 bookings don't disappear from the
@@ -51,6 +63,7 @@ export default function BookingsPage() {
   const [view, setView] = useState<"day" | "week">("day");
   const [filter, setFilter] = useState<"ALL" | BookingStatus>("ALL");
   const [active, setActive] = useState<BookingRow | null>(null);
+  const tour = usePageTour("bookings_v1", BOOKINGS_TOUR);
   const [newOpen, setNewOpen] = useState<string | null>(null);
 
   async function load() {
@@ -251,7 +264,7 @@ export default function BookingsPage() {
             })}
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div data-tour="bookings-list" className="flex flex-col gap-2">
             {visible.length === 0 ? (
               <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
                 Yozilish yo‘q
@@ -296,6 +309,8 @@ export default function BookingsPage() {
           setNewOpen(null);
         }}
       />
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }

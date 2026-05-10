@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { ScreenHeader, useToast } from "@/components/yz";
+import { ScreenHeader, Tour, useToast } from "@/components/yz";
+import type { TourStep } from "@/components/yz";
 import {
   SheetBody,
   SheetContent,
@@ -11,6 +12,17 @@ import {
   SheetRoot,
 } from "@/components/yz/Sheet";
 import { apiFetch } from "@/lib/api";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const PROMO_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='promo-add']",
+    title: "Birinchi promo-kodingiz",
+    body:
+      "Mijozlarga maxsus kod bering — masalan SUMMER20. Mijoz uni yozilishda kiritsa, narxdan chegirma avtomatik chiqib ketadi. Foydalanish chegarasini ham qo'ysangiz bo'ladi.",
+    mode: "action",
+  },
+];
 
 type Promo = {
   id: string;
@@ -28,6 +40,7 @@ export default function PromoPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const tour = usePageTour("promo_v1", PROMO_TOUR);
   const [form, setForm] = useState({
     code: "",
     discount_percent: "10",
@@ -100,6 +113,7 @@ export default function PromoPage() {
         subtitle="Chegirma va aksiyalar"
         right={
           <button
+            data-tour="promo-add"
             onClick={() => setFormOpen(true)}
             className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-900 text-white tap"
           >
@@ -263,6 +277,8 @@ export default function PromoPage() {
           </form>
         </SheetContent>
       </SheetRoot>
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }

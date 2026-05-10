@@ -2,8 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Power, Trash2, UserCircle2 } from "lucide-react";
-import { ScreenHeader, YzLoader, useToast } from "@/components/yz";
+import { ScreenHeader, Tour, YzLoader, useToast } from "@/components/yz";
+import type { TourStep } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const STAFF_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='staff-add']",
+    title: "Mutaxassis qo'shing",
+    body:
+      "Salonda bir nechta usta bor bo'lsa — har birini alohida qo'shing. Mijozlar botda yozilayotganda kerakli ustani tanlaydi.",
+    mode: "action",
+  },
+];
 
 type Staff = {
   id: string;
@@ -24,6 +36,7 @@ export default function StaffPage() {
   const [editing, setEditing] = useState<Staff | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const tour = usePageTour("staff_v1", STAFF_TOUR);
 
   async function load() {
     const [s, svc] = await Promise.all([
@@ -75,6 +88,7 @@ export default function StaffPage() {
         back="/dashboard/settings"
         right={
           <button
+            data-tour="staff-add"
             onClick={() => setCreating(true)}
             className="btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-sm"
           >
@@ -172,6 +186,8 @@ export default function StaffPage() {
           }}
         />
       )}
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }

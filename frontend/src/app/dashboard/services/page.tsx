@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Pencil, Plus, Trash2 } from "lucide-react";
-import { ScreenHeader, useToast } from "@/components/yz";
+import { ScreenHeader, Tour, useToast } from "@/components/yz";
+import type { TourStep } from "@/components/yz";
 import {
   SheetBody,
   SheetContent,
@@ -12,6 +13,24 @@ import {
   SheetRoot,
 } from "@/components/yz/Sheet";
 import { apiFetch } from "@/lib/api";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const SERVICES_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='services-add']",
+    title: "Xizmat qo'shing",
+    body:
+      "Birinchi qadamingiz — xizmatlar ro'yxati. Soch olish, massaj, stomatologiya — har biri narxi va davomiyligi bilan. Mijoz aynan shu ro'yxatdan tanlaydi.",
+    mode: "action",
+  },
+  {
+    targetSelector: "[data-tour='services-list']",
+    title: "Ro'yxat shu yerda",
+    body:
+      "Qo'shilgan xizmatlar shu zonada chiqadi. Har bir kartochkani bosib tahrirlasangiz, narx-vaqt o'zgartirsa bo'ladi. Tartibini ham o'zingiz xohlagancha qo'yasiz.",
+    mode: "info",
+  },
+];
 
 type Svc = {
   id: string;
@@ -52,6 +71,7 @@ export default function ServicesPage() {
     duration_minutes: "30",
   });
   const [err, setErr] = useState("");
+  const tour = usePageTour("services_v1", SERVICES_TOUR);
 
   async function load() {
     setLoadErr("");
@@ -165,6 +185,7 @@ export default function ServicesPage() {
         subtitle={`${rows.length} ta xizmat`}
         right={
           <button
+            data-tour="services-add"
             onClick={openCreate}
             className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-900 text-white tap"
           >
@@ -173,7 +194,7 @@ export default function ServicesPage() {
         }
       />
 
-      <div className="mt-3 flex flex-col gap-2.5 px-4 md:px-0">
+      <div data-tour="services-list" className="mt-3 flex flex-col gap-2.5 px-4 md:px-0">
         {loadErr ? (
           <div className="rounded-[22px] bg-[#FFE7E3] p-4 text-sm text-[#C93A2A]">{loadErr}</div>
         ) : loading ? (
@@ -323,6 +344,8 @@ export default function ServicesPage() {
           </form>
         </SheetContent>
       </SheetRoot>
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }
