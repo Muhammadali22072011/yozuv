@@ -1,6 +1,7 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.celery_app import celery_app
@@ -76,23 +77,17 @@ def flag_no_shows() -> None:
 
     Runs nightly. A booking that's still PENDING or CONFIRMED N hours
     after its end_time means the owner never marked it COMPLETED — most
-    likely the client didn't turn up. Flipping the status keeps stats
-    honest (no-show count per client) and frees the owner from manually
-    triaging weeks-old rows.
+    likely the client didn't turn up.
     """
     db = _session()
     try:
-        # Compare in local Tashkent time because Booking.date / end_time
-        # are stored in the owner's local clock, not UTC.
         cutoff_local = (
             datetime.now(TZ).replace(tzinfo=None) - timedelta(hours=NO_SHOW_GRACE_HOURS)
         )
         candidates = (
             db.query(Booking)
             .filter(
-                Booking.status.in_(
-                    [BookingStatus.PENDING, BookingStatus.CONFIRMED]
-                ),
+                Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
                 Booking.date <= cutoff_local.date(),
             )
             .all()
@@ -106,6 +101,122 @@ def flag_no_shows() -> None:
             flipped += 1
         if flipped:
             db.commit()
+    finally:
+        db.close()
+
+
+# How long since the last completed visit before we treat a client as
+# "we've lost them". 30..60 days — earlier feels pushy, later desperate.
+REENGAGE_AFTER_DAYS = 30
+REENGAGE_BEFORE_DAYS = 60
+
+# Don't send any retention message more often than this — two weeks so
+# birthday + re-engagement don't stack into spam.
+OUTREACH_COOLDOWN_DAYS = 14
+
+
+def _under_cooldown(client: Client, now_utc: datetime) -> bool:
+    last = client.last_outreach_at
+    if last is None:
+        return False
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    return now_utc - last < timedelta(days=OUTREACH_COOLDOWN_DAYS)
+
+
+@celery_app.task(name="app.tasks.reminders.send_birthday_greetings")
+def send_birthday_greetings() -> None:
+    db = _session()
+    try:
+        today_local = datetime.now(TZ).date()
+        now_utc = datetime.now(timezone.utc)
+        candidates = (
+            db.query(Client)
+            .filter(
+                Client.birthday.is_not(None),
+                func.extract("month", Client.birthday) == today_local.month,
+                func.extract("day", Client.birthday) == today_local.day,
+            )
+            .all()
+        )
+        for client in candidates:
+            if _under_cooldown(client, now_utc):
+                continue
+            last_biz_id = (
+                db.query(Booking.business_id)
+                .filter(Booking.client_id == client.id)
+                .order_by(Booking.date.desc(), Booking.start_time.desc())
+                .limit(1)
+                .scalar()
+            )
+            if not last_biz_id:
+                continue
+            biz = db.query(Business).filter(Business.id == last_biz_id).first()
+            if not biz:
+                continue
+            name = (client.first_name or "").strip() or "Aziz mijoz"
+            send_telegram_message(
+                int(client.telegram_id),
+                f"🎂 Tug'ilgan kuningiz bilan, <b>{name}</b>!\n"
+                f"<b>{biz.name}</b> sizni har doim kutadi.",
+            )
+            client.last_outreach_at = now_utc
+        db.commit()
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.reminders.send_reengagement_nudges")
+def send_reengagement_nudges() -> None:
+    db = _session()
+    try:
+        today_local = datetime.now(TZ).date()
+        now_utc = datetime.now(timezone.utc)
+        oldest_last_visit = today_local - timedelta(days=REENGAGE_BEFORE_DAYS)
+        newest_last_visit = today_local - timedelta(days=REENGAGE_AFTER_DAYS)
+
+        rows = (
+            db.query(
+                Booking.client_id,
+                func.max(Booking.date).label("last_date"),
+            )
+            .filter(Booking.status == BookingStatus.COMPLETED)
+            .group_by(Booking.client_id)
+            .all()
+        )
+        for client_id, last_date in rows:
+            if not client_id or not last_date:
+                continue
+            if last_date > newest_last_visit:
+                continue
+            if last_date < oldest_last_visit:
+                continue
+            client = db.query(Client).filter(Client.id == client_id).first()
+            if client is None or _under_cooldown(client, now_utc):
+                continue
+            last_biz_id = (
+                db.query(Booking.business_id)
+                .filter(
+                    Booking.client_id == client_id,
+                    Booking.status == BookingStatus.COMPLETED,
+                    Booking.date == last_date,
+                )
+                .limit(1)
+                .scalar()
+            )
+            if not last_biz_id:
+                continue
+            biz = db.query(Business).filter(Business.id == last_biz_id).first()
+            if not biz:
+                continue
+            name = (client.first_name or "").strip() or "Aziz mijoz"
+            send_telegram_message(
+                int(client.telegram_id),
+                f"👋 <b>{name}</b>, ancha vaqt bo'ldi!\n"
+                f"<b>{biz.name}</b> da yozilishni unutmang.",
+            )
+            client.last_outreach_at = now_utc
+        db.commit()
     finally:
         db.close()
 

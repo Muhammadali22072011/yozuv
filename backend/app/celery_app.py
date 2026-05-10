@@ -32,6 +32,16 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.reminders.flag_no_shows",
         "schedule": crontab(hour=3, minute=0),
     },
+    # 09:30 — well after morning, before most lunch-break notifications.
+    "birthday-greetings-daily": {
+        "task": "app.tasks.reminders.send_birthday_greetings",
+        "schedule": crontab(hour=9, minute=30),
+    },
+    # 10:00 — separated from birthday by 30 min to spread the load.
+    "reengagement-nudges-daily": {
+        "task": "app.tasks.reminders.send_reengagement_nudges",
+        "schedule": crontab(hour=10, minute=0),
+    },
 }
 
 celery_app.autodiscover_tasks(["app.tasks"])

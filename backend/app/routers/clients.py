@@ -1,3 +1,4 @@
+from datetime import date as _date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,10 @@ from app.deps import get_owned_business
 from app.models import Booking, BookingStatus, Business, Client, ClientBlock
 
 router = APIRouter(prefix="/business/me", tags=["clients"])
+
+
+class ClientPatchBody(BaseModel):
+    birthday: _date | None = None
 
 
 class BlockBody(BaseModel):
@@ -89,6 +94,7 @@ def client_detail(
             "last_name": c.last_name,
             "phone": c.phone,
             "telegram_id": c.telegram_id,
+            "birthday": c.birthday.isoformat() if c.birthday else None,
         },
         "bookings": [
             {
@@ -133,6 +139,28 @@ def _client_in_business_or_404(
     if not has_booking:
         raise HTTPException(404, "Not found")
     return c
+
+
+@router.patch("/clients/{client_id}")
+def patch_client(
+    client_id: UUID,
+    body: ClientPatchBody,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner-edit fields the client doesn't surface themselves yet —
+    currently birthday only. Restricted to clients who've actually
+    booked with this business so an owner can't enumerate the global
+    Client table."""
+    c = _client_in_business_or_404(db, business.id, client_id)
+    if body.birthday is not None:
+        c.birthday = body.birthday
+    db.commit()
+    db.refresh(c)
+    return {
+        "id": str(c.id),
+        "birthday": c.birthday.isoformat() if c.birthday else None,
+    }
 
 
 @router.post("/clients/{client_id}/block", status_code=201)
