@@ -1,5 +1,23 @@
 const API = "https://yozuv.onrender.com";
 
+// Multi-business: every API call carries the X-Business-Id of the
+// currently-selected business so the membership-aware deps on the
+// backend (PR #51) know which one the user is acting against. Stored
+// in localStorage; null means "fall back to the legacy single-business
+// owner_id lookup", which is exactly what users with one business want.
+const ACTIVE_BIZ_KEY = "yozuv_active_business_id";
+
+export function getActiveBusinessId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ACTIVE_BIZ_KEY);
+}
+
+export function setActiveBusinessId(id: string | null): void {
+  if (typeof window === "undefined") return;
+  if (id) localStorage.setItem(ACTIVE_BIZ_KEY, id);
+  else localStorage.removeItem(ACTIVE_BIZ_KEY);
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("yozuv_access");
@@ -54,6 +72,13 @@ async function doFetch(path: string, options: RequestInit, token: string | null)
     headers.set("Content-Type", "application/json");
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  // Inject the active business id when one is selected. Backend
+  // routes that haven't migrated to get_active_business yet ignore
+  // the header — adding it unconditionally is safe.
+  const activeBiz = getActiveBusinessId();
+  if (activeBiz && !headers.has("X-Business-Id")) {
+    headers.set("X-Business-Id", activeBiz);
+  }
   return fetch(`${API}${path}`, { ...options, headers });
 }
 
