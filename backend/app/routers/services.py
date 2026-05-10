@@ -18,6 +18,10 @@ class ServiceCreate(BaseModel):
     description: str | None = None
     duration_minutes: int = 30
     order: int = 0
+    # 0 = loyalty disabled. Cap at 50 — anything bigger is a typo (a
+    # business that needs 100 visits before a free one is selling
+    # something different).
+    loyalty_after_visits: int = Field(default=0, ge=0, le=50)
 
 
 class ServiceUpdate(BaseModel):
@@ -27,6 +31,7 @@ class ServiceUpdate(BaseModel):
     description: str | None = None
     duration_minutes: int | None = None
     order: int | None = None
+    loyalty_after_visits: int | None = Field(default=None, ge=0, le=50)
 
 
 class ServiceOut(BaseModel):
@@ -38,6 +43,7 @@ class ServiceOut(BaseModel):
     duration_minutes: int
     is_active: bool
     order: int
+    loyalty_after_visits: int = 0
 
     class Config:
         from_attributes = True
@@ -70,6 +76,7 @@ def create_service(
         description=body.description,
         duration_minutes=body.duration_minutes,
         order=body.order,
+        loyalty_after_visits=body.loyalty_after_visits,
     )
     db.add(s)
     db.commit()

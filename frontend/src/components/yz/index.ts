@@ -26,6 +26,10 @@ export type { ClientDetail } from "./ClientSheet";
 export { NewBookingSheet } from "./NewBookingSheet";
 export { NotificationSheet } from "./NotificationSheet";
 export type { NotificationItem } from "./NotificationSheet";
+export { Tour } from "./Tour";
+export type { TourStep } from "./Tour";
+export { WelcomeModal } from "./WelcomeModal";
+export { HelpDrawer } from "./HelpDrawer";
 export {
   fmtSum,
   fmtShort,
