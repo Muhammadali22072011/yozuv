@@ -2,10 +2,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from "lucide-react";
-import { ScreenHeader, YzLoader, BookingSheet } from "@/components/yz";
-import type { ClientLite, ServiceLite } from "@/components/yz";
+import { ScreenHeader, Tour, YzLoader, BookingSheet } from "@/components/yz";
+import type { ClientLite, ServiceLite, TourStep } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 import type { BookingRow } from "@/types";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const CALENDAR_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='calendar-grid']",
+    title: "Hafta jadvalingiz",
+    body:
+      "Bu yerda 7 kun × 14 soat to'r — har bir kvadrat 1 soat. Mavjud bronlar rangli kartalar bo'lib chiqadi. Bir qarashda haftaning qaysi soati zich, qaysisi bo'sh — ko'rinib turadi.",
+    mode: "info",
+  },
+  {
+    targetSelector: "[data-tour='calendar-nav']",
+    title: "Haftani almashtirish",
+    body:
+      "Strelkalar bilan keyingi/oldingi haftaga o'ting. \"Bugun\" tugmasi sizni har doim joriy haftaga qaytaradi.",
+    mode: "info",
+  },
+];
 
 // Calendar week-view dashboard.
 //
@@ -86,6 +104,7 @@ export default function CalendarPage() {
   const [services, setServices] = useState<ServiceLite[]>([]);
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [active, setActive] = useState<BookingRow | null>(null);
+  const tour = usePageTour("calendar_v1", CALENDAR_TOUR);
 
   const days = useMemo(() => {
     const out: Date[] = [];
@@ -151,7 +170,7 @@ export default function CalendarPage() {
         }
       />
 
-      <div className="mt-2 flex items-center justify-between px-4 md:px-0">
+      <div data-tour="calendar-nav" className="mt-2 flex items-center justify-between px-4 md:px-0">
         <button
           onClick={() => {
             const d = new Date(weekStart);
@@ -190,7 +209,7 @@ export default function CalendarPage() {
         </button>
       </div>
 
-      <div className="mt-3 overflow-x-auto px-4 md:px-0">
+      <div data-tour="calendar-grid" className="mt-3 overflow-x-auto px-4 md:px-0">
         <div className="min-w-[880px]">
           {/* Day header row */}
           <div className="grid grid-cols-[60px_repeat(7,minmax(0,1fr))] border-b border-ink-100">
@@ -313,6 +332,8 @@ export default function CalendarPage() {
         clients={clients}
         onChanged={load}
       />
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }

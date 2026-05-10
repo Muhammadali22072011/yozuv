@@ -3,9 +3,28 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileDown, Share2 } from "lucide-react";
-import { ScreenHeader, YzLogo, useToast } from "@/components/yz";
+import { ScreenHeader, Tour, YzLogo, useToast } from "@/components/yz";
+import type { TourStep } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import type { BusinessMe } from "@/types";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const QR_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='qr-image']",
+    title: "Sizning QR kodingiz",
+    body:
+      "Bu QR kodni vizit kartochkangizga, eshikka, oynaga yoki post-ga joylashtiring. Mijoz skanerlaydi — bot ochiladi va u darhol yozilishi mumkin.",
+    mode: "info",
+  },
+  {
+    targetSelector: "[data-tour='qr-download']",
+    title: "Yuklab oling va chop eting",
+    body:
+      "Tugmani bossangiz QR rasm sizning telefoningizga tushadi. Pastdagi 'PDF' tugmasi esa to'liq broshyurani — xizmatlar va narxlar bilan — chop etishga tayyor variantda beradi.",
+    mode: "info",
+  },
+];
 
 export default function QrPage() {
   const router = useRouter();
@@ -15,6 +34,7 @@ export default function QrPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const tour = usePageTour("qr_v1", QR_TOUR);
 
   useEffect(() => {
     let revoked = false;
@@ -136,7 +156,7 @@ export default function QrPage() {
           </div>
           <div className="text-[13px] font-medium text-ink-500">Skanerlang va yoziling</div>
 
-          <div className="mx-auto mt-4 grid h-60 w-60 place-items-center rounded-[20px] bg-white p-4 shadow-[0_10px_30px_rgba(11,15,31,0.08),_inset_0_0_0_1px_rgba(11,15,31,0.06)]">
+          <div data-tour="qr-image" className="mx-auto mt-4 grid h-60 w-60 place-items-center rounded-[20px] bg-white p-4 shadow-[0_10px_30px_rgba(11,15,31,0.08),_inset_0_0_0_1px_rgba(11,15,31,0.06)]">
             {qrUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={qrUrl} alt="QR" className="h-full w-full" />
@@ -148,7 +168,7 @@ export default function QrPage() {
           <div className="mt-4 break-all font-mono text-xs text-ink-500">{telegramLink || "—"}</div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
+        <div data-tour="qr-download" className="mt-4 grid grid-cols-2 gap-2.5">
           <button onClick={downloadQr} disabled={!qrUrl} className="btn-primary">
             <Download className="mr-2 h-4 w-4" /> QR yuklash
           </button>
@@ -181,6 +201,8 @@ export default function QrPage() {
           )}
         </div>
       </div>
+
+      <Tour open={tour.open} steps={tour.steps} onClose={tour.dismiss} />
     </div>
   );
 }

@@ -1,10 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ScreenHeader, YzLoader, YzLogo, useToast } from "@/components/yz";
+import { ScreenHeader, Tour, YzLoader, YzLogo, useToast } from "@/components/yz";
+import type { TourStep } from "@/components/yz";
 import { MapPicker } from "@/components/yz/MapPicker";
 import { apiBase, apiFetch } from "@/lib/api";
 import type { BusinessMe } from "@/types";
+import { usePageTour } from "@/lib/use-page-tour";
+
+const PROFILE_TOUR: TourStep[] = [
+  {
+    targetSelector: "[data-tour='profile-logo']",
+    title: "Logotip yuklang",
+    body:
+      "Mijozlar /start bossanda eng birinchi ko'radigan narsa — sizning logotipingiz. JPG yoki PNG, 4 MB gacha. Ishonch va brendni darhol qo'yadi.",
+    mode: "info",
+  },
+  {
+    targetSelector: "[data-tour='profile-bot-texts']",
+    title: "Bot xabarlari",
+    body:
+      "Salomlashish, yozilishdan keyingi rahmat va eslatma matnlari. Bularni o'zingizning brendingizga moslashtiring — bot mijozga aynan shu so'zlar bilan murojaat qiladi.",
+    mode: "info",
+  },
+];
 
 type Sub = { plan: string; status: string; expires_at: string | null };
 
@@ -15,6 +34,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const tour = usePageTour("profile_v1", PROFILE_TOUR);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -155,7 +175,7 @@ export default function ProfilePage() {
       />
 
       <div className="mt-2 px-4 md:px-0">
-        <div className="card-soft p-5 text-center">
+        <div data-tour="profile-logo" className="card-soft p-5 text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center overflow-hidden rounded-2xl bg-ink-50">
             {biz.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -297,7 +317,7 @@ export default function ProfilePage() {
         <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
           Bot matnlari
         </div>
-        <div className="card-soft space-y-3 p-4">
+        <div data-tour="profile-bot-texts" className="card-soft space-y-3 p-4">
           <div>
             <label className="block text-xs font-semibold text-ink-500">Salomlashish</label>
             <textarea

@@ -17,7 +17,7 @@ from aiogram.types import (
 )
 
 from app.database import SessionLocal
-from app.models import Business, Client, Service, User
+from app.models import Business, Client, Service, Staff, User
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
@@ -191,8 +191,49 @@ async def show_service_detail(cb: CallbackQuery):
     await cb.answer()
 
 
+def _staff_for_service(db, business_id, service_id) -> list[Staff]:
+    """Active staff who can perform this service. If at least one is
+    explicitly mapped, only those show. Otherwise we fall back to staff
+    with no service map at all so the typical case (one barber doing
+    everything, owner never bothered to map) needs zero config."""
+    rows = (
+        db.query(Staff)
+        .filter(Staff.business_id == business_id, Staff.is_active.is_(True))
+        .order_by(Staff.order.asc(), Staff.name.asc())
+        .all()
+    )
+    explicit = [
+        s for s in rows
+        if s.services and any(svc.id == service_id for svc in s.services)
+    ]
+    if explicit:
+        return explicit
+    return [s for s in rows if not s.services]
+
+
+def _staff_picker_kb(slug: str, sid: str, staff_list: list[Staff]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for s in staff_list:
+        rows.append([InlineKeyboardButton(text=f"👤 {s.name}", callback_data=f"stfok:{sid}:{s.id}")])
+    rows.append([InlineKeyboardButton(text="🎲 Istalgan mutaxassis", callback_data=f"stfok:{sid}:any")])
+    rows.append([InlineKeyboardButton(text="◀️ Xizmatlar", callback_data=f"book:{slug}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _show_dates(cb: CallbackQuery, db, b: Business, sid: str) -> None:
+    days = next_working_dates(db, b.id, 7)
+    if not days:
+        await cb.answer(
+            "Bu biznes hali ish vaqtini sozlamagan. Iltimos, keyinroq urinib ko'ring yoki biznes egasiga murojaat qiling.",
+            show_alert=True,
+        )
+        return
+    items = [(d.isoformat(), _format_uz_date(d)) for d in days]
+    await safe_edit_text(cb, "Sanani tanlang:", reply_markup=dates_kb(b.slug, sid, items))
+
+
 @router.callback_query(F.data.startswith("svcok:"))
-async def pick_service(cb: CallbackQuery):
+async def pick_service(cb: CallbackQuery, state: FSMContext):
     _, sid = cb.data.split(":", 1)
     db = SessionLocal()
     try:
@@ -201,15 +242,47 @@ async def pick_service(cb: CallbackQuery):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        days = next_working_dates(db, b.id, 7)
-        if not days:
-            await cb.answer(
-                "Bu biznes hali ish vaqtini sozlamagan. Iltimos, keyinroq urinib ko'ring yoki biznes egasiga murojaat qiling.",
-                show_alert=True,
+
+        # Staff picker — only when the business has staff. Single-resource
+        # businesses skip the step and the flow is identical to before.
+        staff_list = _staff_for_service(db, b.id, service.id)
+        if staff_list:
+            await safe_edit_text(
+                cb,
+                "Mutaxassisni tanlang:",
+                reply_markup=_staff_picker_kb(b.slug, sid, staff_list),
             )
+            await cb.answer()
             return
-        items = [(d.isoformat(), _format_uz_date(d)) for d in days]
-        await safe_edit_text(cb, "Sanani tanlang:", reply_markup=dates_kb(b.slug, sid, items))
+
+        # Legacy single-resource flow.
+        await state.update_data(staff_id="")
+        await _show_dates(cb, db, b, sid)
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("stfok:"))
+async def pick_staff(cb: CallbackQuery, state: FSMContext):
+    parts = cb.data.split(":")
+    if len(parts) != 3:
+        await cb.answer()
+        return
+    _, sid, choice = parts
+    # staff_id carries through FSM state — every downstream callback
+    # (day, time, prom_y/n, confirm) reads it from there. Empty means
+    # "any master" which falls back to per-business slot conflict.
+    await state.update_data(staff_id="" if choice == "any" else choice)
+
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
+        if not b or not service:
+            await cb.answer("Topilmadi", show_alert=True)
+            return
+        await _show_dates(cb, db, b, sid)
     finally:
         db.close()
     await cb.answer()
@@ -332,8 +405,12 @@ async def pick_time(cb: CallbackQuery, state: FSMContext):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        # Reset any previous promo state for a fresh booking attempt
+        # Reset any previous promo state for a fresh booking attempt, but
+        # preserve staff_id (stored when the user picked a master earlier).
+        prev_staff_id = str((await state.get_data()).get("staff_id") or "")
         await state.clear()
+        if prev_staff_id:
+            await state.update_data(staff_id=prev_staff_id)
         text = (
             f"📋 {service.name}\n"
             f"📅 {_format_uz_date(d)}, {t_str}\n"
@@ -361,7 +438,11 @@ async def promo_skip(cb: CallbackQuery, state: FSMContext):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
+        # Preserve staff_id across the promo-state reset.
+        prev_staff_id = str((await state.get_data()).get("staff_id") or "")
         await state.clear()
+        if prev_staff_id:
+            await state.update_data(staff_id=prev_staff_id)
         await safe_edit_text(
             cb,
             _format_summary(service.name, d, t_str, int(service.price), None),
@@ -502,6 +583,7 @@ def _create_booking_sync(
     t_str: str,
     promo_code: str,
     phone: str,
+    staff_id: str = "",
 ):
     """Synchronous booking creation. Runs in a worker thread."""
     d = date.fromisoformat(d_iso)
@@ -513,9 +595,18 @@ def _create_booking_sync(
         b = db.query(Business).filter(Business.id == service.business_id).first() if service else None
         if not b or not service:
             return None, "Biznes topilmadi"
+        # Empty string = "any master" — leave staff_id off the payload
+        # so the per-business conflict path (legacy semantics) applies.
+        staff_uuid = None
+        if staff_id:
+            try:
+                staff_uuid = UUID(staff_id)
+            except ValueError:
+                staff_uuid = None
         payload = BookingCreatePublic(
             business_id=b.id,
             service_id=UUID(sid),
+            staff_id=staff_uuid,
             client_telegram_id=user_id,
             client_first_name=first_name or "",
             client_last_name=last_name or "",
@@ -635,6 +726,7 @@ async def confirm_booking(cb: CallbackQuery, state: FSMContext):
 
     state_data = await state.get_data()
     promo_code = str(state_data.get("promo_code") or "")
+    staff_id = str(state_data.get("staff_id") or "")
 
     # First booking? Ask the client to share their phone before creating
     # anything — owners need a way to call them, and Telegram-only @username
@@ -642,8 +734,10 @@ async def confirm_booking(cb: CallbackQuery, state: FSMContext):
     has_phone = await asyncio.to_thread(_client_has_phone, cb.from_user.id)
     if not has_phone:
         await state.set_state(BookingPhoneStates.waiting_for_phone)
+        # Carry staff_id across the phone prompt — state.set_state can wipe
+        # unrelated keys on some FSM backends, so we re-stash it here.
         await state.update_data(
-            sid=sid, d_iso=d_iso, t_str=t_str, promo_code=promo_code
+            sid=sid, d_iso=d_iso, t_str=t_str, promo_code=promo_code, staff_id=staff_id
         )
         try:
             await cb.message.answer(
@@ -667,6 +761,7 @@ async def confirm_booking(cb: CallbackQuery, state: FSMContext):
         t_str,
         promo_code,
         "",  # phone already on Client row
+        staff_id,
     )
     if info is None:
         await cb.answer(_booking_error_text(err), show_alert=True)
@@ -717,6 +812,7 @@ async def receive_phone_for_booking(message: Message, state: FSMContext):
     d_iso = str(data.get("d_iso") or "")
     t_str = str(data.get("t_str") or "")
     promo_code = str(data.get("promo_code") or "")
+    staff_id = str(data.get("staff_id") or "")
     await state.clear()
 
     if not sid or not d_iso or not t_str:
@@ -738,6 +834,7 @@ async def receive_phone_for_booking(message: Message, state: FSMContext):
         t_str,
         promo_code,
         phone,
+        staff_id,
     )
     if info is None:
         await message.answer(_booking_error_text(err))
