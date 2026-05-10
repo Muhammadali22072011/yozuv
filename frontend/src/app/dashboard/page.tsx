@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Bell,
   Copy,
+  HelpCircle,
   Phone,
   QrCode,
   Scissors,
@@ -19,9 +20,12 @@ import type { BookingRow, BusinessMe } from "@/types";
 import {
   BookingCard,
   BookingSheet,
+  HelpDrawer,
   HeroGradient,
   NotificationSheet,
   SectionLabel,
+  Tour,
+  WelcomeModal,
   YzLoader,
   YzLogo,
   callPhone,
@@ -32,8 +36,39 @@ import {
   todayISO,
   useToast,
 } from "@/components/yz";
-import type { ClientLite, NotificationItem, ServiceLite } from "@/components/yz";
+import type { ClientLite, NotificationItem, ServiceLite, TourStep } from "@/components/yz";
 import { StatusBadge } from "@/components/yz/StatusBadge";
+import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
+
+const DASHBOARD_TOUR_ID = "dashboard_v1";
+
+const DASHBOARD_TOUR_STEPS: TourStep[] = [
+  {
+    targetSelector: '[data-tour="hero-stats"]',
+    title: "Bugungi statistika",
+    body: "Bu yerda bugungi bronlar, kunlik daromad va haftadagi mijozlar soni ko'rinadi. Ish jarayonini bir qarashda baholash uchun.",
+  },
+  {
+    targetSelector: '[data-tour="bell"]',
+    title: "Bildirishnomalar",
+    body: "Yangi bron, otmen, izoh — hammasi shu yerda. Yon ustidagi raqam — hali ko'rmagan xabarlar soni.",
+  },
+  {
+    targetSelector: '[data-tour="quick-actions"]',
+    title: "Tezkor amallar",
+    body: "QR kod, promo-kodlar, xizmatlar va baholar — eng tez-tez ishlatadigan bo'limlar shu yerda.",
+  },
+  {
+    targetSelector: '[data-tour="bot-link"]',
+    title: "Mijozlar havolangiz",
+    body: "Bossangiz havola buferiga ko'chiriladi. WhatsApp, Instagram yoki vizit kartochkasiga joylashtiring — har bir bosish sizga mijoz olib keladi.",
+  },
+  {
+    targetSelector: '[data-tour="help"]',
+    title: "Yordam",
+    body: "Biror nima noaniq bo'lsa — bu tugma orqali tez-tez beriladigan savollarga javoblar va support bilan bog'lanish.",
+  },
+];
 
 type Sub = { plan: string; status: string; expires_at: string | null };
 
@@ -56,6 +91,12 @@ export default function DashboardHome() {
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Tutorial state — welcome modal first, then optional guided tour.
+  // Auto-shown only on the very first visit; the "?" button always
+  // reopens the help drawer regardless.
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   type DashboardBundle = {
     business: BusinessMe;
@@ -98,6 +139,28 @@ export default function DashboardHome() {
       .catch(() => router.replace("/dashboard/onboarding"));
     return () => window.removeEventListener("yz:bookings-changed", onChanged);
   }, [router]);
+
+  // First-visit tutorial. Triggered after the dashboard fully renders
+  // (otherwise the tour anchors aren't in the DOM yet). Marks "seen"
+  // when the user finishes OR skips so we don't pester them again.
+  useEffect(() => {
+    if (!ready) return;
+    if (hasSeenTour(DASHBOARD_TOUR_ID)) return;
+    setWelcomeOpen(true);
+  }, [ready]);
+
+  function dismissTutorial() {
+    markTourSeen(DASHBOARD_TOUR_ID);
+    setWelcomeOpen(false);
+    setTourOpen(false);
+  }
+
+  function startTour() {
+    setWelcomeOpen(false);
+    // Defer one tick so the modal close-animation doesn't fight the
+    // tour mounting and the spotlight measures the right rectangle.
+    setTimeout(() => setTourOpen(true), 50);
+  }
 
   async function loadNotifications() {
     setNotifLoading(true);
@@ -203,18 +266,29 @@ export default function DashboardHome() {
               </div>
             </div>
           </div>
-          <button
-            onClick={openNotifications}
-            className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
-            aria-label="Bildirishnomalar"
-          >
-            <Bell className="h-5 w-5 text-white" strokeWidth={2} />
-            {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              data-tour="help"
+              onClick={() => setHelpOpen(true)}
+              className="grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              aria-label="Yordam"
+            >
+              <HelpCircle className="h-5 w-5 text-white" strokeWidth={2} />
+            </button>
+            <button
+              data-tour="bell"
+              onClick={openNotifications}
+              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              aria-label="Bildirishnomalar"
+            >
+              <Bell className="h-5 w-5 text-white" strokeWidth={2} />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="mt-7">
@@ -228,7 +302,7 @@ export default function DashboardHome() {
 
       {/* Stats card pulled up */}
       <div className="relative -mt-16 px-4 md:px-0">
-        <div className="rounded-3xl bg-white p-5 shadow-soft-lg">
+        <div data-tour="hero-stats" className="rounded-3xl bg-white p-5 shadow-soft-lg">
           <div className="grid grid-cols-3 gap-0 divide-x divide-ink-200">
             <StatBox label="Bugun" value={summary.bookings} sub="yozilish" color="#4853F5" />
             <StatBox
@@ -299,7 +373,7 @@ export default function DashboardHome() {
       {/* Quick actions */}
       <div className="mt-6 px-4 md:px-0">
         <SectionLabel title="Tezkor amallar" />
-        <div className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        <div data-tour="quick-actions" className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
           <QuickTile
             href="/dashboard/qr"
             label="QR kod"
@@ -358,6 +432,7 @@ export default function DashboardHome() {
       {/* Bot link */}
       <div className="mt-6 px-4 md:px-0">
         <button
+          data-tour="bot-link"
           onClick={() => {
             navigator.clipboard?.writeText(`https://${botLink}`);
             toast("Havola nusxalandi");
@@ -396,6 +471,21 @@ export default function DashboardHome() {
         items={notifs}
         loading={notifLoading}
       />
+
+      <WelcomeModal
+        open={welcomeOpen}
+        ownerName={ownerFirst}
+        onTour={startTour}
+        onSkip={dismissTutorial}
+      />
+
+      <Tour
+        open={tourOpen}
+        steps={DASHBOARD_TOUR_STEPS}
+        onClose={dismissTutorial}
+      />
+
+      <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }
