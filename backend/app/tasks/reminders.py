@@ -63,6 +63,53 @@ def send_hourly_reminders() -> None:
         db.close()
 
 
+# How long after a booking's end_time we wait before flipping it to
+# NO_SHOW. A grace period gives the owner time to mark COMPLETED if
+# they're slow with the dashboard. Two hours is generous for typical
+# barbershop / salon flows.
+NO_SHOW_GRACE_HOURS = 2
+
+
+@celery_app.task(name="app.tasks.reminders.flag_no_shows")
+def flag_no_shows() -> None:
+    """Auto-flag past PENDING/CONFIRMED bookings as NO_SHOW.
+
+    Runs nightly. A booking that's still PENDING or CONFIRMED N hours
+    after its end_time means the owner never marked it COMPLETED — most
+    likely the client didn't turn up. Flipping the status keeps stats
+    honest (no-show count per client) and frees the owner from manually
+    triaging weeks-old rows.
+    """
+    db = _session()
+    try:
+        # Compare in local Tashkent time because Booking.date / end_time
+        # are stored in the owner's local clock, not UTC.
+        cutoff_local = (
+            datetime.now(TZ).replace(tzinfo=None) - timedelta(hours=NO_SHOW_GRACE_HOURS)
+        )
+        candidates = (
+            db.query(Booking)
+            .filter(
+                Booking.status.in_(
+                    [BookingStatus.PENDING, BookingStatus.CONFIRMED]
+                ),
+                Booking.date <= cutoff_local.date(),
+            )
+            .all()
+        )
+        flipped = 0
+        for b in candidates:
+            slot_end = datetime.combine(b.date, b.end_time)
+            if slot_end > cutoff_local:
+                continue
+            b.status = BookingStatus.NO_SHOW
+            flipped += 1
+        if flipped:
+            db.commit()
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.tasks.reminders.trial_expiry_warnings")
 def trial_expiry_warnings() -> None:
     db = _session()

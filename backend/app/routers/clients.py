@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_owned_business
-from app.models import Booking, Business, Client, ClientBlock
+from app.models import Booking, BookingStatus, Business, Client, ClientBlock
 
 router = APIRouter(prefix="/business/me", tags=["clients"])
 
@@ -72,6 +72,8 @@ def client_detail(
         .order_by(Booking.date.desc(), Booking.start_time.desc())
         .all()
     )
+    no_show_count = sum(1 for b in bookings if b.status == BookingStatus.NO_SHOW)
+    late_cancel_count = sum(1 for b in bookings if getattr(b, "late_cancel", False))
     block = (
         db.query(ClientBlock)
         .filter(
@@ -94,9 +96,15 @@ def client_detail(
                 "date": b.date.isoformat(),
                 "start_time": b.start_time.strftime("%H:%M"),
                 "status": str(b.status),
+                "late_cancel": bool(getattr(b, "late_cancel", False)),
             }
             for b in bookings
         ],
+        "stats": {
+            "total_bookings": len(bookings),
+            "no_show_count": no_show_count,
+            "late_cancel_count": late_cancel_count,
+        },
         "block": (
             {
                 "reason": block.reason or "",

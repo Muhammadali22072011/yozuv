@@ -314,7 +314,19 @@ def validate_promo_for_business(db: Session, business_id: UUID, raw_code: str, b
     }
 
 
-def cancel_booking(db: Session, booking_id: UUID, business_id: UUID, reason: str = "") -> Booking | None:
+def cancel_booking(
+    db: Session,
+    booking_id: UUID,
+    business_id: UUID,
+    reason: str = "",
+    by_client: bool = False,
+) -> Booking | None:
+    """Cancel a booking. When ``by_client`` is set we also evaluate the
+    business's ``cancel_window_hours`` policy and flag the cancel as
+    ``late_cancel`` if it falls inside the window. Owner-side cancels
+    don't get the flag — the late-cancel signal is about clients."""
+    from datetime import timezone as _tz
+
     b = (
         db.query(Booking)
         .filter(Booking.id == booking_id, Booking.business_id == business_id)
@@ -322,6 +334,16 @@ def cancel_booking(db: Session, booking_id: UUID, business_id: UUID, reason: str
     )
     if not b:
         return None
+    if by_client:
+        biz = db.query(Business).filter(Business.id == business_id).first()
+        window_hours = int(getattr(biz, "cancel_window_hours", 0) or 0)
+        if window_hours > 0:
+            slot_dt = datetime.combine(b.date, b.start_time)
+            # Naive compare — slot_dt is local and the window is wall-clock
+            # hours; using utcnow() here would shift by TZ_OFFSET.
+            now_local = datetime.now(_tz.utc).astimezone().replace(tzinfo=None)
+            if slot_dt - now_local < timedelta(hours=window_hours):
+                b.late_cancel = True
     b.status = BookingStatus.CANCELLED
     b.cancel_reason = reason
     return b

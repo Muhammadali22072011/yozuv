@@ -363,7 +363,11 @@ async def cancel_booking(cb: CallbackQuery):
         if not b or not client or b.client_id != client.id:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        b.status = BookingStatus.CANCELLED
+        # Route through the service so cancel-window policy is applied
+        # (flips late_cancel=True when within business.cancel_window_hours).
+        from app.services.booking_service import cancel_booking as _cancel_service
+
+        _cancel_service(db, b.id, b.business_id, reason="", by_client=True)
         db.commit()
         await cb.message.edit_text("Yozilish bekor qilindi.")
     finally:
