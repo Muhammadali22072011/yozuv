@@ -26,7 +26,7 @@ from app.schemas.booking import (
     BookingUpdate,
 )
 from app.config import get_settings
-from app.services import booking_service
+from app.services import booking_service, waitlist_service
 from app.services.booking_service import acquire_slot_lock
 from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
@@ -341,39 +341,154 @@ def cancel(
         raise HTTPException(404, "Not found")
     db.commit()
     publish_event(business.id, "booking_cancelled")
+
+    # Slot freed — pull the head of the waitlist for this exact slot
+    # and ping them on Telegram. Best-effort: a failure here mustn't
+    # roll back the cancel.
+    try:
+        result = waitlist_service.notify_first_for_slot(
+            db,
+            business_id=business.id,
+            service_id=b.service_id,
+            slot_date=b.date,
+            slot_start=b.start_time,
+        )
+        db.commit()
+        if result is not None:
+            _entry, client, biz, service = result
+            from app.utils.htmlsafe import h
+
+            send_telegram_message(
+                int(client.telegram_id),
+                f"🔔 <b>{h(biz.name)}</b> da slot ochildi!\n"
+                f"📋 {h(service.name)}\n"
+                f"📅 {b.date.isoformat()} {b.start_time.strftime('%H:%M')}\n\n"
+                f"Tezroq yozilib qolmasin — botda «Yozilish»ni bosing.",
+            )
+    except Exception:
+        # The cancel is already committed; the waitlist hop is purely
+        # additive. Swallow exceptions so a flaky Telegram call doesn't
+        # poison the response.
+        pass
+
     db.refresh(b)
     return b
 
 
-class RecurringBookingBody(BaseModel):
-    """Owner-created recurring booking series.
+class WaitlistJoinBody(BaseModel):
+    business_id: UUID
+    service_id: UUID
+    date: date
+    start_time: time
+    init_data: str = Field(..., min_length=1)
+    client_first_name: str = ""
+    client_last_name: str = ""
+    client_phone: str = ""
 
-    The recurrence is materialised: we create N concrete Booking rows
-    sharing the same recurrence_id, one for every weekly occurrence
-    counting from `start_date`. Materialising up-front (vs lazy) keeps
-    the existing slot-conflict, reminder, and notifications code paths
-    working unchanged — every occurrence is a real Booking row.
-    """
+
+@router.post("/waitlist/join")
+def waitlist_join(
+    body: WaitlistJoinBody,
+    db: Session = Depends(get_db),
+    _: None = Depends(_booking_rate),
+):
+    settings = get_settings()
+    if not settings.bot_token:
+        raise HTTPException(500, "BOT_TOKEN not configured")
+    try:
+        parsed = validate_telegram_init_data(body.init_data, settings.bot_token)
+        tg_user = parse_user_from_init(parsed)
+        client_telegram_id = int(tg_user["id"])
+    except Exception as exc:
+        raise HTTPException(401, f"Invalid initData: {exc}") from exc
+
+    # Verify service belongs to the requested business so a client
+    # can't park a waitlist entry against a stranger's calendar.
+    service = (
+        db.query(Service)
+        .filter(
+            Service.id == body.service_id,
+            Service.business_id == body.business_id,
+            Service.is_active.is_(True),
+        )
+        .first()
+    )
+    if service is None:
+        raise HTTPException(404, "Service not found")
+
+    entry = waitlist_service.join(
+        db,
+        business_id=body.business_id,
+        service_id=body.service_id,
+        slot_date=body.date,
+        slot_start=body.start_time,
+        client_telegram_id=client_telegram_id,
+        client_first_name=body.client_first_name,
+        client_last_name=body.client_last_name,
+        client_phone=body.client_phone,
+    )
+    db.commit()
+    return {
+        "id": str(entry.id),
+        "joined": True,
+        "date": entry.date.isoformat(),
+        "start_time": entry.start_time.strftime("%H:%M"),
+    }
+
+
+@me_router.get("/waitlist")
+def waitlist_for_owner(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner-side: see pending (un-notified) waitlist entries for this
+    business so they can manually fill a slot or contact the client."""
+    from app.models import WaitlistEntry
+
+    rows = (
+        db.query(WaitlistEntry, Client, Service)
+        .join(Client, Client.id == WaitlistEntry.client_id)
+        .join(Service, Service.id == WaitlistEntry.service_id)
+        .filter(
+            WaitlistEntry.business_id == business.id,
+            WaitlistEntry.notified_at.is_(None),
+        )
+        .order_by(WaitlistEntry.date.asc(), WaitlistEntry.start_time.asc())
+        .all()
+    )
+    return [
+        {
+            "id": str(entry.id),
+            "date": entry.date.isoformat(),
+            "start_time": entry.start_time.strftime("%H:%M"),
+            "service": {"id": str(svc.id), "name": svc.name},
+            "client": {
+                "id": str(c.id),
+                "first_name": c.first_name or "",
+                "last_name": c.last_name or "",
+                "phone": c.phone or "",
+            },
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        }
+        for entry, c, svc in rows
+    ]
+
+
+class RecurringBookingBody(BaseModel):
+    """Owner-created recurring booking series."""
 
     client_id: UUID
     service_id: UUID
     staff_id: UUID | None = None
     start_date: date
     start_time: time
-    # Number of weekly occurrences. We cap at 26 (half a year) because
-    # past that point owner schedules drift and the value of a "set
-    # and forget" series collapses.
     occurrences: int = Field(..., ge=2, le=26)
-    # If a particular slot in the series collides with an existing
-    # booking, the default behaviour is "skip and continue". Setting
-    # `strict=True` aborts the entire series creation on the first
-    # conflict so the owner doesn't end up with a half-filled series.
     strict: bool = False
 
 
 @me_router.post("/bookings/recurring")
 def create_recurring(
-    body: "RecurringBookingBody",
+    body: RecurringBookingBody,
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
@@ -392,7 +507,6 @@ def create_recurring(
     if not client:
         raise HTTPException(404, "Client not found")
 
-    # If owner targeted a specific staff, validate.
     staff_id = body.staff_id
     if staff_id is not None:
         from app.models import Staff
@@ -451,8 +565,6 @@ def create_recurring(
         conflict = conflict_q.first()
         if conflict is not None:
             if body.strict:
-                # Roll back partial inserts before erroring out so an
-                # owner sees an all-or-nothing result.
                 for b in created:
                     db.delete(b)
                 db.commit()
@@ -496,10 +608,6 @@ def cancel_recurring(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    """Cancel every booking in a recurrence series. By default only
-    future occurrences are cancelled (past visits already happened),
-    pass `only_future=false` to cancel the whole series including
-    historic rows."""
     today = date.today()
     q = (
         db.query(Booking)
