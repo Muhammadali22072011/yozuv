@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
+  CalendarRange,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   Star,
   Tag,
   User,
+  UserCircle2,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,8 +32,14 @@ const SUPPORT_TG =
 const links = [
   { href: "/dashboard", label: "Bosh sahifa", icon: LayoutDashboard },
   { href: "/dashboard/bookings", label: "Yozilishlar", icon: CalendarDays },
+  // Week-view calendar (PR #50/#52). Listed separately so the owner
+  // sees it even if they bookmark /dashboard/bookings.
+  { href: "/dashboard/calendar", label: "Kalendar", icon: CalendarRange },
   { href: "/dashboard/services", label: "Xizmatlar", icon: Scissors },
-  { href: "/dashboard/schedule", label: "Jadval", icon: ClipboardList },
+  // Multi-staff page (PR #43/#49). Visible from day one — the empty
+  // state nudges the owner to add their first master.
+  { href: "/dashboard/staff", label: "Mutaxassislar", icon: UserCircle2 },
+  { href: "/dashboard/schedule", label: "Ish vaqti", icon: ClipboardList },
   { href: "/dashboard/clients", label: "Mijozlar", icon: Users },
   { href: "/dashboard/promo", label: "Promo-kodlar", icon: Tag },
   { href: "/dashboard/reviews", label: "Baholar", icon: Star },
