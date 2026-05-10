@@ -1,11 +1,15 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Review(Base):
@@ -27,7 +31,9 @@ class Review(Base):
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..5
     comment: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.utcnow())
+    # tz-aware UTC default; the column is DateTime(timezone=True) so a
+    # naive datetime.utcnow() value would mix with aware comparisons.
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     business = relationship("Business")
     booking = relationship("Booking")
