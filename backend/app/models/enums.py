@@ -62,3 +62,17 @@ class PaymentRecordStatus(str, enum.Enum):
     REJECTED = "REJECTED"
     FAILED = "FAILED"
     REFUNDED = "REFUNDED"
+
+
+class MembershipRole(str, enum.Enum):
+    """Permission level a user has against a business.
+
+    OWNER  — full control, including billing and transfer of ownership.
+    MANAGER — read/write everything except billing and ownership.
+    STAFF  — read most, write only own bookings/availability (the
+             corresponding Staff row, if any, controls visibility).
+    """
+
+    OWNER = "OWNER"
+    MANAGER = "MANAGER"
+    STAFF = "STAFF"

@@ -1,11 +1,15 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class BroadcastMessage(Base):
@@ -20,5 +24,5 @@ class BroadcastMessage(Base):
     failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failed_recipients: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow(), index=True
+        DateTime(timezone=True), default=_utcnow, index=True
     )
