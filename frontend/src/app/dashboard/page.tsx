@@ -40,33 +40,42 @@ import type { ClientLite, NotificationItem, ServiceLite, TourStep } from "@/comp
 import { StatusBadge } from "@/components/yz/StatusBadge";
 import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
 
-const DASHBOARD_TOUR_ID = "dashboard_v1";
+// Bumped to v2 — interactive walkthrough where the user actually
+// presses the highlighted buttons. v1 ("read-only" tour) shipped
+// briefly; bumping the id re-shows the new flow even to users who
+// already dismissed v1.
+const DASHBOARD_TOUR_ID = "dashboard_v2";
 
 const DASHBOARD_TOUR_STEPS: TourStep[] = [
   {
     targetSelector: '[data-tour="hero-stats"]',
-    title: "Bugungi statistika",
-    body: "Bu yerda bugungi bronlar, kunlik daromad va haftadagi mijozlar soni ko'rinadi. Ish jarayonini bir qarashda baholash uchun.",
+    title: "Sizning statistikangiz",
+    body: "Bu yerda har kuni: bugungi bronlar soni, daromad va haftadagi mijozlar ko'rinadi. Ko'p o'qish kerak emas — bir qarash va siz vaziyatdasiz.",
+    mode: "info",
   },
   {
     targetSelector: '[data-tour="bell"]',
-    title: "Bildirishnomalar",
-    body: "Yangi bron, otmen, izoh — hammasi shu yerda. Yon ustidagi raqam — hali ko'rmagan xabarlar soni.",
+    title: "Bildirishnomalar tugmasini bosing",
+    body: "Yangi bron, otmen va izohlar bu qo'ng'iroqcha orqali keladi. Bosing va qanday ko'rinishini ko'ring.",
+    mode: "action",
   },
   {
     targetSelector: '[data-tour="quick-actions"]',
     title: "Tezkor amallar",
-    body: "QR kod, promo-kodlar, xizmatlar va baholar — eng tez-tez ishlatadigan bo'limlar shu yerda.",
+    body: "QR kod, promo-kodlar, xizmatlar, baholar — eng tez-tez ishlatadigan bo'limlar shu yerda. Keyinroq bossiz ham bo'ladi.",
+    mode: "info",
   },
   {
     targetSelector: '[data-tour="bot-link"]',
-    title: "Mijozlar havolangiz",
-    body: "Bossangiz havola buferiga ko'chiriladi. WhatsApp, Instagram yoki vizit kartochkasiga joylashtiring — har bir bosish sizga mijoz olib keladi.",
+    title: "Endi havolani bosib ko'ring",
+    body: "Bu sizning mijozlaringiz uchun havola. Bossangiz buferga ko'chiriladi — WhatsApp, Instagram yoki vizit kartochkasiga joylang.",
+    mode: "action",
   },
   {
     targetSelector: '[data-tour="help"]',
-    title: "Yordam",
-    body: "Biror nima noaniq bo'lsa — bu tugma orqali tez-tez beriladigan savollarga javoblar va support bilan bog'lanish.",
+    title: "Yordam doim shu yerda",
+    body: "Biror nima noaniq bo'lsa — bu \"?\" tugmasini bosing. Tez-tez beriladigan savollar va support bilan bog'lanish. Hammasi tayyor!",
+    mode: "info",
   },
 ];
 
