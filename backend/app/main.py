@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
 from app.config import get_settings
+from app.observability import init_sentry
 from app.routers import (
     admin,
     analytics,
@@ -30,6 +31,10 @@ from app.routers import (
 
 logger = logging.getLogger("app.main")
 settings = get_settings()
+
+# Wire up error reporting before the app starts so any boot-time crash
+# (failed migrations, bad config) is captured.
+init_sentry(component="api")
 
 # Module-level refs so the /webhook/{token} endpoint can reach them.
 _bot: Bot | None = None

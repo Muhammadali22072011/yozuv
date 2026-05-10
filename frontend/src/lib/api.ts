@@ -1,4 +1,7 @@
-const API = "https://yozuv.onrender.com";
+// Build-time env var (Next.js inlines NEXT_PUBLIC_* into the client bundle).
+// The render.com URL stays as a fallback so a miss-configured deploy still
+// boots, but production should always set NEXT_PUBLIC_API_URL explicitly.
+const API = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

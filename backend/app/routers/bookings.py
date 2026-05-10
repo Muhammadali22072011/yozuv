@@ -24,10 +24,13 @@ from app.schemas.booking import (
     BookingRead,
     BookingUpdate,
 )
+from app.config import get_settings
 from app.services import booking_service, waitlist_service
+from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
 from app.utils.ratelimit import rate_limit
 from app.utils.slots import get_available_slots
+from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter(tags=["bookings"])
 me_router = APIRouter(prefix="/business/me", tags=["bookings"])
@@ -43,6 +46,22 @@ def create_public_booking(
     db: Session = Depends(get_db),
     _: None = Depends(_booking_rate),
 ):
+    # Trust the verified Telegram WebApp initData, not the client-supplied
+    # client_telegram_id field. Anyone hitting this endpoint directly could
+    # otherwise impersonate any Telegram account or fill a competitor's
+    # calendar with bookings tied to fake identities.
+    settings = get_settings()
+    if not body.init_data:
+        raise HTTPException(401, "init_data is required")
+    if not settings.bot_token:
+        raise HTTPException(500, "BOT_TOKEN not configured")
+    try:
+        parsed = validate_telegram_init_data(body.init_data, settings.bot_token)
+        tg_user = parse_user_from_init(parsed)
+        body.client_telegram_id = int(tg_user["id"])
+    except Exception as exc:
+        raise HTTPException(401, f"Invalid initData: {exc}") from exc
+
     try:
         booking = booking_service.create_booking(db, body)
     except ValueError as e:
@@ -64,11 +83,16 @@ def create_public_booking(
         owner = db.query(User).filter(User.id == business.owner_id).first()
         if owner:
             from bot.locales import t
+            from app.utils.htmlsafe import h
 
             lang = str(business.language)
+            client_name = (
+                f"{client.first_name} {client.last_name}".strip()
+                or str(client.telegram_id)
+            )
             text = t(lang, "new_booking_owner").format(
-                client=f"{client.first_name} {client.last_name}".strip() or str(client.telegram_id),
-                service=service.name if service else "",
+                client=h(client_name),
+                service=h(service.name) if service else "",
                 date=booking.date.strftime("%d-%b"),
                 time=booking.start_time.strftime("%H:%M"),
             )
@@ -81,6 +105,10 @@ def create_public_booking(
                 ]
             }
             send_telegram_message(int(owner.telegram_id), text, reply_markup=kb)
+
+    # Notify any open SSE streams for this business so the dashboard
+    # bell updates without a 60s wait.
+    publish_event(business.id, "booking_new")
 
     return booking
 
@@ -300,6 +328,7 @@ def cancel(
     if not b:
         raise HTTPException(404, "Not found")
     db.commit()
+    publish_event(business.id, "booking_cancelled")
 
     # Slot freed — pull the head of the waitlist for this exact slot
     # and ping them on Telegram. Best-effort: a failure here mustn't
@@ -315,7 +344,7 @@ def cancel(
         db.commit()
         if result is not None:
             _entry, client, biz, service = result
-            from app.utils.htmlsafe import h  # local import — htmlsafe ships in PR fix/bot-html-escape
+            from app.utils.htmlsafe import h
 
             send_telegram_message(
                 int(client.telegram_id),
@@ -325,7 +354,7 @@ def cancel(
                 f"Tezroq yozilib qolmasin — botda «Yozilish»ni bosing.",
             )
     except Exception:
-        # We already committed the cancel; the waitlist hop is purely
+        # The cancel is already committed; the waitlist hop is purely
         # additive. Swallow exceptions so a flaky Telegram call doesn't
         # poison the response.
         pass

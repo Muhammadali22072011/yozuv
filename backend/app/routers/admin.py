@@ -3,9 +3,10 @@ import io
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
@@ -27,8 +28,13 @@ from app.models import (
     SubscriptionStatus,
     User,
 )
+import httpx
+
 from app.services.audit_service import log_admin_action
-from app.services.notification_service import send_telegram_message
+from app.services.notification_service import (
+    send_telegram_message,
+    send_telegram_message_async,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -633,33 +639,58 @@ def _select_broadcast_recipients(
     return q.all()
 
 
-def _send_broadcast_to(
+async def _send_broadcast_to(
     rows: list[tuple[Business, User]], text: str
 ) -> tuple[int, int, list[int]]:
+    """Fan out a broadcast over a shared AsyncClient.
+
+    The previous implementation looped sequentially with sync httpx, which
+    blocked the FastAPI worker for tens of seconds on a 1k-recipient
+    broadcast. We now run with bounded concurrency (Telegram's per-bot
+    rate limit is ~30 msg/s, so we cap concurrent sends at 20 to stay
+    polite).
+    """
+    import asyncio
+
+    sem = asyncio.Semaphore(20)
     sent = 0
     failed = 0
     failed_ids: list[int] = []
-    for _b, owner in rows:
-        if not owner or not owner.telegram_id:
-            failed += 1
-            continue
-        try:
-            send_telegram_message(int(owner.telegram_id), text)
-            sent += 1
-        except Exception:
-            failed += 1
-            failed_ids.append(int(owner.telegram_id))
+
+    async with httpx.AsyncClient() as client:
+        async def _one(owner_tg: int) -> bool:
+            async with sem:
+                try:
+                    await send_telegram_message_async(owner_tg, text, client=client)
+                    return True
+                except Exception:
+                    return False
+
+        targets: list[int] = []
+        for _b, owner in rows:
+            if not owner or not owner.telegram_id:
+                failed += 1
+                continue
+            targets.append(int(owner.telegram_id))
+
+        results = await asyncio.gather(*[_one(t) for t in targets])
+        for tg, ok in zip(targets, results):
+            if ok:
+                sent += 1
+            else:
+                failed += 1
+                failed_ids.append(tg)
     return sent, failed, failed_ids
 
 
 @router.post("/broadcast")
-def broadcast(
+async def broadcast(
     body: BroadcastBody,
     db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user),
 ):
     rows = _select_broadcast_recipients(db, body.only_active, body.filters)
-    sent, failed, failed_ids = _send_broadcast_to(rows, body.text)
+    sent, failed, failed_ids = await _send_broadcast_to(rows, body.text)
 
     msg = BroadcastMessage(
         sent_by_telegram_id=int(admin.telegram_id),
@@ -725,25 +756,37 @@ def list_broadcasts(
 
 
 @router.post("/broadcasts/{broadcast_id}/retry")
-def retry_broadcast(
+async def retry_broadcast(
     broadcast_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user),
 ):
+    import asyncio
+
     msg = db.query(BroadcastMessage).filter(BroadcastMessage.id == broadcast_id).first()
     if not msg:
         raise HTTPException(404, "Broadcast not found")
     if not msg.failed_recipients:
         return {"id": str(msg.id), "sent": 0, "failed": 0, "no_failed": True}
-    targets = msg.failed_recipients
-    sent = 0
+    targets = list(msg.failed_recipients)
+    sem = asyncio.Semaphore(20)
     still_failed: list[int] = []
-    for tg in targets:
-        try:
-            send_telegram_message(int(tg), msg.text)
-            sent += 1
-        except Exception:
-            still_failed.append(int(tg))
+    sent = 0
+
+    async with httpx.AsyncClient() as client:
+        async def _one(tg: int) -> bool:
+            async with sem:
+                try:
+                    await send_telegram_message_async(int(tg), msg.text, client=client)
+                    return True
+                except Exception:
+                    return False
+        results = await asyncio.gather(*[_one(t) for t in targets])
+        for tg, ok in zip(targets, results):
+            if ok:
+                sent += 1
+            else:
+                still_failed.append(int(tg))
     msg.sent_count = int(msg.sent_count) + sent
     msg.failed_count = len(still_failed)
     msg.failed_recipients = still_failed
@@ -787,12 +830,31 @@ def backup_export(db: Session = Depends(get_db), _=Depends(get_admin_user)):
     )
 
 
+CONFIRM_PHRASE = "REPLACE-ALL-DATA"
+
+
 @router.post("/backup/import")
 async def backup_import(
     file: UploadFile = File(...),
+    confirm: str = Form(""),
     db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user),
 ):
+    """Restore the database from a backup JSON.
+
+    DESTRUCTIVE: every existing row in every table is deleted before the
+    backup is loaded. Requires `confirm=REPLACE-ALL-DATA` in the
+    multipart form so a misclick (or a leaked admin token) can't wipe
+    production. Before the wipe runs we also write an automatic
+    snapshot of the current state to UPLOADS_DIR/backups/auto-<ts>.json
+    so an admin who realises mid-deploy can recover.
+    """
+    if confirm != CONFIRM_PHRASE:
+        raise HTTPException(
+            400,
+            f"This endpoint replaces ALL data. Set confirm={CONFIRM_PHRASE} to proceed.",
+        )
+
     contents = await file.read()
     if len(contents) > MAX_BACKUP_BYTES:
         raise HTTPException(400, "File too large (max 50 MB)")
@@ -815,6 +877,32 @@ async def backup_import(
     if unknown:
         raise HTTPException(400, f"Unknown tables in backup: {', '.join(unknown)}")
 
+    # Snapshot current state before destruction so the admin has an
+    # undo path. Best-effort — if it fails, the import still proceeds
+    # (the audit log will reflect that no auto-backup was written).
+    snapshot_path: str | None = None
+    try:
+        from app.config import get_settings as _get_settings
+
+        backups_dir = Path(_get_settings().uploads_dir) / "backups"
+        backups_dir.mkdir(parents=True, exist_ok=True)
+        snapshot: dict = {
+            "version": BACKUP_VERSION,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "tables": {
+                table.name: [dict(r) for r in db.execute(select(table)).mappings().all()]
+                for table in Base.metadata.sorted_tables
+            },
+        }
+        snap_name = f"auto-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
+        (backups_dir / snap_name).write_text(
+            json.dumps(snapshot, default=_json_default, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        snapshot_path = str(backups_dir / snap_name)
+    except Exception:
+        snapshot_path = None
+
     try:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(delete(table))
@@ -834,7 +922,11 @@ async def backup_import(
             "backup.import",
             "",
             None,
-            {"inserted_rows": inserted, "tables": len(tables_in)},
+            {
+                "inserted_rows": inserted,
+                "tables": len(tables_in),
+                "auto_snapshot": snapshot_path,
+            },
         )
         db.commit()
     except HTTPException:
@@ -844,7 +936,12 @@ async def backup_import(
         db.rollback()
         raise HTTPException(500, f"Import failed: {e}")
 
-    return {"ok": True, "inserted_rows": inserted, "tables": len(tables_in)}
+    return {
+        "ok": True,
+        "inserted_rows": inserted,
+        "tables": len(tables_in),
+        "auto_snapshot": snapshot_path,
+    }
 
 
 @router.get("/audit-log")

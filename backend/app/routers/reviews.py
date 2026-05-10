@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_owned_business
 from app.models import Booking, BookingStatus, Business, Client, Review
+from app.services.event_bus import publish as publish_event
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter(tags=["reviews"])
@@ -79,6 +80,10 @@ def submit_review(body: ReviewCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(review)
 
+    # Tell any open SSE streams for the reviewed business so the bell
+    # updates immediately rather than after a 60s poll cycle.
+    publish_event(review.business_id, "review_new")
+
     client_name = "Mijoz"
     if review.client_id:
         c = db.query(Client).filter(Client.id == review.client_id).first()
@@ -145,6 +150,31 @@ def reviews_summary(
     cnt = (
         db.query(func.count(Review.id))
         .filter(Review.business_id == business.id)
+        .scalar()
+    )
+    return {"average_rating": round(float(avg or 0), 2), "count": int(cnt or 0)}
+
+
+@router.get("/business/{slug}/reviews-summary")
+def public_reviews_summary(slug: str, db: Session = Depends(get_db)):
+    """Public read used by the SEO landing page and the bot to render
+    rating without authentication. Skips the comment text — that lives
+    on the owner-only list endpoint."""
+    biz = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
+    if not biz:
+        raise HTTPException(404, "Not found")
+    avg = (
+        db.query(func.avg(Review.rating))
+        .filter(Review.business_id == biz.id)
+        .scalar()
+    )
+    cnt = (
+        db.query(func.count(Review.id))
+        .filter(Review.business_id == biz.id)
         .scalar()
     )
     return {"average_rating": round(float(avg or 0), 2), "count": int(cnt or 0)}

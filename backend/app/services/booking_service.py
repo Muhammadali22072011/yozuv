@@ -2,7 +2,7 @@ import hashlib
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -155,6 +155,16 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
 
     final_price, promo = _apply_promo(db, business.id, payload.promo_code, service.price)
 
+    # Loyalty stamp card: every Nth completed visit of this service for
+    # this client is free. We compute against COMPLETED bookings only —
+    # PENDING/CONFIRMED don't count yet (the visit hasn't happened) and
+    # CANCELLED/NO_SHOW shouldn't either. The "+ 1" is for the booking
+    # we're about to create: if it itself becomes the Nth completed
+    # visit, we discount it now instead of after-the-fact.
+    final_price = _maybe_apply_loyalty(
+        db, service, client.id, base_price=final_price
+    )
+
     booking = Booking(
         business_id=business.id,
         service_id=service.id,
@@ -171,6 +181,55 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
     if promo is not None:
         promo.uses_count = (promo.uses_count or 0) + 1
     return booking
+
+
+def _maybe_apply_loyalty(
+    db: Session, service: Service, client_id, base_price: int
+) -> int:
+    """Apply 100% discount when the booking we're about to create lands
+    on a stamp boundary (every Nth completed visit). Returns the
+    possibly-discounted price."""
+    n = int(getattr(service, "loyalty_after_visits", 0) or 0)
+    if n <= 0:
+        return base_price
+    completed = (
+        db.query(func.count(Booking.id))
+        .filter(
+            Booking.service_id == service.id,
+            Booking.client_id == client_id,
+            Booking.status == BookingStatus.COMPLETED,
+        )
+        .scalar()
+        or 0
+    )
+    # Visit number we are about to create (1-based). If it's a multiple
+    # of N, this is a free stamp.
+    next_visit = int(completed) + 1
+    if next_visit % n == 0:
+        return 0
+    return base_price
+
+
+def loyalty_progress(
+    db: Session, service: Service, client_id
+) -> tuple[int, int] | None:
+    """(stamps_collected, stamps_required) for a (service, client) pair,
+    or None when loyalty is disabled. Used by the bot UI to render the
+    "3 / 5 ⭐" hint."""
+    n = int(getattr(service, "loyalty_after_visits", 0) or 0)
+    if n <= 0:
+        return None
+    completed = (
+        db.query(func.count(Booking.id))
+        .filter(
+            Booking.service_id == service.id,
+            Booking.client_id == client_id,
+            Booking.status == BookingStatus.COMPLETED,
+        )
+        .scalar()
+        or 0
+    )
+    return int(completed) % n, n
 
 
 def _apply_promo(db: Session, business_id: UUID, raw_code: str, base_price: int) -> tuple[int, PromoCode | None]:
