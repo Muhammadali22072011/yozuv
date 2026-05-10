@@ -29,6 +29,10 @@ class BookingStatus(str, enum.Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
     COMPLETED = "COMPLETED"
+    # Auto-flipped by the nightly task when a confirmed/pending booking
+    # passes its end_time without being marked COMPLETED. Owner can
+    # still override it back to COMPLETED if it was an oversight.
+    NO_SHOW = "NO_SHOW"
 
 
 class PaymentStatus(str, enum.Enum):

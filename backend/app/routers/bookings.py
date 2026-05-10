@@ -1,3 +1,4 @@
+import uuid as _uuid
 from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from app.schemas.booking import (
 )
 from app.config import get_settings
 from app.services import booking_service, waitlist_service
+from app.services.booking_service import acquire_slot_lock
 from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
 from app.utils.ratelimit import rate_limit
@@ -141,6 +143,10 @@ def create_owner_booking(
     )
     end_time = end_dt.time()
 
+    # SELECT FOR UPDATE only locks existing rows; an empty slot has none.
+    # Take an advisory lock first so two parallel owner-creates serialize.
+    acquire_slot_lock(db, business.id, body.date, body.start_time)
+
     conflict = (
         db.query(Booking)
         .filter(
@@ -251,6 +257,12 @@ def update_booking(
         )
     )
     new_end = (datetime.combine(new_date, new_start) + timedelta(minutes=duration)).time()
+
+    # Same advisory lock the create path uses — without it, two parallel
+    # owner-edits to the same destination slot can both pass the
+    # conflict check (since the destination has no row yet) and produce
+    # an overlap.
+    acquire_slot_lock(db, business.id, new_date, new_start)
 
     conflict = (
         db.query(Booking)
@@ -376,16 +388,10 @@ class WaitlistJoinBody(BaseModel):
 
 @router.post("/waitlist/join")
 def waitlist_join(
-    body: "WaitlistJoinBody",
+    body: WaitlistJoinBody,
     db: Session = Depends(get_db),
     _: None = Depends(_booking_rate),
 ):
-    from app.config import get_settings
-    from app.utils.telegram_webapp import (
-        parse_user_from_init,
-        validate_telegram_init_data,
-    )
-
     settings = get_settings()
     if not settings.bot_token:
         raise HTTPException(500, "BOT_TOKEN not configured")
@@ -396,9 +402,8 @@ def waitlist_join(
     except Exception as exc:
         raise HTTPException(401, f"Invalid initData: {exc}") from exc
 
-    # Make sure (business, service) align — refuse a service that
-    # belongs to a different business so a client can't park a
-    # waitlist entry against a stranger's calendar.
+    # Verify service belongs to the requested business so a client
+    # can't park a waitlist entry against a stranger's calendar.
     service = (
         db.query(Service)
         .filter(
@@ -467,6 +472,164 @@ def waitlist_for_owner(
         }
         for entry, c, svc in rows
     ]
+
+
+class RecurringBookingBody(BaseModel):
+    """Owner-created recurring booking series."""
+
+    client_id: UUID
+    service_id: UUID
+    staff_id: UUID | None = None
+    start_date: date
+    start_time: time
+    occurrences: int = Field(..., ge=2, le=26)
+    strict: bool = False
+
+
+@me_router.post("/bookings/recurring")
+def create_recurring(
+    body: RecurringBookingBody,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    service = (
+        db.query(Service)
+        .filter(
+            Service.id == body.service_id,
+            Service.business_id == business.id,
+            Service.is_active.is_(True),
+        )
+        .first()
+    )
+    if not service:
+        raise HTTPException(404, "Service not found")
+    client = db.query(Client).filter(Client.id == body.client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    staff_id = body.staff_id
+    if staff_id is not None:
+        from app.models import Staff
+
+        staff_row = (
+            db.query(Staff)
+            .filter(
+                Staff.id == staff_id,
+                Staff.business_id == business.id,
+                Staff.is_active.is_(True),
+            )
+            .first()
+        )
+        if not staff_row:
+            raise HTTPException(404, "Staff not found")
+
+    try:
+        mode = (
+            business.confirmation_mode
+            if isinstance(business.confirmation_mode, ConfirmationMode)
+            else ConfirmationMode(str(business.confirmation_mode))
+        )
+    except ValueError:
+        mode = ConfirmationMode.AUTO
+    status = (
+        BookingStatus.CONFIRMED
+        if mode == ConfirmationMode.AUTO
+        else BookingStatus.PENDING
+    )
+
+    series_id = _uuid.uuid4()
+    created: list[Booking] = []
+    skipped: list[str] = []
+
+    for i in range(body.occurrences):
+        slot_date = body.start_date + timedelta(weeks=i)
+        end_dt = datetime.combine(slot_date, body.start_time) + timedelta(
+            minutes=service.duration_minutes
+        )
+        end_time = end_dt.time()
+
+        conflict_q = (
+            db.query(Booking)
+            .filter(
+                Booking.business_id == business.id,
+                Booking.date == slot_date,
+                Booking.status.in_(
+                    [BookingStatus.PENDING, BookingStatus.CONFIRMED]
+                ),
+                Booking.start_time < end_time,
+                Booking.end_time > body.start_time,
+            )
+        )
+        if staff_id is not None:
+            conflict_q = conflict_q.filter(Booking.staff_id == staff_id)
+        conflict = conflict_q.first()
+        if conflict is not None:
+            if body.strict:
+                for b in created:
+                    db.delete(b)
+                db.commit()
+                raise HTTPException(
+                    400,
+                    f"Conflict on {slot_date.isoformat()} {body.start_time.strftime('%H:%M')}",
+                )
+            skipped.append(slot_date.isoformat())
+            continue
+
+        booking = Booking(
+            business_id=business.id,
+            service_id=service.id,
+            client_id=client.id,
+            staff_id=staff_id,
+            date=slot_date,
+            start_time=body.start_time,
+            end_time=end_time,
+            status=status,
+            payment_status=PaymentStatus.UNPAID,
+            payment_amount=service.price,
+            recurrence_id=series_id,
+        )
+        db.add(booking)
+        created.append(booking)
+    db.commit()
+
+    return {
+        "recurrence_id": str(series_id),
+        "created": [str(b.id) for b in created],
+        "skipped_dates": skipped,
+        "occurrences_requested": body.occurrences,
+        "occurrences_created": len(created),
+    }
+
+
+@me_router.delete("/bookings/recurring/{recurrence_id}")
+def cancel_recurring(
+    recurrence_id: UUID,
+    only_future: bool = True,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    today = date.today()
+    q = (
+        db.query(Booking)
+        .filter(
+            Booking.business_id == business.id,
+            Booking.recurrence_id == recurrence_id,
+            Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+        )
+    )
+    if only_future:
+        q = q.filter(Booking.date >= today)
+    affected = q.all()
+    if not affected:
+        raise HTTPException(404, "No active bookings in series")
+    for b in affected:
+        b.status = BookingStatus.CANCELLED
+        b.cancel_reason = "series_cancelled"
+    db.commit()
+    return {
+        "recurrence_id": str(recurrence_id),
+        "cancelled": len(affected),
+    }
 
 
 @public_router.get("/{slug}/slots")
