@@ -63,6 +63,19 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.0  # set to e.g. 0.1 for 10% perf samples
     sentry_environment: str = ""  # falls back to app_env when blank
 
+    # Daily DB backup -> S3-compatible bucket. Leave bucket blank to
+    # disable. Works with AWS S3, Backblaze B2 (set endpoint_url),
+    # Cloudflare R2 (set endpoint_url), MinIO, etc.
+    backup_s3_bucket: str = ""
+    backup_s3_prefix: str = "yozuv/backups/"
+    backup_s3_endpoint_url: str = ""  # blank = AWS S3 default
+    backup_s3_region: str = "us-east-1"
+    backup_s3_access_key_id: str = ""
+    backup_s3_secret_access_key: str = ""
+    # How many days of nightly snapshots to keep. Older objects are
+    # pruned by the same task that writes the new snapshot.
+    backup_s3_retention_days: int = 30
+
     @model_validator(mode="after")
     def validate_production(self):
         if (self.app_env or "").lower() != "production":

@@ -22,6 +22,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.reminders.trial_expiry_warnings",
         "schedule": crontab(hour=9, minute=0),
     },
+    # 02:30 Tashkent — quiet window. No-op when BACKUP_S3_BUCKET blank.
+    "s3-backup-nightly": {
+        "task": "app.tasks.backup.snapshot_to_s3",
+        "schedule": crontab(hour=2, minute=30),
+    },
     # 03:00 Tashkent — quiet hour, runs after even late-evening bookings.
     "flag-no-shows-nightly": {
         "task": "app.tasks.reminders.flag_no_shows",
@@ -31,3 +36,4 @@ celery_app.conf.beat_schedule = {
 
 celery_app.autodiscover_tasks(["app.tasks"])
 import app.tasks.reminders  # noqa: E402,F401
+import app.tasks.backup  # noqa: E402,F401
