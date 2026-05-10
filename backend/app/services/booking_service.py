@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime, timedelta
+from datetime import date as _date, datetime, time as _time, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, text
@@ -10,6 +10,7 @@ from app.models import (
     BookingStatus,
     Business,
     Client,
+    ClientBlock,
     PaymentStatus,
     PromoCode,
     Service,
@@ -21,24 +22,34 @@ from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
 
 
-def _slot_lock_key(business_id: UUID, payload: BookingCreatePublic) -> int:
-    raw = f"{business_id}:{payload.date.isoformat()}:{payload.start_time.isoformat()}".encode()
+def _slot_lock_key_for(business_id: UUID, slot_date: _date, slot_start: _time) -> int:
+    raw = f"{business_id}:{slot_date.isoformat()}:{slot_start.isoformat()}".encode()
     return int(hashlib.md5(raw).hexdigest()[:8], 16) & 0x7FFFFFFF
 
 
-def _acquire_slot_lock(db: Session, business_id: UUID, payload: BookingCreatePublic) -> None:
-    """Take a transaction-scoped advisory lock so concurrent bookers serialize on the same slot.
+def acquire_slot_lock(
+    db: Session, business_id: UUID, slot_date: _date, slot_start: _time
+) -> None:
+    """Take a transaction-scoped advisory lock so concurrent writes serialize on the same slot.
 
-    SELECT FOR UPDATE only locks existing rows; for an empty slot there is nothing to lock,
-    which lets two clients pass the conflict check at the same time. The advisory lock
-    serializes them on (business_id, date, start_time) until the transaction commits.
+    SELECT FOR UPDATE only locks rows that already exist; for an empty
+    slot there is nothing to lock, which lets two writers pass the
+    conflict check at the same time and both insert. The advisory lock
+    serializes them on (business_id, date, start_time) until the
+    transaction commits. No-op outside Postgres so the SQLite test DB
+    still works.
     """
     if db.bind is None or db.bind.dialect.name != "postgresql":
         return
     db.execute(
         text("SELECT pg_advisory_xact_lock(:key)"),
-        {"key": _slot_lock_key(business_id, payload)},
+        {"key": _slot_lock_key_for(business_id, slot_date, slot_start)},
     )
+
+
+def _acquire_slot_lock(db: Session, business_id: UUID, payload: BookingCreatePublic) -> None:
+    """Backwards-compatible wrapper for the public-flow service callers."""
+    acquire_slot_lock(db, business_id, payload.date, payload.start_time)
 
 
 def get_or_create_client(db: Session, data: BookingCreatePublic) -> Client:
@@ -146,6 +157,27 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
             raise ValueError("Staff not found")
 
     _check_active_subscription(db, business.id)
+
+    # Refuse if this client is on the business's block list. We translate
+    # the telegram_id into a Client row first; clients with no row yet
+    # can't be blocked, by definition.
+    blocking_client = (
+        db.query(Client)
+        .filter(Client.telegram_id == payload.client_telegram_id)
+        .first()
+    )
+    if blocking_client is not None:
+        blocked = (
+            db.query(ClientBlock)
+            .filter(
+                ClientBlock.business_id == business.id,
+                ClientBlock.client_id == blocking_client.id,
+            )
+            .first()
+        )
+        if blocked is not None:
+            # Generic message — don't reveal block reason to the client.
+            raise ValueError("Booking is not allowed for this client")
 
     _acquire_slot_lock(db, business.id, payload)
 
@@ -322,7 +354,19 @@ def validate_promo_for_business(db: Session, business_id: UUID, raw_code: str, b
     }
 
 
-def cancel_booking(db: Session, booking_id: UUID, business_id: UUID, reason: str = "") -> Booking | None:
+def cancel_booking(
+    db: Session,
+    booking_id: UUID,
+    business_id: UUID,
+    reason: str = "",
+    by_client: bool = False,
+) -> Booking | None:
+    """Cancel a booking. When ``by_client`` is set we also evaluate the
+    business's ``cancel_window_hours`` policy and flag the cancel as
+    ``late_cancel`` if it falls inside the window. Owner-side cancels
+    don't get the flag — the late-cancel signal is about clients."""
+    from datetime import timezone as _tz
+
     b = (
         db.query(Booking)
         .filter(Booking.id == booking_id, Booking.business_id == business_id)
@@ -330,6 +374,16 @@ def cancel_booking(db: Session, booking_id: UUID, business_id: UUID, reason: str
     )
     if not b:
         return None
+    if by_client:
+        biz = db.query(Business).filter(Business.id == business_id).first()
+        window_hours = int(getattr(biz, "cancel_window_hours", 0) or 0)
+        if window_hours > 0:
+            slot_dt = datetime.combine(b.date, b.start_time)
+            # Naive compare — slot_dt is local and the window is wall-clock
+            # hours; using utcnow() here would shift by TZ_OFFSET.
+            now_local = datetime.now(_tz.utc).astimezone().replace(tzinfo=None)
+            if slot_dt - now_local < timedelta(hours=window_hours):
+                b.late_cancel = True
     b.status = BookingStatus.CANCELLED
     b.cancel_reason = reason
     return b

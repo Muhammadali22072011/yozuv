@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, time, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +51,15 @@ class Booking(Base):
     )
     payment_amount: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # Set when cancel_booking ran inside business.cancel_window_hours of
+    # start_time. Owner-side cancellations don't flip it — only client
+    # initiated cancels via the bot count as "late".
+    late_cancel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Shared id for every booking that belongs to the same recurrence
+    # series ("каждый вторник на 4 недели"). NULL for one-off bookings.
+    recurrence_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     # Set when the 1-hour-before reminder is delivered. Used by
     # send_hourly_reminders to skip rows already notified — Celery beat
