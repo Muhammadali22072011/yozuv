@@ -4,12 +4,14 @@
 #   Root Directory = backend
 # so this file and the Dockerfile are found, and build context = backend/.
 #
-# For the Telegram bot, create a SECOND Railway service on the same repo,
-# also with Root Directory = backend, and override Start Command to:
-#   python -m bot.main
-# (the bot doesn't need a public domain or healthcheck)
+# Telegram bot: DO NOT run a second service with `python -m bot.main`.
+# That entrypoint is polling-mode for LOCAL DEVELOPMENT only and will
+# raise TelegramConflictError if it runs alongside this API. In
+# production the bot lives inside this same FastAPI process via webhook
+# (see app/main.py lifespan) and registers itself at PUBLIC_API_URL
+# /webhook with the WEBHOOK_SECRET shared header.
 #
-# For a Celery worker (optional, third service):
+# For a Celery worker (optional, separate service):
 #   celery -A app.celery_app worker --loglevel=info
 
 [build]

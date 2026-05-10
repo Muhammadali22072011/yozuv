@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class PlatformSettings(Base):
@@ -16,5 +20,5 @@ class PlatformSettings(Base):
     card_holder: Mapped[str] = mapped_column(String(128), default="")
     payment_comment: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow(), onupdate=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )

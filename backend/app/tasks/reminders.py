@@ -11,6 +11,7 @@ REMINDER_WINDOW_MAX = 61.0
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Service, Subscription, SubscriptionPlan, SubscriptionStatus
 from app.services.notification_service import send_telegram_message
+from app.utils.htmlsafe import h
 from bot.locales import t
 
 
@@ -50,8 +51,8 @@ def send_hourly_reminders() -> None:
             if client and business:
                 lang = str(business.language)
                 text = t(lang, "reminder").format(
-                    service=service.name if service else "",
-                    business=business.name,
+                    service=h(service.name) if service else "",
+                    business=h(business.name),
                 )
                 send_telegram_message(int(client.telegram_id), text)
             # Mark sent even when client/business is missing — otherwise the

@@ -2,6 +2,11 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.config import get_settings
+from app.observability import init_sentry
+
+# Celery worker is a separate process from the FastAPI app, so it needs
+# its own init. Tagged with component=worker so issues split cleanly.
+init_sentry(component="worker")
 
 settings = get_settings()
 

@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Review, Service
 from app.utils.clock import local_today
+from app.utils.htmlsafe import h
 from bot.keyboards.inline import back_to_menu_kb
 from bot.utils import safe_edit_text
 
@@ -56,10 +57,10 @@ async def cmd_mybookings(message: Message):
             svc = db.query(Service).filter(Service.id == b.service_id).first()
             existing = db.query(Review).filter(Review.booking_id == b.id).first()
             text = (
-                f"📍 {biz.name if biz else ''}\n"
-                f"📋 {svc.name if svc else ''}\n"
+                f"📍 {h(biz.name) if biz else ''}\n"
+                f"📋 {h(svc.name) if svc else ''}\n"
                 f"📅 {b.date.isoformat()} {b.start_time.strftime('%H:%M')}\n"
-                f"Holat: {b.status}"
+                f"Holat: {h(b.status)}"
             )
             if existing:
                 text += f"\nSizning bahoyingiz: {'⭐' * existing.rating}"
@@ -78,8 +79,8 @@ async def cmd_mybookings(message: Message):
             label = "✏️ Bahoni o'zgartirish" if existing else "⭐ Baho berish"
             text = (
                 f"✅ <b>Tashrif yakunlandi</b>\n"
-                f"📍 {biz.name if biz else ''}\n"
-                f"📋 {svc.name if svc else ''}\n"
+                f"📍 {h(biz.name) if biz else ''}\n"
+                f"📋 {h(svc.name) if svc else ''}\n"
                 f"📅 {b.date.isoformat()} {b.start_time.strftime('%H:%M')}"
             )
             if existing:
@@ -126,7 +127,7 @@ async def my_from_menu(cb: CallbackQuery):
         lines = ["📋 <b>Mening yozilishlarim</b>", ""]
         for bk in bookings:
             svc = db.query(Service).filter(Service.id == bk.service_id).first()
-            lines.append(f"• {bk.date} {bk.start_time.strftime('%H:%M')} — {svc.name if svc else ''}")
+            lines.append(f"• {bk.date} {bk.start_time.strftime('%H:%M')} — {h(svc.name) if svc else ''}")
         await safe_edit_text(cb, "\n".join(lines), reply_markup=back_to_menu_kb(slug))
     finally:
         db.close()
