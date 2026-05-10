@@ -1,11 +1,13 @@
+import json
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, get_owned_business
+from app.deps import get_current_user, get_owned_business, get_owned_business_download
 from app.models import (
     Booking,
     BookingStatus,
@@ -59,6 +61,18 @@ def create_business(
     db.add(b)
     db.flush()
 
+    # Mirror the legacy owner_id link in the new Membership graph so
+    # both code paths see this business going forward.
+    from app.models import Membership, MembershipRole
+
+    db.add(
+        Membership(
+            user_id=user.id,
+            business_id=b.id,
+            role=MembershipRole.OWNER,
+        )
+    )
+
     now = datetime.now(timezone.utc)
     trial = Subscription(
         business_id=b.id,
@@ -90,6 +104,39 @@ def create_business(
 @router.get("/me", response_model=BusinessMe)
 def my_business(business: Business = Depends(get_owned_business)):
     return business
+
+
+@router.get("/memberships")
+def list_memberships(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Every business this user has access to, with the role they hold.
+
+    Used by the upcoming "switch business" UI so an owner of three
+    salons sees all three and can pick which calendar to look at
+    (the X-Business-Id header carries the choice forward).
+    """
+    from app.models import Membership
+
+    rows = (
+        db.query(Membership, Business)
+        .join(Business, Business.id == Membership.business_id)
+        .filter(Membership.user_id == user.id, Business.deleted_at.is_(None))
+        .order_by(Business.name.asc())
+        .all()
+    )
+    return [
+        {
+            "business_id": str(b.id),
+            "name": b.name,
+            "slug": b.slug,
+            "logo_url": b.logo_url or "",
+            "role": getattr(m.role, "value", str(m.role)),
+            "is_active": bool(b.is_active),
+        }
+        for m, b in rows
+    ]
 
 
 @router.get("/me/dashboard")
@@ -290,7 +337,7 @@ def my_notifications(
                 "id": f"review:{r.id}",
                 "type": "review_new",
                 "title": f"Yangi izoh ({int(r.rating or 0)}★)",
-                "body": (r.text or "")[:120] or "Izohsiz baho",
+                "body": (r.comment or "")[:120] or "Izohsiz baho",
                 "created_at": r.created_at.isoformat() if r.created_at else now.isoformat(),
                 "link": "/dashboard/reviews",
             }
@@ -329,6 +376,53 @@ def my_notifications(
 
     items.sort(key=lambda x: x["created_at"], reverse=True)
     return {"items": items, "generated_at": now.isoformat()}
+
+
+@router.get("/me/notifications/stream")
+async def notifications_stream(
+    # SSE: native EventSource can't send custom headers, so we accept
+    # the access token via ?token= as well as the usual Authorization
+    # header (same pattern as the brochure download).
+    business: Business = Depends(get_owned_business_download),
+):
+    """Server-Sent Events feed for the dashboard bell.
+
+    The dashboard previously polled /notifications every 60 seconds,
+    which generated 60k requests per hour per 1k owners regardless of
+    whether anything changed. This endpoint emits one event per real
+    change (booking, review, subscription update) so the frontend
+    only re-fetches when there's actually new data.
+
+    Format: one `event:` block per kind, plus a `ping` heartbeat every
+    30s so proxies don't kill an otherwise-quiet connection.
+    """
+    from app.services.event_bus import subscribe
+
+    async def gen():
+        # Tell the client they're connected so we have something to
+        # write before the first real event — long flushes through
+        # an idle proxy can otherwise close the stream early.
+        yield "event: connected\ndata: {}\n\n"
+        try:
+            async for kind in subscribe(business.id):
+                payload = json.dumps({"kind": kind})
+                yield f"event: {kind}\ndata: {payload}\n\n"
+        except Exception:
+            # Either the client disconnected or the producer died.
+            # Either way — close cleanly so the frontend can retry.
+            return
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            # Disable proxy buffering — Render/Railway have nginx in
+            # front and it'll otherwise sit on the response for ~60s.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.put("/me", response_model=BusinessMe)
@@ -448,7 +542,13 @@ def public_business(slug: str, db: Session = Depends(get_db)):
 
 @router.get("/{slug}/services", response_model=list)
 def public_services(slug: str, db: Session = Depends(get_db)):
-    b = db.query(Business).filter(Business.slug == slug).first()
+    # Mirror the public detail endpoint above: a deactivated/soft-deleted
+    # business shouldn't keep advertising its menu.
+    b = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
     if not b:
         raise HTTPException(404, "Not found")
     services = (

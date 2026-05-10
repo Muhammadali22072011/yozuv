@@ -3,7 +3,14 @@ import hmac
 import time
 from urllib.parse import parse_qsl
 
-INIT_DATA_TTL_SECONDS = 86400
+# How long Telegram WebApp initData stays valid after the auth_date the
+# WebApp embedded in it. Telegram's spec only says "should be checked
+# against replay" without a fixed cap, so this is a policy choice. One
+# hour is the sweet spot: long enough to survive a slow user typing in
+# a multi-step flow, short enough that an initData scraped from a
+# referrer header / log line / proxied request is useless by the time
+# an attacker can replay it.
+INIT_DATA_TTL_SECONDS = 3600
 
 
 def validate_telegram_init_data(init_data: str, bot_token: str) -> dict[str, str]:

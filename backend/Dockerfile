@@ -17,10 +17,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python deps as root, then drop privileges before copying app
+# code. Running uvicorn / Celery / the bot as root is unnecessary and
+# would let any future RCE write anywhere on the filesystem.
 COPY requirements.txt ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY . .
+# Create the runtime user and the upload directory it needs to write to.
+RUN useradd --create-home --uid 1000 app \
+    && mkdir -p /tmp/yozuv_uploads \
+    && chown -R app:app /app /tmp/yozuv_uploads
+
+COPY --chown=app:app . .
+
+USER app
 
 # Railway injects $PORT. Default to 8000 for local `docker run`.
 ENV PORT=8000

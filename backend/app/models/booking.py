@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.dialects.postgresql import UUID
@@ -7,6 +7,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.enums import BookingStatus, PaymentStatus
+
+
+def _utcnow() -> datetime:
+    """tz-aware UTC default for ``DateTime(timezone=True)`` columns.
+
+    ``datetime.utcnow()`` returns a naive datetime; mixing it with the
+    aware values produced everywhere else (``datetime.now(timezone.utc)``)
+    triggers ``can't compare offset-naive and offset-aware`` mid-query.
+    """
+    return datetime.now(timezone.utc)
 
 
 class Booking(Base):
@@ -41,7 +51,7 @@ class Booking(Base):
     )
     payment_amount: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     # Set when the 1-hour-before reminder is delivered. Used by
     # send_hourly_reminders to skip rows already notified — Celery beat
     # runs every minute, so without dedup the same booking can fall in
