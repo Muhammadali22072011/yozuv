@@ -14,6 +14,7 @@ from app.models import (
     PaymentStatus,
     PromoCode,
     Service,
+    Staff,
     Subscription,
     SubscriptionStatus,
 )
@@ -89,9 +90,26 @@ def _check_active_subscription(db: Session, business_id: UUID) -> None:
         raise ValueError("Business subscription has expired")
 
 
-def _check_slot_available(db: Session, business_id: UUID, payload: BookingCreatePublic, end_time) -> None:
-    """Check that the requested slot is free — uses SELECT FOR UPDATE to prevent races."""
-    conflict = (
+def _check_slot_available(
+    db: Session,
+    business_id: UUID,
+    payload: BookingCreatePublic,
+    end_time,
+    staff_id: UUID | None = None,
+) -> None:
+    """Check that the requested slot is free.
+
+    Two interpretations of "free":
+
+    * `staff_id is None` — single-resource business (legacy bookings,
+      or a business that hasn't onboarded staff). Conflict is per-business:
+      no two overlapping bookings for the same business.
+
+    * `staff_id is set` — multi-staff. Conflict is per-staff: this exact
+      master can't have two overlapping bookings, but a different
+      master may run a parallel session.
+    """
+    q = (
         db.query(Booking)
         .filter(
             Booking.business_id == business_id,
@@ -100,9 +118,10 @@ def _check_slot_available(db: Session, business_id: UUID, payload: BookingCreate
             Booking.start_time < end_time,
             Booking.end_time > payload.start_time,
         )
-        .with_for_update()
-        .first()
     )
+    if staff_id is not None:
+        q = q.filter(Booking.staff_id == staff_id)
+    conflict = q.with_for_update().first()
     if conflict:
         raise ValueError("Requested time slot is no longer available")
 
@@ -118,6 +137,24 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
     )
     if not service:
         raise ValueError("Service not found")
+
+    # When the booking targets a specific staff member, validate that
+    # the staff exists, belongs to this business and is active. We
+    # don't fail closed when the optional service<->staff link is
+    # absent — owners may have services any-staff can do.
+    staff_id = getattr(payload, "staff_id", None)
+    if staff_id is not None:
+        staff_row = (
+            db.query(Staff)
+            .filter(
+                Staff.id == staff_id,
+                Staff.business_id == business.id,
+                Staff.is_active.is_(True),
+            )
+            .first()
+        )
+        if not staff_row:
+            raise ValueError("Staff not found")
 
     _check_active_subscription(db, business.id)
 
@@ -167,7 +204,9 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
         if own_existing:
             return own_existing
 
-    _check_slot_available(db, business.id, payload, end_dt.time())
+    _check_slot_available(
+        db, business.id, payload, end_dt.time(), staff_id=staff_id
+    )
 
     client = get_or_create_client(db, payload)
 
@@ -201,6 +240,7 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
         business_id=business.id,
         service_id=service.id,
         client_id=client.id,
+        staff_id=staff_id,
         date=payload.date,
         start_time=payload.start_time,
         end_time=end_dt.time(),

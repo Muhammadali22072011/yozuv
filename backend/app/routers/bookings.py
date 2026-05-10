@@ -138,16 +138,35 @@ def create_owner_booking(
     if not client:
         raise HTTPException(404, "Client not found")
 
+    # If owner targets a specific staff, validate ownership and active.
+    staff_id = body.staff_id
+    if staff_id is not None:
+        from app.models import Staff
+
+        staff_row = (
+            db.query(Staff)
+            .filter(
+                Staff.id == staff_id,
+                Staff.business_id == business.id,
+                Staff.is_active.is_(True),
+            )
+            .first()
+        )
+        if not staff_row:
+            raise HTTPException(404, "Staff not found")
+
     end_dt = datetime.combine(body.date, body.start_time) + timedelta(
         minutes=service.duration_minutes
     )
     end_time = end_dt.time()
 
-    # SELECT FOR UPDATE only locks existing rows; an empty slot has none.
-    # Take an advisory lock first so two parallel owner-creates serialize.
+    # Take an advisory lock first so two parallel owner-creates
+    # serialize on this slot (SELECT FOR UPDATE alone doesn't lock an
+    # empty slot — there's no row to lock yet). Mirror the public path:
+    # per-staff conflict when staff_id set, per-business otherwise.
     acquire_slot_lock(db, business.id, body.date, body.start_time)
 
-    conflict = (
+    conflict_q = (
         db.query(Booking)
         .filter(
             Booking.business_id == business.id,
@@ -156,9 +175,10 @@ def create_owner_booking(
             Booking.start_time < end_time,
             Booking.end_time > body.start_time,
         )
-        .with_for_update()
-        .first()
     )
+    if staff_id is not None:
+        conflict_q = conflict_q.filter(Booking.staff_id == staff_id)
+    conflict = conflict_q.with_for_update().first()
     if conflict:
         raise HTTPException(400, "Vaqt band")
 
@@ -178,6 +198,7 @@ def create_owner_booking(
         business_id=business.id,
         service_id=service.id,
         client_id=client.id,
+        staff_id=staff_id,
         date=body.date,
         start_time=body.start_time,
         end_time=end_time,

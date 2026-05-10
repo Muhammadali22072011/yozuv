@@ -21,6 +21,11 @@ class BookingCreatePublic(BaseModel):
 
     business_id: UUID
     service_id: UUID
+    # Optional: when the business has multiple staff members the
+    # client picks a specific master. Omit (or pass null) to fall
+    # back to the shared-calendar interpretation used by single-
+    # resource businesses.
+    staff_id: UUID | None = None
     init_data: str = Field(default="", description="Telegram WebApp initData; required for HTTP callers")
     client_telegram_id: int = 0
     client_first_name: str = ""
@@ -34,6 +39,7 @@ class BookingCreatePublic(BaseModel):
 class BookingCreateOwner(BaseModel):
     client_id: UUID
     service_id: UUID
+    staff_id: UUID | None = None
     date: date
     start_time: time
 
@@ -43,6 +49,7 @@ class BookingRead(BaseModel):
     business_id: UUID
     service_id: UUID | None
     client_id: UUID | None
+    staff_id: UUID | None = None
     date: date
     start_time: time
     end_time: time

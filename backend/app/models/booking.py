@@ -32,6 +32,15 @@ class Booking(Base):
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Optional staff member who'll perform the booking. NULL means the
+    # business operates in single-resource mode (legacy bookings + any
+    # business that hasn't onboarded staff yet). Conflict logic in the
+    # booking service treats NULL as "shared calendar" and a set value
+    # as "this specific staff calendar" so multi-staff and single-staff
+    # businesses coexist without a forced migration.
+    staff_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     end_time: Mapped[time] = mapped_column(Time, nullable=False)
