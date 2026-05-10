@@ -1,24 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from "lucide-react";
-import { ScreenHeader, YzLoader, BookingSheet } from "@/components/yz";
+import { ScreenHeader, YzLoader, BookingSheet, useToast } from "@/components/yz";
 import type { ClientLite, ServiceLite } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 import type { BookingRow } from "@/types";
 
-// Calendar week-view dashboard.
+// Calendar week-view dashboard with drag-drop rescheduling.
 //
-// The list view at /dashboard/bookings is fine for "today" but useless
-// for "do I have anything Friday afternoon next week?" The week grid
-// puts seven days × 24 hours on screen, with each booking rendered as
-// a card placed at its slot. Clicking a card opens the existing
-// BookingSheet for edit/cancel/complete.
-//
-// Day picker, time-slot grid, status colours — all inline. Drag-drop
-// rescheduling is out of scope for v1; an owner can still tap a card
-// and use the sheet's date/time edit (#feat/edit-booking already
-// shipped) for the same effect.
+// Each booking card is a draggable element; drop targets are the day
+// columns. Drop position determines the new start_time (snapped to
+// 5-minute increments — finer is unusable on phone, coarser misses
+// the typical 15-min granularity). On drop we PATCH the booking and
+// re-fetch; if the server rejects (slot conflict) we toast the error
+// and the card snaps back automatically because we never moved it
+// optimistically — the re-fetch overrides the local state.
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 8); // 08:00 - 21:00
 const HOUR_PX = 56; // height in CSS px for one hour
@@ -80,12 +77,22 @@ function hmDiffMinutes(a: string, b: string): number {
   return Math.max(0, B.h * 60 + B.m - (A.h * 60 + A.m));
 }
 
+// Snap drop position to a multiple of this many minutes. 15 is the
+// typical scheduling granularity in salons / barbershops; 5 would let
+// the owner drop "10:23" by accident on touch devices.
+const DROP_SNAP_MINUTES = 15;
+
 export default function CalendarPage() {
+  const toast = useToast();
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date()));
   const [bookings, setBookings] = useState<BookingRow[] | null>(null);
   const [services, setServices] = useState<ServiceLite[]>([]);
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [active, setActive] = useState<BookingRow | null>(null);
+  // While a card is being dragged we track which booking it is so we
+  // can disable the click handler and apply a "ghost" style.
+  const draggingId = useRef<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const days = useMemo(() => {
     const out: Date[] = [];
@@ -131,6 +138,44 @@ export default function CalendarPage() {
     }
     return map;
   }, [bookings, days]);
+
+  // Drop handler — given a target date column and pixel offset within
+  // that column (relative to top), compute the new start_time and PATCH.
+  async function handleDrop(targetDate: Date, offsetPx: number, bookingId: string) {
+    const b = (bookings || []).find((x) => x.id === bookingId);
+    if (!b) return;
+
+    // Convert pixel-y to minute-of-day, then snap.
+    const minutesFromTop = (offsetPx / HOUR_PX) * 60;
+    const totalMinutes = HOURS[0] * 60 + minutesFromTop;
+    const snapped =
+      Math.round(totalMinutes / DROP_SNAP_MINUTES) * DROP_SNAP_MINUTES;
+    const startH = Math.floor(snapped / 60);
+    const startM = snapped % 60;
+    if (startH < HOURS[0] || startH > HOURS[HOURS.length - 1]) return;
+
+    const newDate = fmtDateISO(targetDate);
+    const newStart = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`;
+
+    // No-op if nothing actually moved.
+    if (b.date.slice(0, 10) === newDate && b.start_time.slice(0, 5) === newStart) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await apiFetch(`/api/business/me/bookings/${b.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ date: newDate, start_time: newStart }),
+      });
+      await load();
+    } catch (e) {
+      toast((e as Error).message || "Vaqt band yoki xatolik");
+    } finally {
+      setBusy(false);
+      draggingId.current = null;
+    }
+  }
 
   if (!bookings) return <YzLoader fullscreen />;
 
@@ -242,6 +287,19 @@ export default function CalendarPage() {
                   key={iso}
                   className="relative border-l border-ink-100"
                   style={{ height: HOUR_PX * HOURS.length }}
+                  // Drop target — accept the dragged booking and pass
+                  // the y-offset within this column to the handler.
+                  onDragOver={(e) => {
+                    if (draggingId.current) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (!draggingId.current) return;
+                    e.preventDefault();
+                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                    const offsetPx = e.clientY - rect.top;
+                    const id = draggingId.current;
+                    handleDrop(d, offsetPx, id);
+                  }}
                 >
                   {/* Hour grid lines */}
                   {HOURS.map((_, i) => (
@@ -269,11 +327,44 @@ export default function CalendarPage() {
                     const c = statusColor(b.status);
                     const svc = services.find((s) => s.id === b.service_id);
                     const cli = clients.find((x) => x.id === b.client_id);
+                    // Cancelled bookings shouldn't be draggable —
+                    // they're terminal and the conflict-check on the
+                    // backend would reject the PATCH anyway.
+                    const draggable =
+                      b.status !== "CANCELLED" && b.status !== "COMPLETED";
                     return (
                       <button
                         key={b.id}
-                        onClick={() => setActive(b)}
-                        className="absolute left-1 right-1 overflow-hidden rounded-lg border-l-[3px] px-1.5 py-1 text-left transition-transform hover:scale-[1.01]"
+                        onClick={() => {
+                          // Suppress the click that fires after a drag
+                          // ends — otherwise the BookingSheet pops open
+                          // immediately after every reschedule.
+                          if (draggingId.current === b.id) return;
+                          setActive(b);
+                        }}
+                        draggable={draggable && !busy}
+                        onDragStart={(e) => {
+                          draggingId.current = b.id;
+                          // Hide the default drag preview at the
+                          // browser's discretion — Chrome shows the
+                          // card translucently which reads as ghost.
+                          if (e.dataTransfer) {
+                            e.dataTransfer.effectAllowed = "move";
+                            // setData is required on Firefox to start
+                            // an HTML5 drag at all.
+                            e.dataTransfer.setData("text/plain", b.id);
+                          }
+                        }}
+                        onDragEnd={() => {
+                          // Always clear, even if the drop landed
+                          // outside any target.
+                          setTimeout(() => {
+                            draggingId.current = null;
+                          }, 0);
+                        }}
+                        className={`absolute left-1 right-1 overflow-hidden rounded-lg border-l-[3px] px-1.5 py-1 text-left transition-transform hover:scale-[1.01] ${
+                          draggable ? "cursor-grab active:cursor-grabbing" : ""
+                        } ${draggingId.current === b.id ? "opacity-50" : ""}`}
                         style={{
                           top,
                           height,
