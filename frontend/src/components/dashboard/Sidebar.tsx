@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
-  CalendarRange,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -32,9 +31,6 @@ const SUPPORT_TG =
 const links = [
   { href: "/dashboard", label: "Bosh sahifa", icon: LayoutDashboard },
   { href: "/dashboard/bookings", label: "Yozilishlar", icon: CalendarDays },
-  // Week-view calendar (PR #50/#52). Listed separately so the owner
-  // sees it even if they bookmark /dashboard/bookings.
-  { href: "/dashboard/calendar", label: "Kalendar", icon: CalendarRange },
   { href: "/dashboard/services", label: "Xizmatlar", icon: Scissors },
   // Multi-staff page (PR #43/#49). Visible from day one — the empty
   // state nudges the owner to add their first master.
