@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Bell,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { Avatar, ScreenHeader, useToast } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
-import { resetTours } from "@/lib/tour-state";
+import { startOnboarding } from "@/lib/onboarding";
 import type { BusinessMe } from "@/types";
 
 type CardCreateResp = {
@@ -38,6 +39,7 @@ type Plan = "MONTHLY" | "YEARLY";
 
 export default function SettingsPage() {
   const toast = useToast();
+  const router = useRouter();
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [me, setMe] = useState<{ first_name: string; last_name: string } | null>(null);
   const [sub, setSub] = useState<{ plan: string; status: string; expires_at: string | null } | null>(null);
@@ -152,11 +154,12 @@ export default function SettingsPage() {
   }
 
   function replayTours() {
-    // Wipe the localStorage flag so every page's tour fires again next
-    // time the user lands on it. We don't auto-navigate — the user can
-    // open whichever page they want a refresher on.
-    resetTours();
-    toast("Obuchenie qaytadan ishga tushirildi");
+    // Kick off the full guided sequence again — startOnboarding wipes
+    // tour-seen flags, sets the active onboarding cursor, and routes
+    // the user to the first page (Profil). Each per-page tour will
+    // auto-fire and auto-advance to the next page on dismiss.
+    toast("Obuchenie qaytadan boshlanmoqda…");
+    startOnboarding((p) => router.push(p));
   }
 
   function openSupport() {

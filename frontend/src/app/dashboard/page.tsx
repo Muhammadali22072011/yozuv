@@ -39,6 +39,7 @@ import {
 import type { ClientLite, NotificationItem, ServiceLite, TourStep } from "@/components/yz";
 import { StatusBadge } from "@/components/yz/StatusBadge";
 import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
+import { startOnboarding } from "@/lib/onboarding";
 
 const DASHBOARD_TOUR_ID = "dashboard_v1";
 
@@ -149,10 +150,24 @@ export default function DashboardHome() {
     setWelcomeOpen(true);
   }, [ready]);
 
-  function dismissTutorial() {
+  function skipWelcome() {
+    // User clicked "O'zim ko'raman" — they don't want the guided tour
+    // at all. Mark seen and bail; no onboarding chain, no nag again.
     markTourSeen(DASHBOARD_TOUR_ID);
     setWelcomeOpen(false);
     setTourOpen(false);
+  }
+
+  function finishDashboardTour() {
+    // The user just closed the dashboard's own 5-step tour, either by
+    // finishing or X-ing out. Mark seen, and — since they chose the
+    // guided path — kick off the multi-page onboarding chain. They
+    // can still skip individual pages from there.
+    markTourSeen(DASHBOARD_TOUR_ID);
+    setTourOpen(false);
+    setTimeout(() => {
+      startOnboarding((p) => router.push(p));
+    }, 250);
   }
 
   function startTour() {
@@ -476,13 +491,13 @@ export default function DashboardHome() {
         open={welcomeOpen}
         ownerName={ownerFirst}
         onTour={startTour}
-        onSkip={dismissTutorial}
+        onSkip={skipWelcome}
       />
 
       <Tour
         open={tourOpen}
         steps={DASHBOARD_TOUR_STEPS}
-        onClose={dismissTutorial}
+        onClose={finishDashboardTour}
       />
 
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
