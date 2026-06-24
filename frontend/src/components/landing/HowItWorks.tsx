@@ -1,8 +1,8 @@
 const steps = [
-  { n: "01", title: "Biznes yarating", desc: "Nom, kategoriya va xizmatlarni qo‘shing." },
-  { n: "02", title: "Telegramda ulaning", desc: "Havola va QR — mijozlar bot orqali yoziladi." },
-  { n: "03", title: "Slotlarni boshqaring", desc: "Tasdiqlash rejimi: avto, qo‘lda yoki oldindan to‘lov." },
-  { n: "04", title: "O‘sing", desc: "Analitika va eslatmalar bilan qayta tashriflarni oshiring." },
+  { n: "01", title: "Biznesni qo‘shing", desc: "Nom, kategoriya va xizmatlarni kiriting — 2 daqiqa." },
+  { n: "02", title: "Telegramga ulang", desc: "Havola va QR tayyor — mijozlar shu zahoti bot orqali yozila boshlaydi." },
+  { n: "03", title: "Yozuvlarni qabul qiling", desc: "Tasdiqni o‘zingiz tanlaysiz: avto, qo‘lda yoki oldindan to‘lov bilan." },
+  { n: "04", title: "O‘sing", desc: "Eslatma va analitika qayta tashriflarni oshiradi — daromad ko‘rinib turadi." },
 ];
 
 export function HowItWorks() {
@@ -13,7 +13,7 @@ export function HowItWorks() {
           Qanday ishlaydi
         </div>
         <h2 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
-          4 ta qadam — va sizda biznes onlayn
+          5 daqiqada ishga tushasiz
         </h2>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">

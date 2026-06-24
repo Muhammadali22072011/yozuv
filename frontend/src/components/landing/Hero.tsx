@@ -25,11 +25,13 @@ export function Hero() {
           </div>
 
           <h1 className="font-display text-4xl font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl md:text-6xl">
-            Mijozlar Telegram orqali yoziladi
+            Daftarni unuting — mijozlar o&apos;zi Telegramda yoziladi
           </h1>
           <p className="max-w-xl text-base text-white/80 md:text-lg">
-            Barbershop, salon, klinika va boshqa xizmatlar uchun slotlar, eslatmalar
-            va analitika — bitta platformada.
+            Barbershop, salon va klinikalar uchun. Bot mijozni qabul qiladi, bo&apos;sh
+            slotni o&apos;zi topadi va tashrifdan 1 soat oldin eslatadi —
+            &laquo;keluvdim, esimdan chiqibdi&raquo; kamayadi. Sayt ham, ilova ham
+            kerak emas.
           </p>
 
           <div className="flex flex-wrap gap-3 pt-2">
@@ -37,14 +39,22 @@ export function Hero() {
               href="/auth/login"
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3.5 font-display text-[15px] font-bold text-indigo-700 shadow-[0_10px_30px_rgba(0,0,0,0.2)] tap"
             >
-              Boshlash · 14 kun bepul <ArrowRight className="h-4 w-4" />
+              Bepul boshlash — 14 kun <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="#pricing"
               className="inline-flex items-center justify-center rounded-2xl bg-white/15 px-6 py-3.5 font-display text-[15px] font-bold text-white backdrop-blur tap"
             >
-              Tariflar
+              Tariflarni ko&apos;rish
             </Link>
+          </div>
+          <p className="text-[13px] font-medium text-white/70">
+            Karta kerak emas · Payme/Click orqali to&apos;lov
+          </p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-[13px] font-semibold text-white/80">
+            <span>📱 Telegram ichida</span>
+            <span>💳 Payme va Click</span>
+            <span>🔔 Avtomatik eslatmalar</span>
           </div>
         </div>
 

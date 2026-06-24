@@ -16,8 +16,11 @@ export function Categories() {
         Kategoriyalar
       </div>
       <h2 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
-        Kimga mos keladi
+        Sizning sohangiz uchun ham ishlaydi
       </h2>
+      <p className="mt-3 max-w-xl text-ink-500">
+        Yozuv orqali yoziladigan har qanday xizmat — barberdan klinikagacha.
+      </p>
 
       <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-4">
         {cats.map((c) => (
