@@ -85,6 +85,28 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const text = await res.text();
+    let detailMessage: string | null = null;
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (parsed && typeof parsed === "object" && "detail" in parsed) {
+        const detail = (parsed as { detail: unknown }).detail;
+        if (typeof detail === "string") {
+          detailMessage = detail;
+        } else if (Array.isArray(detail)) {
+          const message = detail
+            .map((item) =>
+              item && typeof item === "object" && "msg" in item
+                ? String((item as { msg: unknown }).msg)
+                : String(item)
+            )
+            .join("; ");
+          if (message) detailMessage = message;
+        }
+      }
+    } catch {
+      // Non-JSON body (JSON.parse threw) — fall through to raw text below.
+    }
+    if (detailMessage) throw new Error(detailMessage);
     throw new Error(text || res.statusText);
   }
   if (res.status === 204) return undefined as T;

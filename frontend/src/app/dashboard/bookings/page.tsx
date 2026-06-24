@@ -228,7 +228,7 @@ export default function BookingsPage() {
       </div>
 
       {/* Timeline / list */}
-      <div className="mt-4 px-4 md:px-0">
+      <div data-tour="bookings-list" className="mt-4 px-4 md:px-0">
         {view === "day" ? (
           <div>
             {hours.map((h) => {
@@ -264,7 +264,7 @@ export default function BookingsPage() {
             })}
           </div>
         ) : (
-          <div data-tour="bookings-list" className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             {visible.length === 0 ? (
               <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
                 Yozilish yo‘q

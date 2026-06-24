@@ -168,37 +168,39 @@ export default function QrPage() {
           <div className="mt-4 break-all font-mono text-xs text-ink-500">{telegramLink || "—"}</div>
         </div>
 
-        <div data-tour="qr-download" className="mt-4 grid grid-cols-2 gap-2.5">
-          <button onClick={downloadQr} disabled={!qrUrl} className="btn-primary">
-            <Download className="mr-2 h-4 w-4" /> QR yuklash
-          </button>
-          <button onClick={shareLink} disabled={!telegramLink} className="btn-soft">
-            <Share2 className="mr-2 h-4 w-4" /> {copied ? "✓ Nusxa" : "Ulashish"}
-          </button>
-        </div>
-
-        <div className="card-soft mt-4 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-display text-[15px] font-bold text-ink-900">Broshyura</div>
-              <div className="mt-0.5 text-xs text-ink-500">A5 PDF — xizmatlar va QR</div>
-            </div>
-            <button
-              onClick={downloadBrochure}
-              disabled={downloading || !biz}
-              className="btn-primary px-4 py-3 text-sm"
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              {downloading ? "…" : "PDF"}
+        <div data-tour="qr-download">
+          <div className="mt-4 grid grid-cols-2 gap-2.5">
+            <button onClick={downloadQr} disabled={!qrUrl} className="btn-primary whitespace-nowrap">
+              <Download className="mr-2 h-4 w-4" /> QR yuklash
+            </button>
+            <button onClick={shareLink} disabled={!telegramLink} className="btn-soft whitespace-nowrap">
+              <Share2 className="mr-2 h-4 w-4" /> {copied ? "✓ Nusxa" : "Ulashish"}
             </button>
           </div>
-          {pdfUrl && (
-            <iframe
-              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-              title="Broshyura preview"
-              className="mt-3 h-80 w-full rounded-2xl border border-ink-100 bg-white"
-            />
-          )}
+
+          <div className="card-soft mt-4 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-display text-[15px] font-bold text-ink-900">Broshyura</div>
+                <div className="mt-0.5 text-xs text-ink-500">A5 PDF — xizmatlar va QR</div>
+              </div>
+              <button
+                onClick={downloadBrochure}
+                disabled={downloading || !biz}
+                className="btn-primary px-4 py-3 text-sm"
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                {downloading ? "…" : "PDF"}
+              </button>
+            </div>
+            {pdfUrl && (
+              <iframe
+                src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                title="Broshyura preview"
+                className="mt-3 h-80 w-full rounded-2xl border border-ink-100 bg-white"
+              />
+            )}
+          </div>
         </div>
       </div>
 

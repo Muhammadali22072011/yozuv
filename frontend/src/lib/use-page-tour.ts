@@ -24,7 +24,7 @@
 // Bumping the version suffix (e.g. "services_v1" -> "services_v2")
 // re-shows the tour to everyone after a major UI redesign.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TourStep } from "@/components/yz/Tour";
 import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
@@ -39,6 +39,20 @@ const OPEN_DELAY_MS = 400;
 export function usePageTour(tourId: string, steps: TourStep[]) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  // Holds the deferred advanceOnboarding timer scheduled in dismiss().
+  // Captured so it can be cleared on unmount (and before re-scheduling),
+  // otherwise it could fire after the component is gone — e.g. the user
+  // X-quits the guided sequence inside the 250ms window.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimer.current !== null) {
+        clearTimeout(advanceTimer.current);
+        advanceTimer.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // During guided onboarding the tour ALWAYS fires when the user
@@ -60,7 +74,11 @@ export function usePageTour(tourId: string, steps: TourStep[]) {
     // step, push them to the next page. Defer a tick so the tour's
     // own close animation finishes before the route change.
     if (isOnboardingActive() && isOnboardingTour(tourId)) {
-      setTimeout(() => {
+      if (advanceTimer.current !== null) {
+        clearTimeout(advanceTimer.current);
+      }
+      advanceTimer.current = setTimeout(() => {
+        advanceTimer.current = null;
         advanceOnboarding(tourId, (p) => router.push(p));
       }, 250);
     }
