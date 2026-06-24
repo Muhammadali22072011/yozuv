@@ -66,7 +66,7 @@ export function TourFloat({ tour }: { tour: PageTour }) {
       {/* Onboarding progress chip — only when actively in the sequence. */}
       {progress && isOnboardingActive() && (
         <div
-          className="fixed left-1/2 top-4 z-30 -translate-x-1/2 transform"
+          className="fixed left-1/2 top-4 z-[3100] -translate-x-1/2 transform"
           aria-live="polite"
         >
           <div className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-1.5 text-white shadow-[0_10px_30px_rgba(72,83,245,0.35)]">
@@ -89,8 +89,8 @@ export function TourFloat({ tour }: { tour: PageTour }) {
       {!tour.open && (
         <button
           onClick={tour.replay}
-          aria-label="Obuchenie qaytadan ko'rish"
-          title="Obuchenie qaytadan ko'rish"
+          aria-label="Qo'llanmani qayta ko'rish"
+          title="Qo'llanmani qayta ko'rish"
           className="fixed bottom-24 right-4 z-30 grid h-11 w-11 place-items-center rounded-full bg-white text-indigo-600 shadow-[0_10px_30px_rgba(72,83,245,0.22)] ring-1 ring-indigo-100 tap md:bottom-6"
         >
           <HelpCircle className="h-5 w-5" strokeWidth={2.2} />

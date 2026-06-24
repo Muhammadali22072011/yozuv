@@ -12,8 +12,8 @@ const STAFF_TOUR: TourStep[] = [
     targetSelector: "[data-tour='staff-add']",
     title: "Mutaxassis qo'shing",
     body:
-      "Salonda bir nechta usta bor bo'lsa — har birini alohida qo'shing. Mijozlar botda yozilayotganda kerakli ustani tanlaydi.",
-    mode: "action",
+      "Shu yerdan mutaxassis qo'shasiz. Salonda bir nechta usta bo'lsa — har birini alohida qo'shsangiz bo'ladi. Mijozlar botda yozilayotganda kerakli ustani tanlaydi.",
+    mode: "info",
   },
 ];
 
@@ -109,6 +109,7 @@ export default function StaffPage() {
               yozilishda mijoz aniq ustani tanlaydi.
             </div>
             <button
+              data-tour="staff-add"
               onClick={() => setCreating(true)}
               className="btn-primary mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-sm"
             >

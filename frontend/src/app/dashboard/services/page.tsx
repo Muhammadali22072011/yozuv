@@ -18,10 +18,10 @@ import { usePageTour } from "@/lib/use-page-tour";
 const SERVICES_TOUR: TourStep[] = [
   {
     targetSelector: "[data-tour='services-add']",
-    title: "Xizmat qo'shing",
+    title: "Xizmat qo'shish tugmasi",
     body:
-      "Birinchi qadamingiz — xizmatlar ro'yxati. Soch olish, massaj, stomatologiya — har biri narxi va davomiyligi bilan. Mijoz aynan shu ro'yxatdan tanlaydi.",
-    mode: "action",
+      "Mana shu “+” tugmasi orqali yangi xizmat qo'shasiz. Soch olish, massaj, stomatologiya — har biri narxi va davomiyligi bilan. Mijoz aynan shu ro'yxatdan tanlaydi.",
+    mode: "info",
   },
   {
     targetSelector: "[data-tour='services-list']",

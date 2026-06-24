@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
+  CalendarDays,
   Copy,
   HelpCircle,
   Phone,
@@ -14,6 +15,7 @@ import {
   Star,
   Tag,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import type { BookingRow, BusinessMe } from "@/types";
@@ -21,7 +23,6 @@ import {
   BookingCard,
   BookingSheet,
   HelpDrawer,
-  HeroGradient,
   NotificationSheet,
   SectionLabel,
   Tour,
@@ -159,15 +160,23 @@ export default function DashboardHome() {
   }
 
   function finishDashboardTour() {
-    // The user just closed the dashboard's own 5-step tour, either by
-    // finishing or X-ing out. Mark seen, and — since they chose the
-    // guided path — kick off the multi-page onboarding chain. They
-    // can still skip individual pages from there.
+    // The user reached the natural end of the dashboard's own 5-step
+    // tour (last step's "Tayyor"). Mark seen, and — since they chose
+    // the guided path and saw it through — kick off the multi-page
+    // onboarding chain. They can still skip individual pages from there.
     markTourSeen(DASHBOARD_TOUR_ID);
     setTourOpen(false);
     setTimeout(() => {
       startOnboarding((p) => router.push(p));
     }, 250);
+  }
+
+  function dismissDashboardTour() {
+    // User X-ed out or hit "O'tkazib yuborish" on the dashboard tour.
+    // They opted out of the guided path, so just mark seen and close —
+    // no forced onboarding chain (mirrors skipWelcome).
+    markTourSeen(DASHBOARD_TOUR_ID);
+    setTourOpen(false);
   }
 
   function startTour() {
@@ -267,16 +276,14 @@ export default function DashboardHome() {
 
   return (
     <div className="-mx-4 md:-mx-0">
-      {/* Hero */}
-      <HeroGradient>
+      {/* Header — светлый, воздушный (Havodor) */}
+      <div className="px-4 pt-3 md:px-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <YzLogo size={34} variant="light" />
+            <YzLogo size={34} />
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/70">
-                YOZUV · {plan}
-              </div>
-              <div className="font-display text-[17px] font-bold tracking-tight text-white">
+              <div className="eyebrow">YOZUV · {plan}</div>
+              <div className="font-display text-[17px] font-extrabold tracking-tighter text-ink-900">
                 {biz.name}
               </div>
             </div>
@@ -285,18 +292,18 @@ export default function DashboardHome() {
             <button
               data-tour="help"
               onClick={() => setHelpOpen(true)}
-              className="grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
               aria-label="Yordam"
             >
-              <HelpCircle className="h-5 w-5 text-white" strokeWidth={2} />
+              <HelpCircle className="h-5 w-5" strokeWidth={2} />
             </button>
             <button
               data-tour="bell"
               onClick={openNotifications}
-              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
               aria-label="Bildirishnomalar"
             >
-              <Bell className="h-5 w-5 text-white" strokeWidth={2} />
+              <Bell className="h-5 w-5" strokeWidth={2} />
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
@@ -306,33 +313,50 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="mt-7">
-          <div className="text-sm font-medium text-white/70">Assalomu alaykum,</div>
-          <div className="mt-0.5 font-display text-[28px] font-extrabold tracking-tight text-white">
-            {ownerFirst} 👋
-          </div>
-          <div className="mt-1.5 text-sm font-medium text-white/85">{longDate(new Date())}</div>
+        <div className="mt-5">
+          <div className="text-sm font-medium text-ink-500">Assalomu alaykum,</div>
+          <div className="mt-0.5 display-xl text-[28px]">{ownerFirst} 👋</div>
+          <div className="mt-1 text-sm font-medium text-ink-400">{longDate(new Date())}</div>
         </div>
-      </HeroGradient>
+      </div>
 
-      {/* Stats card pulled up */}
-      <div className="relative -mt-16 px-4 md:px-0">
-        <div data-tour="hero-stats" className="rounded-3xl bg-white p-5 shadow-soft-lg">
-          <div className="grid grid-cols-3 gap-0 divide-x divide-ink-200">
-            <StatBox label="Bugun" value={summary.bookings} sub="yozilish" color="#4853F5" />
-            <StatBox
-              label="Daromad"
-              value={fmtShort(summary.revenue)}
-              sub="so‘m"
-              color="#22C8A8"
-              trend={summary.weekRevenue > 0 ? `+${Math.round((summary.revenue / summary.weekRevenue) * 100)}%` : undefined}
-            />
-            <StatBox
-              label="Mijozlar"
-              value={summary.clients}
-              sub="hafta"
-              color="#FFC94A"
-            />
+      {/* Статистика — яркая feature-карта дохода + пастель-плитки */}
+      <div data-tour="hero-stats" className="mt-5 px-4 md:px-0">
+        <div className="yz-feature relative overflow-hidden rounded-4xl p-5">
+          <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+          <div className="relative text-[13px] font-semibold text-white/75">Bugungi daromad</div>
+          <div className="relative mt-1 tnum display-xl text-[30px] text-white">{fmtSum(summary.revenue)}</div>
+          <div className="relative mt-2.5 flex items-center gap-2">
+            {summary.weekRevenue > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white">
+                <TrendingUp className="h-3.5 w-3.5" strokeWidth={2.4} />
+                +{Math.round((summary.revenue / summary.weekRevenue) * 100)}%
+              </span>
+            )}
+            <span className="text-[12px] font-semibold text-white/75">
+              so‘m · bu hafta {fmtShort(summary.weekRevenue)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="tile-indigo">
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-indigo-600">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div className="mt-3 tnum font-display text-[26px] font-extrabold tracking-tighter text-indigo-700">
+              {summary.bookings}
+            </div>
+            <div className="text-[12px] font-semibold text-indigo-700/70">Bugun · yozilish</div>
+          </div>
+          <div className="tile-mint">
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-success">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="mt-3 tnum font-display text-[26px] font-extrabold tracking-tighter text-success">
+              {summary.clients}
+            </div>
+            <div className="text-[12px] font-semibold text-success/70">Mijozlar · hafta</div>
           </div>
         </div>
       </div>
@@ -497,7 +521,8 @@ export default function DashboardHome() {
       <Tour
         open={tourOpen}
         steps={DASHBOARD_TOUR_STEPS}
-        onClose={finishDashboardTour}
+        onClose={dismissDashboardTour}
+        onComplete={finishDashboardTour}
       />
 
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
@@ -508,39 +533,6 @@ export default function DashboardHome() {
 function clientName(b: BookingRow, clients: ClientLite[]) {
   const c = clients.find((x) => x.id === b.client_id);
   return c ? `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Mijoz" : "Mijoz";
-}
-
-function StatBox({
-  label,
-  value,
-  sub,
-  color,
-  trend,
-}: {
-  label: string;
-  value: string | number;
-  sub: string;
-  color: string;
-  trend?: string;
-}) {
-  return (
-    <div className="px-2 text-center first:pl-0 last:pr-0">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-400">{label}</div>
-      <div
-        className="mt-1 font-display text-2xl font-extrabold tracking-tight"
-        style={{ color }}
-      >
-        {value}
-      </div>
-      <div className="-mt-0.5 text-[11px] font-semibold text-ink-500">{sub}</div>
-      {trend && (
-        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-bold text-success">
-          <TrendingUp className="h-3 w-3" strokeWidth={2.4} />
-          {trend}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function QuickTile({
@@ -559,13 +551,13 @@ function QuickTile({
   return (
     <Link href={href} className="card-soft flex flex-col gap-2.5 p-3.5 tap">
       <div
-        className="grid h-10 w-10 place-items-center rounded-xl"
+        className="grid h-10 w-10 place-items-center rounded-2xl"
         style={{ background: bg }}
       >
         {icon}
       </div>
       <div>
-        <div className="font-display text-sm font-bold tracking-tight text-ink-900">{label}</div>
+        <div className="font-display text-sm font-bold tracking-tighter text-ink-900">{label}</div>
         <div className="mt-0.5 text-xs text-ink-400">{sub}</div>
       </div>
     </Link>

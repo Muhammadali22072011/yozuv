@@ -17,8 +17,6 @@
 //   onboarding tracks "user is actively in a guided sequence right
 //   now and tours should fire regardless of seen state."
 
-import { resetTours } from "./tour-state";
-
 const ACTIVE_KEY = "yozuv_onboarding_active";
 const STEP_KEY = "yozuv_onboarding_step";
 
@@ -60,7 +58,7 @@ export function getOnboardingStep(): number {
     const raw = window.localStorage.getItem(STEP_KEY);
     const n = raw ? Number(raw) : 0;
     if (Number.isNaN(n)) return 0;
-    return Math.max(0, Math.min(ONBOARDING_SEQUENCE.length, n));
+    return Math.max(0, Math.min(ONBOARDING_SEQUENCE.length - 1, n));
   } catch {
     return 0;
   }
@@ -83,15 +81,18 @@ export function isOnboardingTour(tourId: string): boolean {
 }
 
 /**
- * Begin (or restart) the guided onboarding sequence. Wipes any
- * previous tour-seen flags so each per-page tour fires fresh, then
- * navigates to the first step's page. Caller supplies a navigate fn
- * (router.push) so this module stays framework-agnostic.
+ * Begin (or restart) the guided onboarding sequence. Flips the active
+ * flag, resets the cursor, then navigates to the first step's page.
+ * Per-page tours still fire while onboarding is active because
+ * usePageTour gates on isOnboardingTour() (which overrides the seen
+ * flag), so we no longer wipe the whole tour-seen map here — doing so
+ * also cleared dashboard_v1 and re-triggered the WelcomeModal once the
+ * chain finished. Caller supplies a navigate fn (router.push) so this
+ * module stays framework-agnostic.
  */
 export function startOnboarding(navigate: (path: string) => void): void {
   if (typeof window === "undefined") return;
   try {
-    resetTours();
     window.localStorage.setItem(ACTIVE_KEY, "1");
     setStep(0);
   } catch {

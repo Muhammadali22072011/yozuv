@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
 
 /**
@@ -22,11 +23,30 @@ export function WelcomeModal({
   onTour: () => void;
   onSkip: () => void;
 }) {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onSkip();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    modalRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onSkip]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[2900] flex items-center justify-center bg-black/55 px-4">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="welcome-modal-title"
+        tabIndex={-1}
+        className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.4)] outline-none"
+      >
         <div
           className="px-6 pt-7 pb-6 text-white"
           style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
@@ -34,7 +54,10 @@ export function WelcomeModal({
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/14 backdrop-blur">
             <Sparkles className="h-6 w-6 text-yellow-300" />
           </div>
-          <h2 className="mt-4 font-display text-2xl font-extrabold tracking-tight">
+          <h2
+            id="welcome-modal-title"
+            className="mt-4 break-words font-display text-2xl font-extrabold tracking-tight"
+          >
             Xush kelibsiz, {ownerName}!
           </h2>
           <p className="mt-1.5 text-[14px] leading-relaxed text-white/85">
