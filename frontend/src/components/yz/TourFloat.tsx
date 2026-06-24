@@ -66,19 +66,21 @@ export function TourFloat({ tour }: { tour: PageTour }) {
       {/* Onboarding progress chip — only when actively in the sequence. */}
       {progress && isOnboardingActive() && (
         <div
-          className="fixed left-1/2 top-4 z-30 -translate-x-1/2 transform"
+          className="fixed left-1/2 top-4 z-30 -translate-x-1/2 transform px-3"
+          style={{ top: "max(1rem, env(safe-area-inset-top))" }}
           aria-live="polite"
         >
-          <div className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-1.5 text-white shadow-[0_10px_30px_rgba(72,83,245,0.35)]">
-            <span className="font-display text-[11px] font-extrabold tracking-wide">
+          <div className="animate-card-in flex items-center gap-2 rounded-full bg-white/90 py-1.5 pl-1.5 pr-2 shadow-soft ring-1 ring-ink-100 backdrop-blur">
+            <span className="yz-feature tnum grid place-items-center rounded-full px-2.5 py-1 font-display text-[11px] font-extrabold tracking-wide text-white">
               {progress.current}/{progress.total}
             </span>
-            <span className="text-[12px] font-semibold opacity-90">·</span>
-            <span className="font-display text-[12px] font-bold">{stepLabel}</span>
+            <span className="font-display text-[12px] font-bold text-ink-900">
+              {stepLabel}
+            </span>
             <button
               onClick={quitOnboarding}
               aria-label="Onboardingni o'tkazib yuborish"
-              className="ml-1 grid h-5 w-5 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25"
+              className="tap grid h-5 w-5 place-items-center rounded-full bg-ink-100 text-ink-500 hover:bg-ink-200 hover:text-ink-700"
             >
               <X className="h-3 w-3" strokeWidth={2.6} />
             </button>
@@ -91,9 +93,9 @@ export function TourFloat({ tour }: { tour: PageTour }) {
           onClick={tour.replay}
           aria-label="Obuchenie qaytadan ko'rish"
           title="Obuchenie qaytadan ko'rish"
-          className="fixed bottom-24 right-4 z-30 grid h-11 w-11 place-items-center rounded-full bg-white text-indigo-600 shadow-[0_10px_30px_rgba(72,83,245,0.22)] ring-1 ring-indigo-100 tap md:bottom-6"
+          className="tap fixed bottom-24 right-4 z-30 grid h-12 w-12 place-items-center rounded-2xl bg-white text-indigo-600 shadow-soft-lg ring-1 ring-ink-100 transition-colors hover:bg-indigo-50 active:scale-[0.94] md:bottom-6"
         >
-          <HelpCircle className="h-5 w-5" strokeWidth={2.2} />
+          <HelpCircle className="h-[22px] w-[22px]" strokeWidth={2.2} />
         </button>
       )}
     </>

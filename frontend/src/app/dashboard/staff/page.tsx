@@ -100,29 +100,31 @@ export default function StaffPage() {
       <div className="mt-2 px-4 md:px-0">
         {staff.length === 0 ? (
           <div className="card-soft p-8 text-center">
-            <UserCircle2 className="mx-auto h-10 w-10 text-ink-300" />
-            <div className="mt-3 font-display text-base font-bold text-ink-700">
+            <div className="tile-indigo mx-auto grid h-16 w-16 place-items-center rounded-3xl">
+              <UserCircle2 className="h-8 w-8 text-indigo-600" strokeWidth={1.8} />
+            </div>
+            <div className="mt-4 font-display text-base font-bold text-ink-700">
               Hali mutaxassis qo&apos;shilmagan
             </div>
-            <div className="mt-1 text-xs text-ink-400">
+            <div className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-ink-400">
               Salondagi har bir usta o&apos;z jadvalini boshqarsin — har bir
               yozilishda mijoz aniq ustani tanlaydi.
             </div>
             <button
               onClick={() => setCreating(true)}
-              className="btn-primary mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+              className="btn-primary tap mt-5 inline-flex items-center gap-1.5 px-4 py-2.5 text-sm"
             >
               <Plus className="h-4 w-4" /> Birinchi mutaxassisni qo&apos;shing
             </button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {staff.map((s) => (
               <div
                 key={s.id}
-                className={`card-soft flex items-center gap-3 p-3.5 ${s.is_active ? "" : "opacity-60"}`}
+                className={`card-soft flex items-center gap-3 p-3.5 transition ${s.is_active ? "" : "opacity-60"}`}
               >
-                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-100 text-ink-400">
+                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-indigo-50 text-indigo-400 ring-1 ring-indigo-100/70">
                   {s.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -131,7 +133,7 @@ export default function StaffPage() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <UserCircle2 className="h-7 w-7" />
+                    <UserCircle2 className="h-7 w-7" strokeWidth={1.8} />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -139,11 +141,18 @@ export default function StaffPage() {
                     onClick={() => setEditing(s)}
                     className="block w-full text-left"
                   >
-                    <div className="truncate font-display text-sm font-bold text-ink-900">
-                      {s.name}
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-display text-sm font-bold tracking-tight text-ink-900">
+                        {s.name}
+                      </span>
+                      {s.is_active ? (
+                        <span className="pill-success shrink-0">Faol</span>
+                      ) : (
+                        <span className="pill-muted shrink-0">Yashirin</span>
+                      )}
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-ink-400">
-                      {s.phone || "—"} ·{" "}
+                    <div className="mt-1 truncate text-xs text-ink-400">
+                      <span className="tnum">{s.phone || "—"}</span> ·{" "}
                       {s.service_ids.length
                         ? `${s.service_ids.length} ta xizmat`
                         : "Xizmatlar yo'q"}
@@ -154,14 +163,14 @@ export default function StaffPage() {
                   onClick={() => toggle(s)}
                   disabled={busy}
                   title={s.is_active ? "Yashirish" : "Faollashtirish"}
-                  className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-500 hover:bg-ink-200"
+                  className="tap grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink-100 text-ink-500 transition hover:bg-ink-200 disabled:opacity-50"
                 >
                   <Power className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => remove(s)}
                   disabled={busy}
-                  className="grid h-9 w-9 place-items-center rounded-xl bg-[#FFE7E3] text-coral hover:bg-[#FFD3CC]"
+                  className="tap grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#FFE7E3] text-coral transition hover:bg-[#FFD3CC] disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -273,10 +282,11 @@ function StaffSheet({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-3xl bg-white p-5"
+        className="w-full max-w-lg rounded-t-4xl bg-white p-5 shadow-soft-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="font-display text-lg font-extrabold text-ink-900">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-ink-200" />
+        <div className="font-display text-lg font-extrabold tracking-tight text-ink-900">
           {initial ? "Mutaxassisni tahrirlash" : "Yangi mutaxassis"}
         </div>
 
@@ -322,11 +332,7 @@ function StaffSheet({
                       key={s.id}
                       type="button"
                       onClick={() => toggleService(s.id)}
-                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                        on
-                          ? "bg-indigo-600 text-white"
-                          : "bg-ink-100 text-ink-700 hover:bg-ink-200"
-                      }`}
+                      className={`tap ${on ? "chip-active" : "chip"}`}
                     >
                       {s.name}
                     </button>
@@ -337,17 +343,17 @@ function StaffSheet({
           )}
         </div>
 
-        <div className="mt-5 flex gap-2">
+        <div className="mt-6 flex gap-2.5">
           <button
             onClick={onClose}
-            className="flex-1 rounded-2xl bg-ink-100 px-4 py-3 text-sm font-bold text-ink-700"
+            className="tap flex-1 rounded-2xl border border-ink-200 bg-white px-4 py-3 text-sm font-bold text-ink-700 shadow-soft-sm transition hover:bg-ink-50"
           >
             Bekor qilish
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="btn-primary flex-1 px-4 py-3 text-sm disabled:opacity-50"
+            className="btn-primary tap flex-1 px-4 py-3 text-sm disabled:opacity-50"
           >
             {saving ? "Saqlanmoqda…" : "Saqlash"}
           </button>

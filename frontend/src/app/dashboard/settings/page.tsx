@@ -195,26 +195,26 @@ export default function SettingsPage() {
     <div>
       <ScreenHeader title="Sozlamalar" />
 
-      <div className="mt-2 flex flex-col gap-4 px-4 md:px-0">
+      <div className="mt-2 flex flex-col gap-5 px-4 md:px-0">
         {/* Profile card */}
-        <div className="card-soft flex items-center gap-3.5 p-4">
+        <div className="card-lg flex items-center gap-4 p-4">
           <Avatar name={ownerName} size={56} />
           <div className="min-w-0 flex-1">
-            <div className="truncate font-display text-[17px] font-extrabold tracking-tight text-ink-900">
+            <div className="truncate font-display text-[18px] font-extrabold tracking-tighter text-ink-900">
               {ownerName}
             </div>
             <div className="truncate text-[13px] font-medium text-ink-500">
               {biz?.name || "—"}
             </div>
             {sub && (
-              <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-600">
+              <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-extrabold tracking-wide text-indigo-600">
                 💎 {sub.plan}
               </div>
             )}
           </div>
           <Link
             href="/dashboard/profile"
-            className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
+            className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-100 text-ink-500 tap"
             aria-label="Tahrir"
           >
             <Pencil className="h-4 w-4" />
@@ -250,20 +250,20 @@ export default function SettingsPage() {
           {sub && (
             <div className="flex items-start gap-3 px-2 py-3">
               <div
-                className="grid h-10 w-10 place-items-center rounded-xl"
-                style={{ background: "#E6FAF3" }}
+                className="grid h-11 w-11 place-items-center rounded-2xl"
+                style={{ background: "var(--success-bg)" }}
               >
                 <CreditCard className="h-5 w-5 text-success" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-display text-sm font-bold text-ink-900">
+                  <span className="font-display text-[15px] font-bold tracking-tight text-ink-900">
                     {sub.plan === "TRIAL" ? "Bepul sinov" : sub.plan === "MONTHLY" ? "Oylik" : sub.plan === "YEARLY" ? "Yillik" : sub.plan}
                   </span>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                      sub.status === "ACTIVE" ? "bg-[#E6FAF3] text-success" : "bg-ink-100 text-ink-500"
-                    }`}
+                    className={
+                      sub.status === "ACTIVE" ? "pill-success" : "pill-muted"
+                    }
                   >
                     {sub.status === "ACTIVE" ? "FAOL" : sub.status}
                   </span>
@@ -280,7 +280,7 @@ export default function SettingsPage() {
             </div>
           )}
           {!info ? (
-            <div className="flex flex-col gap-2 rounded-2xl p-3">
+            <div className="flex flex-col gap-2.5 p-2">
               <button
                 onClick={() => startCardPayment("MONTHLY")}
                 className="btn-primary justify-center text-sm"
@@ -295,21 +295,19 @@ export default function SettingsPage() {
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl bg-ink-50 p-3">
-              <div className="text-xs font-semibold text-ink-500">
-                Quyidagi kartaga o‘tkazing
-              </div>
-              <div className="mt-1 font-mono text-[17px] font-bold tracking-wider text-ink-900">
+            <div className="rounded-3xl bg-ink-50 p-4">
+              <div className="eyebrow">Quyidagi kartaga o‘tkazing</div>
+              <div className="mt-1.5 tnum font-mono text-[19px] font-bold tracking-wider text-ink-900">
                 {info.card_number || "—"}
               </div>
               {info.card_holder && (
                 <div className="text-sm text-ink-500">{info.card_holder}</div>
               )}
-              <div className="mt-2 text-sm font-semibold">
+              <div className="mt-2.5 tnum font-display text-[15px] font-bold tracking-tight text-ink-900">
                 {new Intl.NumberFormat("uz-UZ").format(info.amount)} so‘m · {plan}
               </div>
               {info.payment_comment && (
-                <div className="mt-2 rounded-xl bg-white p-3 text-sm text-ink-700">
+                <div className="mt-2.5 rounded-2xl bg-white p-3 text-sm text-ink-700 shadow-soft-sm">
                   {info.payment_comment}
                 </div>
               )}
@@ -324,12 +322,12 @@ export default function SettingsPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="mt-2 block w-full text-sm"
+                className="mt-2 block w-full text-sm text-ink-500 file:mr-3 file:rounded-xl file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:font-display file:text-sm file:font-bold file:text-ink-700"
               />
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2.5">
                 <button
                   onClick={() => setInfo(null)}
-                  className="flex-1 rounded-2xl bg-ink-100 py-3 text-sm font-bold text-ink-700 tap"
+                  className="flex-1 rounded-2xl bg-ink-100 py-4 font-display text-sm font-bold text-ink-700 tap"
                 >
                   Bekor
                 </button>
@@ -342,8 +340,8 @@ export default function SettingsPage() {
                 </button>
               </div>
               {status && (
-                <div className="mt-2 text-xs text-ink-500">
-                  Holati: <span className="font-mono">{status.status}</span>
+                <div className="mt-2.5 text-xs text-ink-500">
+                  Holati: <span className="tnum font-mono font-semibold text-ink-700">{status.status}</span>
                 </div>
               )}
             </div>
@@ -359,10 +357,10 @@ export default function SettingsPage() {
             sub={notifOn ? "Yoqilgan" : "O'chirilgan"}
             right={
               <span
-                className={`relative h-5 w-9 rounded-full transition-colors ${notifOn ? "bg-indigo-600" : "bg-ink-200"}`}
+                className={`relative h-6 w-10 rounded-full transition-colors ${notifOn ? "bg-indigo-600 shadow-[0_4px_12px_-4px_rgba(72,83,245,0.6)]" : "bg-ink-200"}`}
               >
                 <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${notifOn ? "translate-x-4" : "translate-x-0.5"}`}
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${notifOn ? "translate-x-[18px]" : "translate-x-0.5"}`}
                 />
               </span>
             }
@@ -397,7 +395,7 @@ export default function SettingsPage() {
           />
         </Section>
 
-        <div className="py-5 text-center text-[11px] font-semibold text-ink-400">
+        <div className="py-6 text-center eyebrow text-ink-300">
           Yozuv · 2.4.1
         </div>
       </div>
@@ -408,10 +406,8 @@ export default function SettingsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="px-1 pb-2 text-[12px] font-bold uppercase tracking-wide text-ink-400">
-        {title}
-      </div>
-      <div className="card-soft overflow-hidden p-1.5">{children}</div>
+      <div className="eyebrow px-1 pb-2.5">{title}</div>
+      <div className="card-lg overflow-hidden p-2">{children}</div>
     </div>
   );
 }
@@ -436,16 +432,16 @@ function Row({
   right?: React.ReactNode;
 }) {
   const content = (
-    <div className="flex items-center gap-3 px-2 py-3">
+    <div className="flex items-center gap-3.5 rounded-2xl px-2.5 py-3 transition-colors hover:bg-ink-50">
       <div
-        className="grid h-10 w-10 place-items-center rounded-xl"
+        className="grid h-11 w-11 place-items-center rounded-2xl"
         style={{ background: bg }}
       >
         {icon}
       </div>
       <div className="min-w-0 flex-1">
         <div
-          className={`font-display text-sm font-bold ${
+          className={`font-display text-[15px] font-bold tracking-tight ${
             danger ? "text-[#C93A2A]" : "text-ink-900"
           }`}
         >

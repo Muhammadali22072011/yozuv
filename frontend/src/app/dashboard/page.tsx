@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
+  CalendarDays,
   Copy,
   HelpCircle,
   Phone,
@@ -14,6 +15,7 @@ import {
   Star,
   Tag,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import type { BookingRow, BusinessMe } from "@/types";
@@ -21,7 +23,6 @@ import {
   BookingCard,
   BookingSheet,
   HelpDrawer,
-  HeroGradient,
   NotificationSheet,
   SectionLabel,
   Tour,
@@ -267,16 +268,14 @@ export default function DashboardHome() {
 
   return (
     <div className="-mx-4 md:-mx-0">
-      {/* Hero */}
-      <HeroGradient>
+      {/* Header — светлый, воздушный (Havodor) */}
+      <div className="px-4 pt-3 md:px-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <YzLogo size={34} variant="light" />
+            <YzLogo size={34} />
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/70">
-                YOZUV · {plan}
-              </div>
-              <div className="font-display text-[17px] font-bold tracking-tight text-white">
+              <div className="eyebrow">YOZUV · {plan}</div>
+              <div className="font-display text-[17px] font-extrabold tracking-tighter text-ink-900">
                 {biz.name}
               </div>
             </div>
@@ -285,18 +284,18 @@ export default function DashboardHome() {
             <button
               data-tour="help"
               onClick={() => setHelpOpen(true)}
-              className="grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
               aria-label="Yordam"
             >
-              <HelpCircle className="h-5 w-5 text-white" strokeWidth={2} />
+              <HelpCircle className="h-5 w-5" strokeWidth={2} />
             </button>
             <button
               data-tour="bell"
               onClick={openNotifications}
-              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white/18 backdrop-blur tap"
+              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
               aria-label="Bildirishnomalar"
             >
-              <Bell className="h-5 w-5 text-white" strokeWidth={2} />
+              <Bell className="h-5 w-5" strokeWidth={2} />
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-coral px-1 text-[10px] font-extrabold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
@@ -306,33 +305,60 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="mt-7">
-          <div className="text-sm font-medium text-white/70">Assalomu alaykum,</div>
-          <div className="mt-0.5 font-display text-[28px] font-extrabold tracking-tight text-white">
-            {ownerFirst} 👋
-          </div>
-          <div className="mt-1.5 text-sm font-medium text-white/85">{longDate(new Date())}</div>
+        <div className="mt-5">
+          <div className="text-sm font-medium text-ink-500">Assalomu alaykum,</div>
+          <div className="mt-0.5 display-xl text-[28px]">{ownerFirst} 👋</div>
+          <div className="mt-1 text-sm font-medium text-ink-400">{longDate(new Date())}</div>
         </div>
-      </HeroGradient>
+      </div>
 
-      {/* Stats card pulled up */}
-      <div className="relative -mt-16 px-4 md:px-0">
-        <div data-tour="hero-stats" className="rounded-3xl bg-white p-5 shadow-soft-lg">
-          <div className="grid grid-cols-3 gap-0 divide-x divide-ink-200">
-            <StatBox label="Bugun" value={summary.bookings} sub="yozilish" color="#4853F5" />
-            <StatBox
-              label="Daromad"
-              value={fmtShort(summary.revenue)}
-              sub="so‘m"
-              color="#22C8A8"
-              trend={summary.weekRevenue > 0 ? `+${Math.round((summary.revenue / summary.weekRevenue) * 100)}%` : undefined}
-            />
-            <StatBox
-              label="Mijozlar"
-              value={summary.clients}
-              sub="hafta"
-              color="#FFC94A"
-            />
+      {/* Статистика — яркая feature-карта дохода + пастель-плитки.
+          Градиент задан инлайн-стилем — гарантированно виден независимо
+          от Tailwind purge/HMR (текст белый, фон обязан быть тёмным). */}
+      <div data-tour="hero-stats" className="mt-5 px-4 md:px-0">
+        <div
+          className="relative overflow-hidden rounded-4xl p-5 text-white"
+          style={{
+            background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+            boxShadow: "0 18px 36px -18px rgba(72,83,245,0.6)",
+          }}
+        >
+          <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+          <div className="relative text-[13px] font-semibold text-white/75">Bugungi daromad</div>
+          <div className="relative mt-1 tnum font-display text-[30px] font-extrabold tracking-tightest text-white">
+            {fmtSum(summary.revenue)}
+          </div>
+          <div className="relative mt-2.5 flex items-center gap-2">
+            {summary.weekRevenue > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white">
+                <TrendingUp className="h-3.5 w-3.5" strokeWidth={2.4} />
+                +{Math.round((summary.revenue / summary.weekRevenue) * 100)}%
+              </span>
+            )}
+            <span className="text-[12px] font-semibold text-white/75">
+              so‘m · bu hafta {fmtShort(summary.weekRevenue)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="rounded-3xl bg-indigo-50 p-4">
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-indigo-600">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div className="mt-3 tnum font-display text-[26px] font-extrabold tracking-tighter text-indigo-700">
+              {summary.bookings}
+            </div>
+            <div className="text-[12px] font-semibold text-indigo-700/70">Bugun · yozilish</div>
+          </div>
+          <div className="rounded-3xl p-4" style={{ background: "#E7F8F2" }}>
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-success">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="mt-3 tnum font-display text-[26px] font-extrabold tracking-tighter text-success">
+              {summary.clients}
+            </div>
+            <div className="text-[12px] font-semibold text-success/70">Mijozlar · hafta</div>
           </div>
         </div>
       </div>

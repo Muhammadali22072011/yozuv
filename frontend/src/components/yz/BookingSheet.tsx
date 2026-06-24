@@ -19,10 +19,12 @@ import { callPhone, fmtSum, hm, messageTelegram, shortDate } from "./utils";
 
 function Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
   return (
-    <div className="flex items-center justify-between py-2 text-sm">
-      <div className="font-medium text-ink-400">{label}</div>
+    <div className="flex items-center justify-between gap-3 py-2 text-sm">
+      <div className="shrink-0 font-medium text-ink-400">{label}</div>
       <div
-        className={`font-display text-ink-900 ${bold ? "text-base font-extrabold" : "font-bold"}`}
+        className={`text-right font-display text-ink-900 ${
+          bold ? "tnum text-base font-extrabold tracking-tight" : "font-bold"
+        }`}
       >
         {value}
       </div>
@@ -42,10 +44,12 @@ function ActionBtn({
   return (
     <button
       onClick={onClick}
-      className="flex flex-1 flex-col items-center gap-1 rounded-2xl bg-indigo-50 px-3 py-3 tap"
+      className="tile-indigo flex flex-1 flex-col items-center gap-2 px-3 py-3.5 tap"
     >
-      <span className="text-indigo-600">{icon}</span>
-      <span className="font-display text-xs font-bold text-indigo-600">{label}</span>
+      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-indigo-600">
+        {icon}
+      </span>
+      <span className="font-display text-xs font-bold text-indigo-700">{label}</span>
     </button>
   );
 }
@@ -171,15 +175,13 @@ export function BookingSheet({
       <SheetContent>
         <SheetHeader />
         <SheetBody>
-          <div className="text-center">
-            <div className="inline-flex">
+          <div className="flex flex-col items-center text-center">
+            <div className="rounded-full bg-white p-1.5 shadow-soft-sm ring-1 ring-ink-100">
               <Avatar name={name} size={68} />
             </div>
-            <div className="mt-3 font-display text-[22px] font-extrabold tracking-tight text-ink-900">
-              {name}
-            </div>
-            <div className="mt-0.5 text-sm text-ink-500">{cli?.phone || "—"}</div>
-            <div className="mt-2.5 inline-flex">
+            <div className="mt-3.5 display-xl text-[22px]">{name}</div>
+            <div className="mt-0.5 tnum text-sm text-ink-500">{cli?.phone || "—"}</div>
+            <div className="mt-3 inline-flex">
               <StatusBadge status={booking.status} />
             </div>
           </div>
@@ -211,12 +213,12 @@ export function BookingSheet({
           )}
 
           {editing ? (
-            <div className="mt-5 rounded-[22px] border-[1.5px] border-indigo-100 bg-white p-4">
-              <label className="block text-xs font-semibold text-ink-500">Xizmat</label>
+            <div className="mt-5 card-soft p-4">
+              <label className="eyebrow block">Xizmat</label>
               <select
                 value={editServiceId}
                 onChange={(e) => setEditServiceId(e.target.value)}
-                className="yz-input mt-1 w-full"
+                className="yz-input mt-1.5 w-full"
               >
                 {services.length === 0 && <option value="">—</option>}
                 {services.map((s) => (
@@ -225,30 +227,30 @@ export function BookingSheet({
                   </option>
                 ))}
               </select>
-              <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="mt-3.5 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-ink-500">Sana</label>
+                  <label className="eyebrow block">Sana</label>
                   <input
                     type="date"
                     value={editDate}
                     onChange={(e) => setEditDate(e.target.value)}
-                    className="yz-input mt-1 w-full"
+                    className="yz-input mt-1.5 w-full"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink-500">Vaqt</label>
+                  <label className="eyebrow block">Vaqt</label>
                   <input
                     type="time"
                     value={editTime}
                     onChange={(e) => setEditTime(e.target.value)}
-                    className="yz-input mt-1 w-full"
+                    className="yz-input mt-1.5 w-full"
                   />
                 </div>
               </div>
             </div>
           ) : (
             <div
-              className="mt-4 rounded-[22px] p-4"
+              className="mt-5 rounded-3xl p-4 shadow-soft"
               style={{ background: "linear-gradient(135deg,#EEF0FF,#F8F9FC)" }}
             >
               <Row label="Vaqt" value={`${shortDate(booking.date)} · ${hm(booking.start_time)}`} />
@@ -266,7 +268,7 @@ export function BookingSheet({
               <button
                 onClick={() => setEditing(false)}
                 disabled={busy}
-                className="flex-1 rounded-2xl bg-ink-100 px-4 py-3.5 font-display text-sm font-bold text-ink-900 tap"
+                className="btn-soft flex-1 disabled:opacity-40"
               >
                 Bekor
               </button>
@@ -279,7 +281,8 @@ export function BookingSheet({
               <button
                 onClick={cancel}
                 disabled={busy}
-                className="flex-1 rounded-2xl bg-[#FFE7E3] px-4 py-3.5 font-display text-sm font-bold text-[#C93A2A] tap"
+                className="flex-1 rounded-2xl px-4 py-4 font-display text-base font-bold transition-transform active:scale-[0.97] disabled:opacity-40"
+                style={{ background: "var(--danger-bg)", color: "var(--danger)" }}
               >
                 Bekor qilish
               </button>
@@ -292,7 +295,8 @@ export function BookingSheet({
               <button
                 onClick={cancel}
                 disabled={busy}
-                className="flex-1 rounded-2xl bg-[#FFE7E3] px-4 py-3.5 font-display text-sm font-bold text-[#C93A2A] tap"
+                className="flex-1 rounded-2xl px-4 py-4 font-display text-base font-bold transition-transform active:scale-[0.97] disabled:opacity-40"
+                style={{ background: "var(--danger-bg)", color: "var(--danger)" }}
               >
                 Bekor qilish
               </button>

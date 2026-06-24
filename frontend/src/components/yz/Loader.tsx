@@ -21,42 +21,43 @@ export function YzLoader({
     >
       <div className="relative grid h-20 w-20 place-items-center">
         <span
-          className="absolute inset-0 rounded-[22px] animate-yz-pulse"
+          className="absolute inset-0 rounded-[26px] animate-yz-pulse"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(72,83,245,0.35), rgba(72,83,245,0) 70%)",
+              "radial-gradient(closest-side, rgba(124,92,255,0.32), rgba(72,83,245,0) 72%)",
           }}
         />
         <span
-          className="absolute inset-2 rounded-2xl border-2 border-indigo-500/25 border-t-indigo-600 animate-spin"
+          className="absolute inset-2 rounded-[20px] border-2 border-indigo-500/15 border-t-indigo-600 animate-spin"
           style={{ animationDuration: "1.1s" }}
         />
         <span
-          className="grid h-12 w-12 place-items-center rounded-[14px] font-display text-[22px] font-extrabold text-white"
+          className="grid h-12 w-12 place-items-center rounded-2xl font-display text-[22px] font-extrabold text-white"
           style={{
-            background: "linear-gradient(135deg,#5B6BFF,#3640D4)",
-            boxShadow: "0 10px 24px rgba(72,83,245,0.45)",
+            background: "linear-gradient(135deg,#5B6BFF,#7C5CFF 55%,#3640D4)",
+            boxShadow:
+              "0 12px 28px -10px rgba(72,83,245,0.55), inset 0 1px 0 rgba(255,255,255,0.28)",
           }}
         >
           Y
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <span className="font-display text-[13px] font-semibold tracking-tight text-ink-500">
           {label}
         </span>
-        <span className="flex gap-0.5">
+        <span className="flex gap-1">
           <span
-            className="h-1 w-1 rounded-full bg-indigo-500 animate-yz-dot"
+            className="h-1.5 w-1.5 rounded-full bg-indigo-600 animate-yz-dot"
             style={{ animationDelay: "0ms" }}
           />
           <span
-            className="h-1 w-1 rounded-full bg-indigo-500 animate-yz-dot"
+            className="h-1.5 w-1.5 rounded-full bg-indigo-600 animate-yz-dot"
             style={{ animationDelay: "160ms" }}
           />
           <span
-            className="h-1 w-1 rounded-full bg-indigo-500 animate-yz-dot"
+            className="h-1.5 w-1.5 rounded-full bg-indigo-600 animate-yz-dot"
             style={{ animationDelay: "320ms" }}
           />
         </span>

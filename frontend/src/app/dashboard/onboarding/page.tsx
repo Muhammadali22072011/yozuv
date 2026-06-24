@@ -2,12 +2,29 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, Clock, Plus, Trash2 } from "lucide-react";
-import { HeroGradient } from "@/components/yz/HeroGradient";
+import { ArrowRight, Check, Clock, MapPin, Plus, Sparkles, Trash2 } from "lucide-react";
 import { YzLoader } from "@/components/yz/Loader";
 import { YzLogo } from "@/components/yz/Logo";
 import { MapPicker } from "@/components/yz/MapPicker";
 import { apiFetch } from "@/lib/api";
+
+const STEP_META: { label: string; title: string; sub: string }[] = [
+  {
+    label: "Biznes",
+    title: "Biznesingizni yarating",
+    sub: "Nom, kategoriya va asosiy ma'lumotlar.",
+  },
+  {
+    label: "Xizmatlar",
+    title: "Xizmatlarni qo‘shing",
+    sub: "2–3 ta xizmat — narx va davomiyligini kiriting.",
+  },
+  {
+    label: "Ish vaqti",
+    title: "Ish vaqtingiz",
+    sub: "Mijozlar qaysi vaqtda yozila olishini belgilang.",
+  },
+];
 
 const CATEGORIES: { value: string; label: string; emoji: string }[] = [
   { value: "barbershop", label: "Barbershop", emoji: "💈" },
@@ -184,50 +201,83 @@ export default function OnboardingPage() {
     return <YzLoader fullscreen />;
   }
 
+  const meta = STEP_META[step - 1];
+
   return (
-    <main className="min-h-screen bg-ink-50">
-      <HeroGradient className="rounded-b-[32px] pb-24">
+    <main
+      className="min-h-screen bg-ink-50"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
+      {/* Светлая воздушная шапка (Havodor) — без большого indigo-блока. */}
+      <header className="px-4 pt-5">
         <div className="mx-auto flex w-full max-w-xl items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <YzLogo size={36} variant="light" />
-            <div className="font-display text-[17px] font-bold tracking-tight text-white">
+            <YzLogo size={36} />
+            <div className="font-display text-[17px] font-extrabold tracking-tighter text-ink-900">
               Yozuv
             </div>
           </div>
-          <span className="rounded-full bg-white/14 px-3 py-1 text-[11px] font-bold text-white backdrop-blur">
+          <span className="tnum rounded-full bg-white px-3 py-1 text-[11px] font-extrabold text-ink-500 shadow-soft-sm">
             {step} / 3
           </span>
         </div>
-        <div className="mx-auto mt-10 max-w-xl">
-          <div className="text-sm font-semibold text-white/70">
-            Onboarding · {step}-qadam
+      </header>
+
+      <div className="px-4 pb-24 pt-5">
+        <div className="mx-auto max-w-xl space-y-5">
+          {/* Премиальная feature-карточка шага — единственный яркий момент. */}
+          <div
+            className="relative overflow-hidden rounded-4xl p-5 text-white"
+            style={{
+              background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+              boxShadow: "0 18px 36px -18px rgba(72,83,245,0.6)",
+            }}
+          >
+            <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+            <div className="relative flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white/15 backdrop-blur">
+                <Sparkles className="h-4.5 w-4.5 text-white" strokeWidth={2.2} />
+              </span>
+              <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/75">
+                Onboarding · {step}-qadam
+              </div>
+            </div>
+            <h1 className="relative mt-3.5 font-display text-[28px] font-extrabold leading-tight tracking-tightest text-white">
+              {meta.title}
+            </h1>
+            <p className="relative mt-2 max-w-md text-sm text-white/80">
+              {meta.sub}
+            </p>
+
+            {/* Сегментированный прогресс с подписями шагов. */}
+            <div className="relative mt-5 grid grid-cols-3 gap-2">
+              {STEP_META.map((m, i) => {
+                const n = i + 1;
+                const done = step > n;
+                const current = step === n;
+                return (
+                  <div key={m.label} className="flex flex-col gap-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-colors ${
+                        step >= n ? "bg-white" : "bg-white/25"
+                      }`}
+                    />
+                    <div
+                      className={`flex items-center gap-1 text-[11px] font-bold ${
+                        current ? "text-white" : "text-white/55"
+                      }`}
+                    >
+                      {done && <Check className="h-3 w-3" strokeWidth={3} />}
+                      {m.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <h1 className="mt-1 font-display text-[30px] font-extrabold leading-tight tracking-[-0.02em] text-white">
-            {step === 1 && "Biznesingizni yarating"}
-            {step === 2 && "Xizmatlarni qo‘shing"}
-            {step === 3 && "Ish vaqtingiz"}
-          </h1>
-          <p className="mt-2 max-w-md text-sm text-white/80">
-            {step === 1 && "Nom, kategoriya va asosiy ma'lumotlar."}
-            {step === 2 && "2–3 ta xizmat — narx va davomiyligini kiriting."}
-            {step === 3 && "Mijozlar qaysi vaqtda yozila olishini belgilang."}
-          </p>
-        </div>
-
-        <div className="mx-auto mt-6 flex max-w-xl items-center gap-2">
-          {[1, 2, 3].map((n) => (
-            <div
-              key={n}
-              className={`h-1.5 flex-1 rounded-full ${
-                step >= n ? "bg-white" : "bg-white/25"
-              }`}
-            />
-          ))}
-        </div>
-      </HeroGradient>
-
-      <div className="relative z-10 -mt-16 px-4 pb-24">
-        <div className="mx-auto max-w-xl space-y-3">
           {step === 1 && (
             <Step1
               biz={biz}
@@ -244,7 +294,10 @@ export default function OnboardingPage() {
           {step === 3 && <Step3 days={days} setDays={setDays} />}
 
           {err && (
-            <div className="rounded-2xl bg-[#FFE7E3] px-3.5 py-2.5 text-sm text-[#C93A2A]">
+            <div
+              className="rounded-2xl px-3.5 py-2.5 text-sm font-medium"
+              style={{ background: "var(--danger-bg)", color: "var(--danger)" }}
+            >
               {err}
             </div>
           )}
@@ -255,7 +308,7 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={back}
                 disabled={submitting}
-                className="flex-1 rounded-2xl bg-white px-4 py-3.5 font-display text-[15px] font-bold text-ink-900 shadow-soft tap"
+                className="btn-soft flex-1 justify-center tap disabled:opacity-40"
               >
                 Orqaga
               </button>
@@ -264,7 +317,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={next}
-                className="btn-primary flex-[2] justify-center"
+                className="btn-primary flex-[2] justify-center tap"
               >
                 Davom etish <ArrowRight className="ml-2 h-4 w-4" />
               </button>
@@ -273,7 +326,7 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={finish}
                 disabled={submitting}
-                className="btn-primary flex-[2] justify-center"
+                className="btn-primary flex-[2] justify-center tap"
               >
                 {submitting ? "Saqlanmoqda…" : "Tayyor"}
                 {!submitting && <Check className="ml-2 h-4 w-4" />}
@@ -333,7 +386,7 @@ function Step1({
   }, [biz.viloyat]);
 
   return (
-    <div className="card-soft space-y-4 p-5 md:p-6">
+    <div className="card space-y-5 p-5 md:p-6">
       <div>
         <label className="block text-xs font-semibold text-ink-500">
           Biznes nomi *
@@ -379,9 +432,9 @@ function Step1({
                 key={c.value}
                 type="button"
                 onClick={() => setBiz({ ...biz, category: c.value })}
-                className={`flex items-center gap-2 rounded-2xl border-[1.5px] px-3 py-2.5 text-left tap ${
+                className={`flex items-center gap-2 rounded-2xl border-[1.5px] px-3 py-2.5 text-left tap transition-colors ${
                   active
-                    ? "border-indigo-600 bg-indigo-50"
+                    ? "border-indigo-500 bg-indigo-50 shadow-soft-sm"
                     : "border-ink-100 bg-white"
                 }`}
               >
@@ -434,7 +487,8 @@ function Step1({
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-ink-500">
+        <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-500">
+          <MapPin className="h-3.5 w-3.5 text-ink-400" strokeWidth={2.2} />
           Xaritada joylashuv
         </label>
         <div className="mt-1.5">
@@ -494,18 +548,23 @@ function Step2({
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {services.map((s, i) => (
-        <div key={i} className="card-soft space-y-3 p-4 md:p-5">
+        <div key={i} className="card space-y-3.5 p-4 md:p-5">
           <div className="flex items-center justify-between">
-            <div className="font-display text-sm font-bold text-ink-900">
-              Xizmat {i + 1}
+            <div className="flex items-center gap-2.5">
+              <span className="tnum grid h-8 w-8 place-items-center rounded-2xl bg-indigo-50 font-display text-sm font-extrabold text-indigo-700">
+                {i + 1}
+              </span>
+              <div className="font-display text-sm font-bold text-ink-900">
+                Xizmat {i + 1}
+              </div>
             </div>
             {services.length > 1 && (
               <button
                 type="button"
                 onClick={() => remove(i)}
-                className="grid h-8 w-8 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
+                className="grid h-9 w-9 place-items-center rounded-2xl bg-ink-100 text-ink-500 tap transition-colors active:bg-ink-200"
                 aria-label="O‘chirish"
               >
                 <Trash2 className="h-4 w-4" />
@@ -530,7 +589,7 @@ function Step2({
                 value={s.price}
                 onChange={(e) => update(i, { price: e.target.value })}
                 placeholder="50000"
-                className="yz-input mt-1"
+                className="yz-input mt-1 tnum"
               />
             </div>
             <div>
@@ -540,7 +599,7 @@ function Step2({
                 inputMode="numeric"
                 value={s.duration_minutes}
                 onChange={(e) => update(i, { duration_minutes: e.target.value })}
-                className="yz-input mt-1"
+                className="yz-input mt-1 tnum"
               />
             </div>
           </div>
@@ -550,7 +609,7 @@ function Step2({
       <button
         type="button"
         onClick={add}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-ink-200 bg-white px-4 py-3.5 font-display text-sm font-bold text-ink-700 tap"
+        className="flex w-full items-center justify-center gap-2 rounded-3xl border-[1.5px] border-dashed border-ink-200 bg-white px-4 py-4 font-display text-sm font-bold text-ink-700 tap transition-colors active:bg-ink-50"
       >
         <Plus className="h-4 w-4" /> Yana qo‘shish
       </button>
@@ -570,7 +629,7 @@ function Step3({
   }
 
   return (
-    <div className="card-soft divide-y divide-ink-100 p-1.5">
+    <div className="card divide-y divide-ink-100 p-1.5">
       {days.map((d, i) => (
         <div key={d.day_of_week} className="px-3 py-3.5">
           <div className="flex items-center gap-3">
@@ -586,7 +645,9 @@ function Step3({
                 {d.is_working ? (
                   <>
                     <Clock className="h-3 w-3" />
-                    {d.start_time} – {d.end_time}
+                    <span className="tnum">
+                      {d.start_time} – {d.end_time}
+                    </span>
                   </>
                 ) : (
                   "Dam olish kuni"
@@ -619,7 +680,7 @@ function Step3({
                   type="time"
                   value={d.start_time}
                   onChange={(e) => update(i, { start_time: e.target.value })}
-                  className="yz-input mt-1"
+                  className="yz-input mt-1 tnum"
                 />
               </div>
               <div>
@@ -630,7 +691,7 @@ function Step3({
                   type="time"
                   value={d.end_time}
                   onChange={(e) => update(i, { end_time: e.target.value })}
-                  className="yz-input mt-1"
+                  className="yz-input mt-1 tnum"
                 />
               </div>
             </div>

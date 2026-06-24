@@ -92,8 +92,8 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
   return (
     <>
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink-900/5 bg-white/88 pb-7 pt-2.5 backdrop-blur-xl backdrop-saturate-150 md:hidden"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
+        className="fixed inset-x-3 z-40 rounded-[26px] border border-white/60 bg-white/85 px-2 py-2 shadow-soft-lg backdrop-blur-xl backdrop-saturate-150 md:hidden"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
       >
         <div className="flex items-center justify-around">
           {tabs.slice(0, 2).map((t) => (
@@ -101,7 +101,7 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
           ))}
           <button
             onClick={onAdd}
-            className="-mt-6 grid h-14 w-14 place-items-center rounded-[20px] yz-grad text-white shadow-indigo"
+            className="-mt-7 grid h-14 w-14 place-items-center rounded-[20px] yz-grad text-white shadow-indigo tap"
             aria-label="Yangi yozilish"
           >
             <Plus className="h-6 w-6" strokeWidth={2.8} />
@@ -111,14 +111,25 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
           ))}
           <button
             onClick={() => setMoreOpen(true)}
-            className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 py-1",
-              moreActive ? "text-indigo-600" : "text-ink-400"
-            )}
+            className="flex flex-1 flex-col items-center gap-1 py-0.5"
             aria-label="Yana"
           >
-            <LayoutGrid className="h-[22px] w-[22px]" strokeWidth={2} />
-            <span className="font-display text-[11px] font-semibold">Yana</span>
+            <span
+              className={cn(
+                "grid h-9 w-9 place-items-center rounded-2xl transition-colors",
+                moreActive ? "bg-indigo-50 text-indigo-600" : "text-ink-400"
+              )}
+            >
+              <LayoutGrid className="h-[21px] w-[21px]" strokeWidth={2} />
+            </span>
+            <span
+              className={cn(
+                "font-display text-[11px] font-semibold",
+                moreActive ? "text-indigo-600" : "text-ink-400"
+              )}
+            >
+              Yana
+            </span>
           </button>
         </div>
       </nav>
@@ -138,11 +149,11 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
                     href={l.href}
                     onClick={() => setMoreOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 rounded-[18px] border bg-white p-3.5 tap",
+                      "flex items-center gap-3 rounded-3xl border bg-white p-3.5 shadow-soft-sm tap",
                       active ? "border-indigo-200 ring-2 ring-indigo-200/60" : "border-ink-100"
                     )}
                   >
-                    <span className={cn("grid h-10 w-10 place-items-center rounded-xl", toneStyles[tone])}>
+                    <span className={cn("grid h-10 w-10 place-items-center rounded-2xl", toneStyles[tone])}>
                       <Icon className="h-5 w-5" strokeWidth={2.2} />
                     </span>
                     <span className="min-w-0 flex-1 font-display text-sm font-extrabold tracking-tight text-ink-900">
@@ -184,15 +195,23 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
 function TabItem({ tab, active }: { tab: Tab; active: boolean }) {
   const Icon = tab.icon;
   return (
-    <Link
-      href={tab.href}
-      className={cn(
-        "flex flex-1 flex-col items-center gap-0.5 py-1",
-        active ? "text-indigo-600" : "text-ink-400"
-      )}
-    >
-      <Icon className="h-[22px] w-[22px]" strokeWidth={2} />
-      <span className="font-display text-[11px] font-semibold">{tab.label}</span>
+    <Link href={tab.href} className="flex flex-1 flex-col items-center gap-1 py-0.5">
+      <span
+        className={cn(
+          "grid h-9 w-9 place-items-center rounded-2xl transition-colors",
+          active ? "bg-indigo-50 text-indigo-600" : "text-ink-400"
+        )}
+      >
+        <Icon className="h-[21px] w-[21px]" strokeWidth={2} />
+      </span>
+      <span
+        className={cn(
+          "font-display text-[11px] font-semibold",
+          active ? "text-indigo-600" : "text-ink-400"
+        )}
+      >
+        {tab.label}
+      </span>
     </Link>
   );
 }

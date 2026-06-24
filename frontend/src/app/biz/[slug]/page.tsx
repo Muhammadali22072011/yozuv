@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, MapPin, Phone, Star } from "lucide-react";
+import { ArrowRight, Clock, MapPin, Phone, Sparkles, Star } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
 const BOT = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
@@ -128,119 +128,128 @@ export default async function BusinessPage({
   const logo = biz.logo_url ? `${API}${biz.logo_url}` : null;
 
   return (
-    <main className="min-h-screen bg-white">
-      {/* Hero */}
-      <section
-        className="relative px-6 py-12 text-white"
-        style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
-      >
-        <div className="mx-auto flex max-w-3xl items-center gap-5">
-          {logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logo}
-              alt={biz.name}
-              className="h-20 w-20 shrink-0 rounded-2xl object-cover ring-2 ring-white/20"
-            />
-          ) : (
-            <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-white/10 text-3xl">
-              📍
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-white/70">
-              {cat}
-            </div>
-            <h1 className="mt-1 truncate font-display text-3xl font-extrabold tracking-tight">
-              {biz.name}
-            </h1>
-            {summary.count > 0 && (
-              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/14 px-2.5 py-1 text-xs font-bold backdrop-blur">
-                <Star className="h-3 w-3 fill-yellow-300 text-yellow-300" />
-                {summary.average_rating.toFixed(1)} · {summary.count} ta sharh
+    <main className="min-h-screen bg-ink-50">
+      {/* Hero — светлая «воздушная» шапка (Havodor): тёмный текст на
+          холсте, лого в мягком пастельном чипе, единственный яркий
+          акцент — кнопка «Yozilish» (индиго-градиент). */}
+      <section className="px-5 pb-2 pt-8 sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          <div className="card-lg p-5 sm:p-6">
+            <div className="flex items-center gap-4 sm:gap-5">
+              {logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logo}
+                  alt={biz.name}
+                  className="h-20 w-20 shrink-0 rounded-3xl object-cover shadow-soft ring-1 ring-ink-100"
+                />
+              ) : (
+                <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-indigo-50 text-3xl">
+                  📍
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="eyebrow">{cat}</div>
+                <h1 className="mt-1 truncate font-display text-[26px] font-extrabold tracking-tighter text-ink-900 sm:text-3xl">
+                  {biz.name}
+                </h1>
+                {summary.count > 0 && (
+                  <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-warn-bg px-2.5 py-1 text-xs font-bold text-warn">
+                    <Star className="h-3 w-3 fill-lemon text-lemon" />
+                    <span className="tnum">{summary.average_rating.toFixed(1)}</span> · {summary.count} ta sharh
+                  </div>
+                )}
               </div>
+            </div>
+
+            {biz.description && (
+              <p className="mt-5 text-[15px] leading-relaxed text-ink-500">
+                {biz.description}
+              </p>
             )}
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={botLink}
+                className="tap inline-flex flex-1 items-center justify-center gap-2 rounded-2xl px-7 py-4 font-display text-[15px] font-bold text-white"
+                style={{
+                  background: "linear-gradient(135deg,#7C5CFF,#4853F5)",
+                  boxShadow: "0 16px 32px -16px rgba(72,83,245,0.6)",
+                }}
+              >
+                Yozilish <ArrowRight className="h-4 w-4" />
+              </Link>
+              {biz.phone && (
+                <a
+                  href={`tel:${biz.phone}`}
+                  className="btn-soft tap gap-2 text-[15px]"
+                >
+                  <Phone className="h-4 w-4 text-indigo-600" />
+                  <span className="tnum">{biz.phone}</span>
+                </a>
+              )}
+            </div>
           </div>
-        </div>
 
-        {biz.description && (
-          <p className="mx-auto mt-6 max-w-3xl text-[15px] leading-relaxed text-white/90">
-            {biz.description}
-          </p>
-        )}
-
-        <div className="mx-auto mt-8 flex max-w-3xl flex-col gap-3 sm:flex-row">
-          <Link
-            href={botLink}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-7 py-4 font-display text-[15px] font-bold text-indigo-700 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
-          >
-            Yozilish <ArrowRight className="h-4 w-4" />
-          </Link>
-          {biz.phone && (
-            <a
-              href={`tel:${biz.phone}`}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/10 px-5 py-4 font-display text-[15px] font-bold text-white backdrop-blur"
-            >
-              <Phone className="h-4 w-4" />
-              {biz.phone}
-            </a>
+          {/* Address */}
+          {(biz.address || biz.viloyat || biz.tuman) && (
+            <div className="card-soft mt-3 flex items-start gap-3 p-4">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 pt-0.5 text-sm text-ink-700">
+                {biz.address && <div className="font-semibold text-ink-900">{biz.address}</div>}
+                {(biz.viloyat || biz.tuman) && (
+                  <div className="mt-0.5 text-ink-400">
+                    {[biz.viloyat, biz.tuman].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </section>
 
-      {/* Address */}
-      {(biz.address || biz.viloyat || biz.tuman) && (
-        <section className="border-b border-ink-100 px-6 py-5">
-          <div className="mx-auto flex max-w-3xl items-start gap-2 text-sm text-ink-700">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
-            <div>
-              {biz.address && <div>{biz.address}</div>}
-              {(biz.viloyat || biz.tuman) && (
-                <div className="text-ink-400">
-                  {[biz.viloyat, biz.tuman].filter(Boolean).join(" · ")}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Services */}
-      <section className="px-6 py-10">
+      <section className="px-5 py-8 sm:px-6">
         <div className="mx-auto max-w-3xl">
-          <h2 className="font-display text-xl font-extrabold tracking-tight text-ink-900">
-            Xizmatlar
-          </h2>
+          <h2 className="section-title text-xl">Xizmatlar</h2>
           {services.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-ink-200 bg-ink-50 px-5 py-10 text-center text-sm text-ink-400">
-              Hozircha xizmatlar qo&apos;shilmagan
+            <div className="mt-4 flex flex-col items-center gap-3 rounded-3xl border border-dashed border-ink-200 bg-white px-5 py-10 text-center">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div className="text-sm text-ink-400">
+                Hozircha xizmatlar qo&apos;shilmagan
+              </div>
             </div>
           ) : (
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 space-y-2.5">
               {services.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-center justify-between rounded-2xl border border-ink-100 bg-white p-4"
+                  className="card-soft flex items-center justify-between gap-4 p-4"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-display text-[15px] font-bold text-ink-900">
+                    <div className="truncate font-display text-[15px] font-bold tracking-tight text-ink-900">
                       {s.name}
                     </div>
-                    <div className="mt-0.5 text-xs text-ink-400">
-                      {s.duration_minutes} daq
+                    <div className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-ink-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span className="tnum">{s.duration_minutes}</span> daq
                     </div>
                   </div>
-                  <div className="ml-4 shrink-0 font-display text-[15px] font-bold text-indigo-700">
-                    {fmtSum(s.price)} so&apos;m
+                  <div className="ml-1 shrink-0 font-display text-[15px] font-extrabold tracking-tight text-indigo-700">
+                    <span className="tnum">{fmtSum(s.price)}</span> so&apos;m
                   </div>
                 </li>
               ))}
             </ul>
           )}
-          <div className="mt-8 text-center">
+          <div className="mt-8">
             <Link
               href={botLink}
-              className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-7 py-4 font-display text-[15px] font-bold text-white"
+              className="btn-primary tap w-full gap-2 text-[15px]"
             >
               Botda yozilish <ArrowRight className="h-4 w-4" />
             </Link>
@@ -248,7 +257,7 @@ export default async function BusinessPage({
         </div>
       </section>
 
-      <footer className="border-t border-ink-100 bg-ink-50 px-6 py-8 text-center">
+      <footer className="px-6 pb-10 pt-2 text-center">
         <Link href="/" className="text-sm font-semibold text-indigo-700">
           Yozuv haqida
         </Link>
