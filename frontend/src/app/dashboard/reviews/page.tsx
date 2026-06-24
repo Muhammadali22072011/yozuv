@@ -65,10 +65,13 @@ export default function ReviewsPage() {
             {dist.map((d) => (
               <div key={d.n} className="flex items-center gap-2">
                 <div className="w-3 text-xs font-bold text-ink-500">{d.n}</div>
+                {/* Bar share is per-rating count over the SAME population the
+                    counts came from (loaded rows), not sum.count — mixing them
+                    made the bars never reach 100%. */}
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
                   <div
                     className="h-full rounded-full bg-lemon"
-                    style={{ width: `${total ? (d.count / total) * 100 : 0}%` }}
+                    style={{ width: `${rows.length ? (d.count / rows.length) * 100 : 0}%` }}
                   />
                 </div>
                 <div className="w-4 text-right text-xs font-bold text-ink-400">{d.count}</div>

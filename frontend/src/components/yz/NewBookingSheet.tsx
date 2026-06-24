@@ -20,6 +20,18 @@ type Service = { id: string; name: string; price: number; duration_minutes: numb
 
 const STEPS = ["Mijoz", "Xizmat", "Vaqt", "Tasdiq"] as const;
 
+// Hourly slots offered in the time picker. Single source of truth so the
+// busy-slot computation and the rendered grid can't drift apart.
+const TIME_SLOTS = [
+  "09:00", "10:00", "11:00", "12:00", "13:00",
+  "14:00", "15:00", "16:00", "17:00", "18:00",
+] as const;
+
+function hhmmToMin(t: string): number {
+  const [h, m] = t.slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
+}
+
 function Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
   return (
     <div className="flex items-center justify-between py-2 text-sm">
@@ -86,8 +98,27 @@ export function NewBookingSheet({
 
   useEffect(() => {
     if (!open) return;
-    apiFetch<{ start_time: string }[]>(`/api/business/me/bookings?booking_date=${date}`)
-      .then((rows) => setBusySlots(new Set(rows.map((r) => r.start_time.slice(0, 5)))))
+    apiFetch<{ start_time: string; end_time: string; status: string }[]>(
+      `/api/business/me/bookings?booking_date=${date}`
+    )
+      .then((rows) => {
+        const busy = new Set<string>();
+        for (const r of rows) {
+          // Only active bookings occupy a slot — CANCELLED/COMPLETED/NO_SHOW
+          // leave it free (the old code marked every status as busy).
+          if (r.status !== "PENDING" && r.status !== "CONFIRMED") continue;
+          const start = hhmmToMin(r.start_time);
+          const end = r.end_time ? hhmmToMin(r.end_time) : start + 60;
+          // Mark every candidate slot whose start falls inside [start, end),
+          // so a multi-hour booking blocks all the hours it spans — not just
+          // its exact start (which let the user pick a colliding later slot).
+          for (const slot of TIME_SLOTS) {
+            const s = hhmmToMin(slot);
+            if (s >= start && s < end) busy.add(slot);
+          }
+        }
+        setBusySlots(busy);
+      })
       .catch(() => setBusySlots(new Set()));
   }, [open, date]);
 
@@ -249,18 +280,7 @@ export function NewBookingSheet({
                 />
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {[
-                  "09:00",
-                  "10:00",
-                  "11:00",
-                  "12:00",
-                  "13:00",
-                  "14:00",
-                  "15:00",
-                  "16:00",
-                  "17:00",
-                  "18:00",
-                ].map((t) => {
+                {TIME_SLOTS.map((t) => {
                   const busy = busySlots.has(t);
                   const active = time === t;
                   return (

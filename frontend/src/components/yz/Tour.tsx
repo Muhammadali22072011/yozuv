@@ -36,7 +36,11 @@ export function Tour({
 }: {
   steps: TourStep[];
   open: boolean;
-  onClose: () => void;
+  /** Called when the tour ends. `completed` is true only when the user
+   *  reached the end (finished the last step), false when they X-ed out,
+   *  skipped, or a target couldn't be found. Callers that don't care can
+   *  ignore the argument. */
+  onClose: (completed: boolean) => void;
 }) {
   const [idx, setIdx] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -51,27 +55,59 @@ export function Tour({
 
   useLayoutEffect(() => {
     if (!open || !step) return;
-    const measure = () => {
+    // Reset for the new step, then bring the target into view ONCE. The
+    // scroll/resize listener below only RE-READS the rect — calling
+    // scrollIntoView from inside the scroll handler created a feedback
+    // loop (scroll → measure → scrollIntoView → scroll → …).
+    setRect(null);
+    let raf = 0;
+    const read = () => {
       const el = document.querySelector(step.targetSelector) as HTMLElement | null;
-      if (!el) {
-        setRect(null);
-        return;
-      }
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      requestAnimationFrame(() => {
+      if (!el) return;
+      setRect(el.getBoundingClientRect());
+      setVw(window.innerWidth);
+      setVh(window.innerHeight);
+    };
+    const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    raf = requestAnimationFrame(read);
+    const onMove = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(read);
+    };
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open, idx, step]);
+
+  // When the target isn't in the DOM yet, retry briefly before giving up.
+  // Doing this in an effect (not in the render body) avoids the React
+  // "setState during render" anti-pattern the old queueMicrotask had.
+  useEffect(() => {
+    if (!open || !step || rect !== null) return;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+      if (el) {
+        window.clearInterval(id);
         setRect(el.getBoundingClientRect());
         setVw(window.innerWidth);
         setVh(window.innerHeight);
-      });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [open, idx, step]);
+        return;
+      }
+      if (++tries >= 12) {
+        // ~1.2s elapsed and the anchor never appeared — skip this step.
+        window.clearInterval(id);
+        if (idx + 1 < steps.length) setIdx(idx + 1);
+        else onClose(false);
+      }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [open, step, rect, idx, steps.length, onClose]);
 
   // Action mode: listen for clicks anywhere; if the click landed
   // inside the target subtree, advance the tour. Capture phase so we
@@ -86,7 +122,7 @@ export function Tour({
       if (!target.closest(step.targetSelector)) return;
       setTimeout(() => {
         if (idx + 1 < steps.length) setIdx(idx + 1);
-        else onClose();
+        else onClose(true);
       }, 50);
     };
     document.addEventListener("click", onClick, true);
@@ -95,13 +131,9 @@ export function Tour({
 
   if (!open || !step) return null;
 
-  if (rect === null) {
-    queueMicrotask(() => {
-      if (idx + 1 < steps.length) setIdx(idx + 1);
-      else onClose();
-    });
-    return null;
-  }
+  // Nothing to spotlight until the target is measured. The retry/skip
+  // effect above handles a missing anchor — never mutate state here.
+  if (rect === null) return null;
 
   const mode = step.mode || "info";
   const isLast = idx === steps.length - 1;
@@ -195,7 +227,7 @@ export function Tour({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => onClose(false)}
             aria-label="Yopish"
             className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-ink-400 hover:bg-ink-100"
           >
@@ -205,7 +237,7 @@ export function Tour({
         <p className="mt-2 text-sm leading-relaxed text-ink-700">{step.body}</p>
         <div className="mt-3 flex items-center justify-between">
           <button
-            onClick={onClose}
+            onClick={() => onClose(false)}
             className="text-xs font-semibold text-ink-400 hover:text-ink-600"
           >
             O&apos;tkazib yuborish
@@ -213,7 +245,7 @@ export function Tour({
           {mode === "info" ? (
             <button
               onClick={() => {
-                if (isLast) onClose();
+                if (isLast) onClose(true);
                 else setIdx(idx + 1);
               }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"

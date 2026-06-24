@@ -158,16 +158,18 @@ export default function DashboardHome() {
     setTourOpen(false);
   }
 
-  function finishDashboardTour() {
-    // The user just closed the dashboard's own 5-step tour, either by
-    // finishing or X-ing out. Mark seen, and — since they chose the
-    // guided path — kick off the multi-page onboarding chain. They
-    // can still skip individual pages from there.
+  function finishDashboardTour(completed: boolean) {
+    // The dashboard's own 5-step tour just ended. Mark it seen either way.
+    // Only when the user actually FINISHED it do we kick off the multi-page
+    // onboarding chain — X-ing out / skipping must NOT drag them through all
+    // 7 pages (that was the bug: the X button force-started the whole chain).
     markTourSeen(DASHBOARD_TOUR_ID);
     setTourOpen(false);
-    setTimeout(() => {
-      startOnboarding((p) => router.push(p));
-    }, 250);
+    if (completed) {
+      setTimeout(() => {
+        startOnboarding((p) => router.push(p));
+      }, 250);
+    }
   }
 
   function startTour() {
@@ -263,7 +265,20 @@ export default function DashboardHome() {
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
   const botLink = `t.me/${botUsername}?start=${biz.slug}`;
   const plan = sub?.plan || "FREE";
-  const next = bookings.find((b) => b.status !== "CANCELLED") || bookings[0];
+  // "Keyingi yozilish" = the next UPCOMING booking, not just the first
+  // non-cancelled row (which could be a past/completed one). Take active
+  // bookings whose start time hasn't passed yet, earliest first.
+  const nowHM = (() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  })();
+  const next = bookings
+    .filter(
+      (b) =>
+        (b.status === "PENDING" || b.status === "CONFIRMED") &&
+        b.start_time.slice(0, 5) >= nowHM
+    )
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))[0];
 
   return (
     <div className="-mx-4 md:-mx-0">
@@ -325,8 +340,10 @@ export default function DashboardHome() {
               value={fmtShort(summary.revenue)}
               sub="so‘m"
               color="#22C8A8"
-              trend={summary.weekRevenue > 0 ? `+${Math.round((summary.revenue / summary.weekRevenue) * 100)}%` : undefined}
             />
+            {/* No trend badge: today's revenue ÷ week revenue is not a
+                period-over-period change. Re-add once the backend returns a
+                comparable prior-period figure. */}
             <StatBox
               label="Mijozlar"
               value={summary.clients}

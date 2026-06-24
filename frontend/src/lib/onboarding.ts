@@ -17,8 +17,6 @@
 //   onboarding tracks "user is actively in a guided sequence right
 //   now and tours should fire regardless of seen state."
 
-import { resetTours } from "./tour-state";
-
 const ACTIVE_KEY = "yozuv_onboarding_active";
 const STEP_KEY = "yozuv_onboarding_step";
 
@@ -60,7 +58,9 @@ export function getOnboardingStep(): number {
     const raw = window.localStorage.getItem(STEP_KEY);
     const n = raw ? Number(raw) : 0;
     if (Number.isNaN(n)) return 0;
-    return Math.max(0, Math.min(ONBOARDING_SEQUENCE.length, n));
+    // Clamp to the LAST valid index — length itself is out of range and
+    // would make ONBOARDING_SEQUENCE[idx] undefined.
+    return Math.max(0, Math.min(ONBOARDING_SEQUENCE.length - 1, n));
   } catch {
     return 0;
   }
@@ -83,15 +83,18 @@ export function isOnboardingTour(tourId: string): boolean {
 }
 
 /**
- * Begin (or restart) the guided onboarding sequence. Wipes any
- * previous tour-seen flags so each per-page tour fires fresh, then
- * navigates to the first step's page. Caller supplies a navigate fn
- * (router.push) so this module stays framework-agnostic.
+ * Begin (or restart) the guided onboarding sequence, then navigate to the
+ * first step's page. Caller supplies a navigate fn (router.push) so this
+ * module stays framework-agnostic.
+ *
+ * We deliberately DON'T wipe the tour-seen map here: usePageTour already
+ * fires each sequence tour while onboarding is active (via isOnboardingTour),
+ * regardless of its seen flag. Wiping would needlessly re-arm dashboard_v1
+ * and every out-of-sequence tour the user already dismissed.
  */
 export function startOnboarding(navigate: (path: string) => void): void {
   if (typeof window === "undefined") return;
   try {
-    resetTours();
     window.localStorage.setItem(ACTIVE_KEY, "1");
     setStep(0);
   } catch {
