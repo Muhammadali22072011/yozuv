@@ -23,7 +23,14 @@ export function Chip({
     >
       {children}
       {count !== undefined && (
-        <span className={cn("font-bold", active ? "opacity-70" : "opacity-60")}>{count}</span>
+        <span
+          className={cn(
+            "tnum inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-5 tabular-nums",
+            active ? "bg-white/20 text-white" : "bg-white/80 text-ink-700 shadow-sm",
+          )}
+        >
+          {count}
+        </span>
       )}
     </button>
   );

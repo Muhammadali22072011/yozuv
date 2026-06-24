@@ -19,18 +19,20 @@ export default function GlobalError({
 
   return (
     <main className="grid min-h-screen place-items-center bg-ink-50 px-6 py-16">
-      <div className="w-full max-w-md text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#FFE7E3]">
-          <AlertTriangle className="h-8 w-8 text-[#C93A2A]" strokeWidth={2.2} />
+      <div className="card-lg animate-card-in w-full max-w-md p-8 text-center sm:p-10">
+        <div className="tile-coral mx-auto grid h-20 w-20 place-items-center rounded-3xl">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/70 shadow-soft-sm backdrop-blur">
+            <AlertTriangle className="h-7 w-7 text-[#C93A2A]" strokeWidth={2.2} />
+          </span>
         </div>
-        <h1 className="mt-5 font-display text-2xl font-extrabold tracking-tight text-ink-900">
+        <h1 className="mt-6 font-display text-2xl font-extrabold tracking-tighter text-ink-900">
           Nimadir noto‘g‘ri ketdi
         </h1>
-        <p className="mt-2 text-sm text-ink-500">
+        <p className="mx-auto mt-2.5 max-w-xs text-sm leading-relaxed text-ink-500">
           Iltimos, qayta urinib ko‘ring. Agar muammo davom etsa, biz bilan bog‘laning.
         </p>
 
-        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+        <div className="mt-7 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
           <button
             type="button"
             onClick={() => reset()}
@@ -39,10 +41,7 @@ export default function GlobalError({
             <RefreshCw className="mr-2 h-4 w-4" />
             Qayta urinish
           </button>
-          <Link
-            href="/"
-            className="rounded-2xl bg-white px-5 py-3.5 font-display text-[15px] font-bold text-ink-900 shadow-soft tap"
-          >
+          <Link href="/" className="btn-soft justify-center">
             Bosh sahifaga
           </Link>
         </div>
@@ -51,7 +50,7 @@ export default function GlobalError({
           href="https://t.me/zimdevuz"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 underline-offset-2 hover:underline"
+          className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 underline-offset-2 hover:underline"
         >
           Yordam kerakmi? Telegram orqali yozing
         </a>

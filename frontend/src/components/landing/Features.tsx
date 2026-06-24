@@ -49,27 +49,32 @@ export function Features() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-20">
       <div className="max-w-2xl">
-        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600">
+        <div className="font-display text-[11px] font-extrabold uppercase tracking-[0.18em] text-indigo-600">
           Imkoniyatlar
         </div>
-        <h2 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
+        <h2 className="mt-3 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
           Kundalik jarayonlarni soddalashtiring
         </h2>
-        <p className="mt-3 text-ink-500">
+        <p className="mt-4 text-lg leading-relaxed text-ink-500">
           Mijoz oqimi, eslatmalar va tahlildan vaqt ayirmang — Yozuv o‘zi qiladi.
         </p>
       </div>
 
-      <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {items.map((it) => (
-          <div key={it.title} className="card-soft p-6">
+          <div
+            key={it.title}
+            className="card-soft p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft-lg"
+          >
             <div
-              className="grid h-11 w-11 place-items-center rounded-xl"
+              className="grid h-14 w-14 place-items-center rounded-2xl"
               style={{ background: it.bg, color: it.fg }}
             >
-              <it.icon className="h-5 w-5" strokeWidth={2.2} />
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/70">
+                <it.icon className="h-5 w-5" strokeWidth={2.2} />
+              </span>
             </div>
-            <h3 className="mt-4 font-display text-lg font-bold tracking-tight text-ink-900">
+            <h3 className="mt-5 font-display text-lg font-extrabold tracking-tight text-ink-900">
               {it.title}
             </h3>
             <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{it.desc}</p>

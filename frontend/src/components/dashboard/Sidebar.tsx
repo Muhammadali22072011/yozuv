@@ -60,28 +60,29 @@ export function Sidebar({ onAddBooking }: { onAddBooking?: () => void }) {
     : links;
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-ink-100 bg-white md:flex md:flex-col">
-      <div className="flex items-center gap-2.5 px-6 pt-8 pb-5">
-        <YzLogo size={32} variant="gradient" />
+    <aside className="hidden w-64 shrink-0 bg-white shadow-[1px_0_0_rgba(229,231,240,0.8),8px_0_24px_-18px_rgba(11,15,31,0.18)] md:flex md:flex-col">
+      <div className="flex items-center gap-3 px-6 pt-8 pb-6">
+        <YzLogo size={34} variant="gradient" />
         <div>
-          <div className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
+          <div className="font-display text-[18px] font-extrabold tracking-tight text-ink-900">
             Yozuv
           </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-400">
-            Kabinet
-          </div>
+          <div className="eyebrow">Kabinet</div>
         </div>
       </div>
 
       {onAddBooking && (
-        <div className="px-4 pb-4">
-          <button onClick={onAddBooking} className="btn-primary w-full justify-center py-3.5 text-[15px]">
+        <div className="px-4 pb-5">
+          <button
+            onClick={onAddBooking}
+            className="btn-primary tap w-full justify-center py-3.5 text-[15px]"
+          >
             <Plus className="mr-2 h-4 w-4" strokeWidth={2.8} /> Yangi yozilish
           </button>
         </div>
       )}
 
-      <nav className="flex-1 space-y-1 px-3 pb-6">
+      <nav className="scroll flex-1 space-y-1 overflow-y-auto px-3 pb-6">
         {allLinks.map((l) => {
           const active =
             pathname === l.href || (l.href !== "/dashboard" && pathname?.startsWith(l.href + "/"));
@@ -91,13 +92,25 @@ export function Sidebar({ onAddBooking }: { onAddBooking?: () => void }) {
               key={l.href}
               href={l.href}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
+                "group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition-colors",
                 active
-                  ? "bg-indigo-50 text-indigo-700"
+                  ? "bg-indigo-50 text-indigo-700 shadow-soft-sm"
                   : "text-ink-500 hover:bg-ink-50 hover:text-ink-900"
               )}
             >
-              <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 2} />
+              {active && (
+                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-indigo-600" />
+              )}
+              <span
+                className={cn(
+                  "grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-colors",
+                  active
+                    ? "bg-white/80 text-indigo-700 shadow-soft-sm"
+                    : "text-ink-400 group-hover:text-ink-700"
+                )}
+              >
+                <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 2} />
+              </span>
               {l.label}
             </Link>
           );
@@ -109,15 +122,21 @@ export function Sidebar({ onAddBooking }: { onAddBooking?: () => void }) {
           href={SUPPORT_TG}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-700"
+          className="tap flex items-center gap-3 rounded-2xl bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-700"
         >
-          <LifeBuoy className="h-4 w-4" /> Yordam
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/80 text-indigo-600 shadow-soft-sm">
+            <LifeBuoy className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          Yordam
         </a>
         <Link
           href="/dashboard/settings"
-          className="flex items-center gap-3 rounded-xl bg-ink-50 px-3 py-2.5 text-sm font-semibold text-ink-700"
+          className="tap flex items-center gap-3 rounded-2xl bg-ink-50 px-3 py-2.5 text-sm font-semibold text-ink-700"
         >
-          <CreditCard className="h-4 w-4" /> To'lov
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-ink-500 shadow-soft-sm">
+            <CreditCard className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          To'lov
         </Link>
       </div>
     </aside>

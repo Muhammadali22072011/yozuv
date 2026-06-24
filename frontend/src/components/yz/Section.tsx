@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 export function SectionLabel({
   title,
@@ -18,12 +19,20 @@ export function SectionLabel({
       <h3 className="section-title">{title}</h3>
       {action &&
         (href ? (
-          <Link href={href} className="text-[13px] font-bold text-indigo-600">
+          <Link
+            href={href}
+            className="inline-flex items-center gap-0.5 text-[13px] font-bold text-indigo-600"
+          >
             {action}
+            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.6} />
           </Link>
         ) : (
-          <button onClick={onAction} className="text-[13px] font-bold text-indigo-600 tap">
+          <button
+            onClick={onAction}
+            className="inline-flex items-center gap-0.5 text-[13px] font-bold text-indigo-600 tap"
+          >
             {action}
+            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.6} />
           </button>
         ))}
     </div>

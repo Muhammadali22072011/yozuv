@@ -22,16 +22,16 @@ export function SheetContent({
     height === "auto" ? "auto" : height === "tall" ? "88vh" : height;
   return (
     <SheetPortal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/45 animate-fadeIn data-[state=closed]:animate-[fadeIn_200ms_ease_reverse]" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] animate-fadeIn data-[state=closed]:animate-[fadeIn_200ms_ease_reverse]" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed bottom-0 left-0 right-0 z-50 flex max-h-[92vh] flex-col rounded-t-[28px] bg-white shadow-[0_-8px_40px_rgba(0,0,0,0.12)] animate-sheetUp focus:outline-none",
+          "fixed bottom-0 left-0 right-0 z-50 flex max-h-[92vh] flex-col rounded-t-4xl bg-white shadow-[0_-10px_50px_-12px_rgba(11,15,31,0.25)] animate-sheetUp focus:outline-none",
           "mx-auto md:max-w-[480px]",
           className
         )}
         style={{ height: resolvedHeight, maxHeight: "92vh" }}
       >
-        <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-ink-200" />
+        <div className="mx-auto mt-3 h-1.5 w-11 shrink-0 rounded-full bg-ink-200/80" />
         {children}
       </DialogPrimitive.Content>
     </SheetPortal>
@@ -48,19 +48,19 @@ export function SheetHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between px-5 pt-4">
+    <div className="flex items-center justify-between gap-3 px-5 pt-4">
       {title ? (
-        <h2 className="font-display text-[22px] font-extrabold tracking-tight text-ink-900">
+        <h2 className="min-w-0 truncate font-display text-[22px] font-extrabold tracking-tighter text-ink-900">
           {title}
         </h2>
       ) : (
         <span />
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {right}
         <DialogPrimitive.Close
           onClick={onClose}
-          className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-900 tap"
+          className="grid h-9 w-9 place-items-center rounded-2xl bg-ink-100 text-ink-500 tap transition-colors hover:bg-ink-200/70 hover:text-ink-900"
           aria-label="Yopish"
         >
           <X className="h-5 w-5" strokeWidth={2.2} />
@@ -79,7 +79,10 @@ export function SheetBody({ children, className }: { children: React.ReactNode; 
 export function SheetFooter({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={cn("flex items-center gap-2.5 px-5 pt-3", className)}
+      className={cn(
+        "flex items-center gap-2.5 border-t border-ink-100/70 px-5 pt-3.5",
+        className
+      )}
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
     >
       {children}

@@ -7,6 +7,7 @@ import {
   Building2,
   Check,
   ClipboardList,
+  Clock,
   CreditCard,
   Database,
   Megaphone,
@@ -14,7 +15,9 @@ import {
   Plus,
   RotateCcw,
   Shield,
+  Sparkles,
   Trash2,
+  TrendingUp,
   Wallet,
   X,
 } from "lucide-react";
@@ -785,9 +788,9 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => setTab("settings")}
-            className="flex w-full items-start gap-3 rounded-[22px] bg-[#FFE7E3] p-4 text-left tap"
+            className="flex w-full items-start gap-3 rounded-3xl bg-[#FFE7E3] p-4 text-left tap"
           >
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#C93A2A] text-white">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#C93A2A] text-white">
               <AlertTriangle className="h-5 w-5" />
             </div>
             <div>
@@ -803,12 +806,12 @@ export default function AdminPage() {
 
         {tab === "summary" && sum && (
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-            <StatCard label="Bizneslar" value={sum.businesses_total} sub={`Faol: ${sum.businesses_active}`} color="#4853F5" />
-            <StatCard label="Yangi (7 kun)" value={sum.businesses_new_7d} color="#22C8A8" />
-            <StatCard label="Faol obunalar" value={sum.active_subscriptions} sub={`Trial: ${sum.trial_subscriptions} · Pulli: ${sum.paid_subscriptions}`} color="#FFC94A" />
-            <StatCard label="MRR" value={fmtShort(sum.mrr_uzs)} sub="so‘m / oy" color="#22C8A8" />
-            <StatCard label="Daromad (7 kun)" value={fmtShort(sum.revenue_7d_uzs)} sub="so‘m" color="#4853F5" />
-            <StatCard label="Tasdiqlash kutmoqda" value={sum.pending_card_payments} sub="kutilmoqda" color="#FF7A6B" />
+            <StatCard label="Bizneslar" value={sum.businesses_total} sub={`Faol: ${sum.businesses_active}`} tone="indigo" icon={Building2} />
+            <StatCard label="Yangi (7 kun)" value={sum.businesses_new_7d} tone="mint" icon={Sparkles} />
+            <StatCard label="Faol obunalar" value={sum.active_subscriptions} sub={`Trial: ${sum.trial_subscriptions} · Pulli: ${sum.paid_subscriptions}`} tone="lemon" icon={Wallet} />
+            <StatCard label="MRR" value={fmtShort(sum.mrr_uzs)} sub="so‘m / oy" tone="mint" icon={TrendingUp} />
+            <StatCard label="Daromad (7 kun)" value={fmtShort(sum.revenue_7d_uzs)} sub="so‘m" tone="indigo" icon={CreditCard} />
+            <StatCard label="Tasdiqlash kutmoqda" value={sum.pending_card_payments} sub="kutilmoqda" tone="coral" icon={Clock} />
           </div>
         )}
 
@@ -834,8 +837,11 @@ export default function AdminPage() {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
             {biz.length === 0 && (
-              <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-8 text-center text-sm text-ink-400 md:col-span-2">
-                Bizneslar yo‘q
+              <div className="card-soft flex flex-col items-center gap-3 p-8 text-center md:col-span-2">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+                  <Building2 className="h-6 w-6" strokeWidth={2.2} />
+                </div>
+                <span className="text-sm font-medium text-ink-400">Bizneslar yo‘q</span>
               </div>
             )}
             {biz.map((b) => (
@@ -900,26 +906,26 @@ export default function AdminPage() {
                     <>
                       <button
                         onClick={() => extend(b.id, 7)}
-                        className="rounded-xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                        className="rounded-2xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
                       >
                         +7 kun
                       </button>
                       <button
                         onClick={() => extend(b.id, 30)}
-                        className="rounded-xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                        className="rounded-2xl bg-indigo-50 px-3.5 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
                       >
                         +30 kun
                       </button>
                       <button
                         onClick={() => openSubForm(b)}
-                        className="rounded-xl bg-indigo-50 px-3 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                        className="rounded-2xl bg-indigo-50 px-3 py-2 text-[13px] font-bold text-indigo-700 tap hover:bg-indigo-100"
                         title="Reja/holat"
                       >
                         Reja
                       </button>
                       <button
                         onClick={() => openEditBiz(b)}
-                        className="inline-flex items-center gap-1 rounded-xl bg-ink-100 px-3 py-2 text-[13px] font-bold text-ink-700 tap hover:bg-ink-200"
+                        className="inline-flex items-center gap-1 rounded-2xl bg-ink-100 px-3 py-2 text-[13px] font-bold text-ink-700 tap hover:bg-ink-200"
                         title="Tahrirlash"
                       >
                         <Pencil className="h-3.5 w-3.5" strokeWidth={2.6} />
@@ -927,7 +933,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => toggleBiz(b.id, !b.is_active)}
                         className={cn(
-                          "ml-auto rounded-xl px-3.5 py-2 text-[13px] font-bold tap",
+                          "ml-auto rounded-2xl px-3.5 py-2 text-[13px] font-bold tap",
                           b.is_active
                             ? "bg-[#FFE7E3] text-[#C93A2A] hover:bg-[#FCD7CE]"
                             : "bg-[#E6FAF3] text-[#0E9577] hover:bg-[#CFF1E1]"
@@ -940,7 +946,7 @@ export default function AdminPage() {
                   <button
                     onClick={() => deleteBiz(b)}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-xl px-3 py-2 text-[13px] font-bold tap",
+                      "inline-flex items-center gap-1 rounded-2xl px-3 py-2 text-[13px] font-bold tap",
                       b.deleted_at
                         ? "ml-auto bg-[#FFE7E3] text-[#C93A2A] hover:bg-[#FCD7CE]"
                         : "bg-ink-100 text-ink-600 hover:bg-ink-200"
@@ -960,13 +966,14 @@ export default function AdminPage() {
         {tab === "payments" && (
           <div className="space-y-5">
             <div>
-              <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-ink-400">
-                Tasdiqlash kutmoqda
-              </div>
+              <div className="eyebrow mb-2 px-1">Tasdiqlash kutmoqda</div>
               <div className="grid gap-3 md:grid-cols-2">
             {pending.length === 0 && (
-              <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-8 text-center text-sm text-ink-400 md:col-span-2">
-                Hozircha kutilayotgan to‘lov yo‘q
+              <div className="card-soft flex flex-col items-center gap-3 p-8 text-center md:col-span-2">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl text-[#0E9577]" style={{ background: "#E7F8F2" }}>
+                  <Check className="h-6 w-6" strokeWidth={2.4} />
+                </div>
+                <span className="text-sm font-medium text-ink-400">Hozircha kutilayotgan to‘lov yo‘q</span>
               </div>
             )}
             {pending.map((p) => (
@@ -977,7 +984,7 @@ export default function AdminPage() {
                       {p.business_name}
                     </div>
                     <div className="mt-1 flex items-baseline gap-2">
-                      <span className="font-display text-xl font-extrabold tracking-[-0.02em] text-ink-900">
+                      <span className="tnum font-display text-xl font-extrabold tracking-[-0.02em] text-ink-900">
                         {fmtSum(p.amount)}
                       </span>
                       <span className="text-xs font-semibold text-ink-500">so‘m</span>
@@ -1048,9 +1055,7 @@ export default function AdminPage() {
             </div>
 
             <div>
-              <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-ink-400">
-                Oxirgi to‘lovlar
-              </div>
+              <div className="eyebrow mb-2 px-1">Oxirgi to‘lovlar</div>
               <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
                 {recent.length === 0 && (
                   <div className="p-6 text-center text-sm text-ink-400">
@@ -1089,7 +1094,7 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-display text-sm font-extrabold tracking-[-0.01em] text-ink-900">
+                        <div className="tnum font-display text-sm font-extrabold tracking-[-0.01em] text-ink-900">
                           {fmtSum(tx.amount)}
                         </div>
                         <span
@@ -1107,7 +1112,7 @@ export default function AdminPage() {
                             refund(tx.id, tx.business_name, tx.amount)
                           }
                           disabled={refundingId === tx.id}
-                          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#FFE7E3] px-3 py-2 text-[12px] font-bold text-[#C93A2A] tap hover:bg-[#FCD7CE] disabled:opacity-50"
+                          className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl bg-[#FFE7E3] px-3 py-2 text-[12px] font-bold text-[#C93A2A] tap hover:bg-[#FCD7CE] disabled:opacity-50"
                           title="Pulni qaytarish va obunani bekor qilish"
                         >
                           <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
@@ -1215,7 +1220,7 @@ export default function AdminPage() {
                 placeholder="Yangilik matni..."
                 className="yz-input mt-4"
               />
-              <div className="mt-2 text-right text-[11px] font-semibold text-ink-400">
+              <div className="tnum mt-2 text-right text-[11px] font-semibold text-ink-400">
                 {broadcastText.length} / 4000
               </div>
               <button
@@ -1228,9 +1233,7 @@ export default function AdminPage() {
             </div>
 
             <div>
-              <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-ink-400">
-                Tarix
-              </div>
+              <div className="eyebrow mb-2 px-1">Tarix</div>
               <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
                 {broadcastHistory.length === 0 && (
                   <div className="p-6 text-center text-sm text-ink-400">
@@ -1276,7 +1279,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => retryBroadcast(h.id)}
                         disabled={retryingId === h.id}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
                       >
                         <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
                         {retryingId === h.id
@@ -1350,11 +1353,9 @@ export default function AdminPage() {
 
             {/* Live preview of how the card looks to clients */}
             <div className="space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-ink-400">
-                Mijoz ko‘radi
-              </div>
+              <div className="eyebrow">Mijoz ko‘radi</div>
               <div
-                className="relative overflow-hidden rounded-[22px] p-5 text-white shadow-soft"
+                className="relative overflow-hidden rounded-3xl p-5 text-white shadow-soft-lg"
                 style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
               >
                 <div className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-indigo-500/30 blur-2xl" />
@@ -1471,12 +1472,12 @@ export default function AdminPage() {
               </select>
               <button
                 onClick={loadAudit}
-                className="rounded-xl bg-ink-100 px-3 py-2 text-sm font-bold text-ink-700 tap hover:bg-ink-200"
+                className="rounded-2xl bg-ink-100 px-3 py-2 text-sm font-bold text-ink-700 tap hover:bg-ink-200"
               >
                 Yangilash
               </button>
               <span className="ml-auto text-[11px] font-semibold text-ink-400">
-                {audit.length} yozuv
+                <span className="tnum">{audit.length}</span> yozuv
               </span>
             </div>
             <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
@@ -1561,11 +1562,11 @@ function SubscriptionFormModal({
   const set = (patch: Partial<SubFormState>) => onChange({ ...form, ...patch });
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4"
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="card-soft w-full max-w-md overflow-hidden"
+        className="card-lg w-full max-w-md overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
@@ -1577,7 +1578,7 @@ function SubscriptionFormModal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 hover:bg-ink-100"
+            className="grid h-8 w-8 place-items-center rounded-2xl text-ink-500 hover:bg-ink-100"
             aria-label="Yopish"
           >
             <X className="h-4 w-4" strokeWidth={2.6} />
@@ -1623,7 +1624,7 @@ function SubscriptionFormModal({
               className="yz-input mt-1"
             />
           </div>
-          <div className="rounded-xl bg-ink-50 px-3 py-2 text-[11px] text-ink-500">
+          <div className="rounded-2xl bg-ink-50 px-3 py-2 text-[11px] text-ink-500">
             Egaga Telegram orqali xabar yuboriladi.
           </div>
         </div>
@@ -1665,11 +1666,11 @@ function BusinessFormModal({
   const set = (patch: Partial<BizFormState>) => onChange({ ...form, ...patch });
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4"
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="card-soft w-full max-w-lg overflow-hidden"
+        className="card-lg w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
@@ -1678,7 +1679,7 @@ function BusinessFormModal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 hover:bg-ink-100"
+            className="grid h-8 w-8 place-items-center rounded-2xl text-ink-500 hover:bg-ink-100"
             aria-label="Yopish"
           >
             <X className="h-4 w-4" strokeWidth={2.6} />
@@ -1807,35 +1808,57 @@ function BusinessFormModal({
   );
 }
 
+const STAT_TONES = {
+  indigo: { bg: "#EEF0FF", fg: "#4853F5", chip: "rgba(255,255,255,0.7)" },
+  mint: { bg: "#E7F8F2", fg: "#0E9577", chip: "rgba(255,255,255,0.7)" },
+  lemon: { bg: "#FFF3DA", fg: "#A8751A", chip: "rgba(255,255,255,0.7)" },
+  coral: { bg: "#FFE7E3", fg: "#C93A2A", chip: "rgba(255,255,255,0.7)" },
+} as const;
+
 function StatCard({
   label,
   value,
   sub,
-  color,
+  tone,
+  icon: Icon,
 }: {
   label: string;
   value: number | string;
   sub?: string;
-  color: string;
+  tone: keyof typeof STAT_TONES;
+  icon: typeof Shield;
 }) {
+  const t = STAT_TONES[tone];
   return (
-    <div className="card-soft relative overflow-hidden p-4 md:p-5">
-      <span
-        className="absolute left-0 top-0 h-full w-1"
-        style={{ background: color }}
-        aria-hidden
-      />
-      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-400">
-        {label}
+    <div
+      className="relative overflow-hidden rounded-3xl p-4 md:p-5"
+      style={{ background: t.bg }}
+    >
+      <div
+        className="grid h-10 w-10 place-items-center rounded-2xl"
+        style={{ background: t.chip, color: t.fg }}
+      >
+        <Icon className="h-5 w-5" strokeWidth={2.2} />
       </div>
       <div
-        className="mt-2 font-display text-[28px] font-extrabold leading-none tracking-[-0.02em] md:text-[32px]"
-        style={{ color }}
+        className="mt-3 tnum font-display text-[26px] font-extrabold leading-none tracking-tighter md:text-[30px]"
+        style={{ color: t.fg }}
       >
         {value}
       </div>
+      <div
+        className="mt-2 text-[11px] font-bold uppercase tracking-[0.08em]"
+        style={{ color: t.fg, opacity: 0.7 }}
+      >
+        {label}
+      </div>
       {sub && (
-        <div className="mt-1.5 text-[11px] font-semibold text-ink-500">{sub}</div>
+        <div
+          className="mt-1 text-[11px] font-semibold"
+          style={{ color: t.fg, opacity: 0.6 }}
+        >
+          {sub}
+        </div>
       )}
     </div>
   );

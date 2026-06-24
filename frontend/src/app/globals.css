@@ -5,51 +5,65 @@
 :root {
   --background: 0 0% 100%;
   --foreground: 222 47% 11%;
-  --border: 214 32% 91%;
-  --radius: 0.75rem;
+  --border: 230 30% 92%;
+  --radius: 0.875rem;
 
   --indigo-50: #eef0ff;
   --indigo-100: #e0e4ff;
   --indigo-200: #c7ccff;
   --indigo-300: #a3aaff;
+  --indigo-400: #7c84ff;
   --indigo-500: #5b6bff;
   --indigo-600: #4853f5;
   --indigo-700: #3640d4;
+  --indigo-800: #2a2e9e;
   --indigo-900: #1e2270;
+  --iris: #7c5cff;
   --ink-900: #0b0f1f;
   --ink-700: #2a2f45;
   --ink-500: #5a6078;
-  --ink-400: #848aa2;
+  --ink-400: #878da6;
   --ink-300: #b9becd;
-  --ink-200: #e3e5ec;
-  --ink-100: #f2f3f7;
-  --ink-50: #f8f9fc;
+  --ink-200: #e5e7f0;
+  --ink-100: #f1f2f8;
+  --ink-50: #f5f6fb;
+  --canvas: #f5f6fb;
   --mint: #22c8a8;
   --lemon: #ffc94a;
   --coral: #ff7a6b;
   --lilac: #b8a6ff;
   --sky: #7bc6ff;
   --rose: #ff9fb5;
-  --success-bg: #e6faf3;
-  --warn-bg: #fff3da;
-  --danger-bg: #ffe7e3;
+  --success-bg: #e7f8f2;
+  --warn-bg: #fff4dd;
+  --danger-bg: #ffe9e5;
+  --success: #0e9577;
+  --warn: #a8751a;
+  --danger: #c93a2a;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The Telegram WebApp panel can show a sliver of the page root behind
-   the rendered content (rounded corners, viewport-vs-content mismatch
-   on desktop). Painting <html> in the brand indigo makes any sliver
-   blend with the hero gradient instead of showing as a white line. */
+/* Havodor — светлый «воздушный» холст. Раньше <html> красился в indigo,
+   т.к. почти все экраны открывались синим hero. В новой системе верх
+   экранов светлый, поэтому корень красим в холст (--canvas): любой
+   тонкий просвет под чромой Telegram сливается со светлым фоном, а не
+   даёт цветную полосу. themeColor остаётся indigo — шапку Telegram
+   красит сам мессенджер. */
 html {
-  background: #4853f5;
+  background: var(--canvas);
 }
 
 body {
   @apply bg-ink-50 text-ink-900 antialiased;
   font-feature-settings: "ss01", "cv11";
+}
+
+/* Табличные цифры для статистики, сумм и времени — колонки не «прыгают». */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 .scroll::-webkit-scrollbar {
@@ -60,78 +74,156 @@ body {
 }
 
 @layer components {
+  /* ── Поверхности ─────────────────────────────────────────────── */
+  .surface {
+    @apply bg-white;
+  }
+
   .card-soft {
-    @apply rounded-[22px] bg-white shadow-soft;
+    @apply rounded-3xl bg-white shadow-soft;
   }
 
   .card {
-    @apply rounded-[22px] border border-ink-100 bg-white shadow-soft;
+    @apply rounded-3xl border border-ink-100 bg-white shadow-soft;
   }
 
+  .card-lg {
+    @apply rounded-4xl bg-white shadow-soft-lg;
+  }
+
+  /* Пастельная плитка статистики/быстрых действий. Цвет задаётся
+     модификатором .tile-*. Без тени — глубину даёт сам фон. */
+  .tile {
+    @apply rounded-3xl p-4;
+  }
+  .tile-indigo {
+    @apply tile bg-indigo-50;
+  }
+  .tile-mint {
+    @apply tile;
+    background: var(--success-bg);
+  }
+  .tile-lemon {
+    @apply tile;
+    background: var(--warn-bg);
+  }
+  .tile-coral {
+    @apply tile;
+    background: var(--danger-bg);
+  }
+  .tile-sky {
+    @apply tile;
+    background: #e8f4ff;
+  }
+  .tile-lilac {
+    @apply tile;
+    background: #f1ecff;
+  }
+
+  /* ── Градиенты бренда ────────────────────────────────────────── */
   .yz-grad {
-    background: linear-gradient(135deg, #5b6bff 0%, #4853f5 50%, #3640d4 100%);
+    background: linear-gradient(135deg, #6e79ff 0%, #4853f5 52%, #3a44e0 100%);
   }
-
   .yz-grad-soft {
     background: linear-gradient(135deg, #eef0ff 0%, #e0e4ff 100%);
   }
-
   .yz-hero {
-    background: linear-gradient(160deg, #5b6bff 0%, #4853f5 55%, #3640d4 100%);
+    background: radial-gradient(130% 120% at 82% -10%, #7c5cff 0%, #4853f5 46%, #343ecf 100%);
+  }
+  /* Единственный «яркий» акцент Havodor — карточка-фича (напр. daromad). */
+  .yz-feature {
+    background: linear-gradient(135deg, #7c5cff 0%, #4853f5 100%);
+    box-shadow: 0 18px 36px -18px rgba(72, 83, 245, 0.6);
+  }
+  /* Тёмная премиальная карточка (ссылка на бота и т.п.). */
+  .yz-dark {
+    background: linear-gradient(135deg, #0b0f1f 0%, #1e2270 100%);
   }
 
+  /* ── Кнопки ──────────────────────────────────────────────────── */
   .btn-primary {
     @apply inline-flex items-center justify-center rounded-2xl px-5 py-4 font-display text-base font-bold tracking-tight text-white transition-transform active:scale-[0.97];
     background: linear-gradient(180deg, #5b6bff 0%, #4853f5 100%);
-    box-shadow: 0 8px 24px rgba(72, 83, 245, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 12px 26px -10px rgba(72, 83, 245, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
   .btn-primary:disabled {
     @apply opacity-40 cursor-not-allowed;
   }
 
   .btn-soft {
-    @apply inline-flex items-center justify-center rounded-2xl bg-white px-5 py-4 font-display text-base font-bold text-ink-900 shadow-soft active:opacity-80;
+    @apply inline-flex items-center justify-center rounded-2xl border border-ink-200 bg-white px-5 py-4 font-display text-base font-bold text-ink-900 shadow-soft-sm transition active:scale-[0.97];
   }
 
   .tap {
-    @apply cursor-pointer select-none transition-opacity active:opacity-70;
+    @apply cursor-pointer select-none transition-transform active:scale-[0.97];
   }
 
+  /* ── Чипы / пилюли ───────────────────────────────────────────── */
   .chip {
-    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-ink-100 px-3.5 py-2 text-[13px] font-semibold text-ink-700;
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-ink-100 px-3.5 py-2 text-[13px] font-semibold text-ink-700 transition-colors;
   }
-
   .chip-active {
     @apply bg-ink-900 text-white;
   }
 
   .pill {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold;
   }
   .pill-success {
     @apply pill;
     background: var(--success-bg);
-    color: var(--success, #0e9577);
+    color: var(--success);
   }
   .pill-warn {
     @apply pill;
     background: var(--warn-bg);
-    color: #a8751a;
+    color: var(--warn);
   }
   .pill-danger {
     @apply pill;
     background: var(--danger-bg);
-    color: #c93a2a;
+    color: var(--danger);
   }
   .pill-muted {
     @apply pill bg-ink-100 text-ink-500;
   }
 
+  /* ── Типографика ─────────────────────────────────────────────── */
   .section-title {
-    @apply font-display text-[17px] font-extrabold tracking-tight text-ink-900;
+    @apply font-display text-[17px] font-extrabold tracking-tighter text-ink-900;
+  }
+  .display-xl {
+    @apply font-display font-extrabold tracking-tightest text-ink-900;
+  }
+  .eyebrow {
+    @apply font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-400;
   }
 
+  /* ── Поля ввода ──────────────────────────────────────────────── */
   .yz-input {
-    @apply w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 font-sans text-sm text-ink-900 outline-none transition-colors placeholder:text-ink-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20;
+    @apply w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 font-sans text-sm text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15;
+  }
+
+  /* Скелетон-загрузка с бегущим бликом. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-2xl bg-ink-100;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  }
+}
+
+/* Уважаем системную настройку «меньше движения» — гасим все анимации,
+   оставляя мгновенные финальные состояния. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

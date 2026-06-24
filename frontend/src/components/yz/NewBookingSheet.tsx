@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Search } from "lucide-react";
+import { Check, Clock, Scissors, Search } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Avatar } from "./Avatar";
 import {
@@ -22,10 +22,12 @@ const STEPS = ["Mijoz", "Xizmat", "Vaqt", "Tasdiq"] as const;
 
 function Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
   return (
-    <div className="flex items-center justify-between py-2 text-sm">
+    <div className="flex items-center justify-between gap-3 py-2 text-sm">
       <div className="font-medium text-ink-400">{label}</div>
       <div
-        className={`font-display text-ink-900 ${bold ? "text-base font-extrabold" : "font-bold"}`}
+        className={`text-right font-display tracking-tight ${
+          bold ? "text-lg font-extrabold text-indigo-700 tnum" : "font-bold text-ink-900"
+        }`}
       >
         {value}
       </div>
@@ -135,36 +137,39 @@ export function NewBookingSheet({
       <SheetContent height="tall">
         <SheetHeader title="Yangi yozilish" />
 
-        <div className="mt-3 flex gap-1.5 px-5">
+        <div className="mt-4 flex gap-1.5 px-5">
           {STEPS.map((s, i) => (
             <div
               key={s}
               className={cn(
-                "h-1 flex-1 rounded-full",
-                i <= step ? "yz-grad" : "bg-ink-200"
+                "h-1.5 flex-1 rounded-full transition-colors",
+                i <= step ? "yz-grad" : "bg-ink-100"
               )}
             />
           ))}
         </div>
-        <div className="px-5 pt-2.5 text-xs font-bold text-ink-400">
+        <div className="px-5 pt-3 eyebrow">
           {step + 1}/{STEPS.length} · {STEPS[step]}
         </div>
 
         <SheetBody>
           {step === 0 && (
-            <div className="flex flex-col gap-2">
-              <div className="mb-2 flex items-center gap-2.5 rounded-2xl bg-ink-100 px-3.5 py-3">
-                <Search className="h-4 w-4 text-ink-400" />
+            <div className="flex flex-col gap-2.5">
+              <div className="relative mb-1">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Mijoz qidirish"
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-400"
+                  className="yz-input pl-11"
                 />
               </div>
               {filteredClients.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-5 text-center text-sm text-ink-400">
-                  Mijoz topilmadi
+                <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-ink-200 bg-white p-7 text-center">
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-ink-100 text-ink-400">
+                    <Search className="h-5 w-5" />
+                  </div>
+                  <div className="text-sm font-medium text-ink-400">Mijoz topilmadi</div>
                 </div>
               )}
               {filteredClients.map((c) => {
@@ -175,19 +180,24 @@ export function NewBookingSheet({
                     key={c.id}
                     onClick={() => setClient(c)}
                     className={cn(
-                      "flex items-center gap-3 rounded-2xl border-[1.5px] px-3 py-3 text-left tap",
-                      active ? "border-indigo-600 bg-indigo-50" : "border-ink-100 bg-white"
+                      "flex items-center gap-3 rounded-3xl border-[1.5px] px-3.5 py-3 text-left tap",
+                      active
+                        ? "border-indigo-500 bg-indigo-50 shadow-soft-sm"
+                        : "border-transparent bg-white shadow-soft-sm"
                     )}
                   >
                     <Avatar name={name} size={40} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-display text-sm font-bold text-ink-900">
+                      <div className="truncate font-display text-sm font-bold tracking-tight text-ink-900">
                         {name}
                       </div>
-                      <div className="truncate text-xs text-ink-400">{c.phone || "—"}</div>
+                      <div className="truncate text-xs text-ink-400 tnum">{c.phone || "—"}</div>
                     </div>
                     {active && (
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-indigo-600 text-white">
+                      <span
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white"
+                        style={{ background: "linear-gradient(135deg,#7C5CFF,#4853F5)" }}
+                      >
                         <Check className="h-3.5 w-3.5" strokeWidth={3} />
                       </span>
                     )}

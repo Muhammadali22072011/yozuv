@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, UserPlus, Users } from "lucide-react";
 import {
   Avatar,
   ClientSheet,
@@ -85,9 +85,14 @@ export default function ClientsPage() {
     <div>
       <ScreenHeader title="Mijozlar" subtitle={`${rows.length} ta faol mijoz`} />
 
-      <div className="mt-1 px-4 md:px-0">
-        <div data-tour="clients-search" className="flex items-center gap-2.5 rounded-2xl bg-white px-3.5 py-3 shadow-soft">
-          <Search className="h-5 w-5 text-ink-400" />
+      <div className="mt-2 px-4 md:px-0">
+        <div
+          data-tour="clients-search"
+          className="flex items-center gap-3 rounded-3xl bg-white px-3.5 py-3 shadow-soft transition focus-within:ring-4 focus-within:ring-indigo-500/15"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+            <Search className="h-4.5 w-4.5" strokeWidth={2.2} />
+          </span>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -109,14 +114,23 @@ export default function ClientsPage() {
         </Chip>
       </div>
 
-      <div data-tour="clients-list" className="mt-4 flex flex-col gap-2 px-4 md:px-0">
+      <div data-tour="clients-list" className="mt-4 flex flex-col gap-2.5 px-4 md:px-0">
         {loading ? (
-          <div className="rounded-[22px] bg-white p-6 text-center text-sm text-ink-400 shadow-soft">
+          <div className="card-soft p-6 text-center text-sm text-ink-400">
             Yuklanmoqda…
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-[22px] bg-white p-6 text-center text-sm text-ink-400 shadow-soft">
-            {rows.length === 0 ? "Hali mijoz yo‘q" : "Mijoz topilmadi"}
+          <div className="card-soft flex flex-col items-center gap-3 p-8 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-3xl bg-indigo-50 text-indigo-600">
+              {rows.length === 0 ? (
+                <UserPlus className="h-6 w-6" strokeWidth={2} />
+              ) : (
+                <Users className="h-6 w-6" strokeWidth={2} />
+              )}
+            </span>
+            <div className="text-sm font-medium text-ink-400">
+              {rows.length === 0 ? "Hali mijoz yo‘q" : "Mijoz topilmadi"}
+            </div>
           </div>
         ) : (
           filtered.map((r) => {
@@ -140,26 +154,26 @@ export default function ClientsPage() {
                     is_vip: r.is_vip,
                   })
                 }
-                className="card-soft flex items-center gap-3 p-3.5 text-left tap"
+                className="card-soft flex items-center gap-3.5 p-3.5 text-left tap"
               >
-                <Avatar name={name} size={46} vip={r.is_vip} />
+                <Avatar name={name} size={48} vip={r.is_vip} isNew={isNew} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <div className="truncate font-display text-[15px] font-bold text-ink-900">
+                    <div className="truncate font-display text-[15px] font-bold tracking-tight text-ink-900">
                       {name}
                     </div>
                     {isNew && (
-                      <span className="rounded-full bg-[#FFE7E3] px-1.5 py-0.5 text-[10px] font-extrabold text-[#C93A2A]">
+                      <span className="shrink-0 rounded-full bg-danger-bg px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-danger">
                         YANGI
                       </span>
                     )}
                   </div>
                   <div className="mt-0.5 truncate text-xs text-ink-500">
-                    {r.visits} ta tashrif · {r.last_visit?.slice(0, 10) || "—"}
+                    <span className="tnum">{r.visits}</span> ta tashrif · {r.last_visit?.slice(0, 10) || "—"}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-display text-sm font-extrabold text-ink-900">
+                <div className="shrink-0 text-right">
+                  <div className="tnum font-display text-sm font-extrabold tracking-tight text-ink-900">
                     {fmtSum(r.total_spent)}
                   </div>
                   <div className="text-[10px] font-semibold text-ink-400">so‘m</div>

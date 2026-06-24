@@ -25,21 +25,23 @@ export function ScreenHeader({
   };
 
   return (
-    <div className="flex items-start gap-3 px-4 pt-4 pb-3 md:px-0">
+    <div className="flex items-center gap-3 px-4 pt-4 pb-3 md:px-0">
       {showBack && (
         <button
           onClick={go}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white shadow-soft tap"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
           aria-label="Orqaga"
         >
-          <ArrowLeft className="h-5 w-5 text-ink-900" strokeWidth={2.4} />
+          <ArrowLeft className="h-5 w-5" strokeWidth={2.2} />
         </button>
       )}
-      <div className="flex-1 pt-1">
-        <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-900">{title}</h1>
-        {subtitle && <div className="mt-0.5 text-[13px] font-medium text-ink-400">{subtitle}</div>}
+      <div className="min-w-0 flex-1">
+        <h1 className="display-xl truncate text-[26px] leading-none">{title}</h1>
+        {subtitle && (
+          <div className="mt-1.5 truncate text-[13px] font-medium text-ink-400">{subtitle}</div>
+        )}
       </div>
-      {right}
+      {right && <div className="flex shrink-0 items-center gap-2">{right}</div>}
     </div>
   );
 }

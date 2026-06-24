@@ -150,27 +150,31 @@ export function MapPicker({ value, onChange, onAddressLookup, height = 280 }: Pr
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div
         ref={mapDivRef}
-        className="overflow-hidden rounded-2xl border-[1.5px] border-ink-100 bg-ink-50"
+        className="overflow-hidden rounded-3xl bg-ink-50 shadow-soft ring-1 ring-ink-100"
         style={{ height }}
       />
-      <div className="flex items-center justify-between gap-2 text-xs">
+      <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={useMyLocation}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-1.5 font-semibold text-indigo-700 tap"
+          className="tap inline-flex items-center gap-2 rounded-2xl bg-indigo-50 px-3.5 py-2 text-[13px] font-semibold text-indigo-700 transition disabled:opacity-50"
         >
-          <Navigation className="h-3.5 w-3.5" />
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-xl bg-white/70 text-indigo-600">
+            <Navigation className="h-3.5 w-3.5" />
+          </span>
           {busy ? "Kutilmoqda…" : "Mening joylashuvim"}
         </button>
-        <div className="inline-flex items-center gap-1 text-ink-400">
-          <MapPin className="h-3 w-3" />
-          {value
-            ? `${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}`
-            : "Xaritani bosing yoki marker'ni suring"}
+        <div className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-50 px-3 py-1.5 text-[11px] font-medium text-ink-400">
+          <MapPin className="h-3 w-3 text-ink-300" />
+          {value ? (
+            <span className="tnum text-ink-500">{`${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}`}</span>
+          ) : (
+            "Xaritani bosing yoki marker'ni suring"
+          )}
         </div>
       </div>
     </div>

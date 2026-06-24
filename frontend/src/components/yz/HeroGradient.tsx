@@ -10,12 +10,12 @@ export function HeroGradient({
   decorations?: boolean;
 }) {
   return (
-    <div className={cn("yz-hero relative overflow-hidden rounded-b-[32px] px-5 pb-20 pt-14", className)}>
+    <div className={cn("yz-hero relative overflow-hidden rounded-b-[34px] px-5 pb-20 pt-14", className)}>
       {decorations && (
         <>
-          <div className="pointer-events-none absolute -right-10 -top-8 h-48 w-48 rounded-full bg-white/10" />
-          <div className="pointer-events-none absolute right-20 top-20 h-24 w-24 rounded-full bg-lemon/25 blur-sm" />
-          <div className="pointer-events-none absolute -left-5 bottom-14 h-28 w-28 rounded-full bg-lilac/25" />
+          <div className="pointer-events-none absolute -right-12 -top-10 h-52 w-52 rounded-full bg-white/15 blur-2xl" />
+          <div className="pointer-events-none absolute right-16 top-16 h-28 w-28 rounded-full bg-sky/30 blur-2xl" />
+          <div className="pointer-events-none absolute -left-8 bottom-10 h-32 w-32 rounded-full bg-lilac/30 blur-2xl" />
         </>
       )}
       <div className="relative">{children}</div>

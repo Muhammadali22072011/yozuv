@@ -1,33 +1,37 @@
 import Link from "next/link";
-import { ArrowRight, Bell, CalendarDays } from "lucide-react";
+import { ArrowRight, Bell, CalendarDays, Sparkles } from "lucide-react";
 import { YzLogo } from "@/components/yz/Logo";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      <div className="absolute inset-0 yz-hero" />
-      <div className="pointer-events-none absolute -right-24 top-0 h-80 w-80 rounded-full bg-white/10" />
-      <div className="pointer-events-none absolute right-40 top-24 h-40 w-40 rounded-full bg-lemon/30 blur-sm" />
-      <div className="pointer-events-none absolute -left-16 bottom-20 h-56 w-56 rounded-full bg-lilac/25" />
+    <section className="relative overflow-hidden bg-ink-50">
+      {/* Havodor — светлый воздушный холст. Один яркий момент — кнопка-градиент
+          и стат-чип в макете; фон держим лёгким с пастельными свечениями. */}
+      <div className="pointer-events-none absolute -right-28 -top-24 h-96 w-96 rounded-full bg-indigo-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute right-44 top-28 h-44 w-44 rounded-full bg-lemon/25 blur-2xl" />
+      <div className="pointer-events-none absolute -left-20 bottom-16 h-72 w-72 rounded-full bg-lilac/25 blur-3xl" />
 
-      <div className="relative mx-auto flex max-w-6xl flex-col gap-12 px-6 pt-20 pb-24 lg:flex-row lg:items-center lg:gap-16 lg:pt-28 lg:pb-32">
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-12 px-6 pt-16 pb-20 lg:flex-row lg:items-center lg:gap-16 lg:pt-24 lg:pb-28">
         <div className="flex-1 space-y-6">
           <div className="flex items-center gap-2.5">
-            <YzLogo size={40} variant="light" />
+            <YzLogo size={40} />
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/70">
-                Telegram Mini App
-              </div>
-              <div className="font-display text-[17px] font-extrabold tracking-tight text-white">
+              <div className="eyebrow">Telegram Mini App</div>
+              <div className="font-display text-[17px] font-extrabold tracking-tighter text-ink-900">
                 Yozuv
               </div>
             </div>
           </div>
 
-          <h1 className="font-display text-4xl font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl md:text-6xl">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-bold text-indigo-700 shadow-soft-sm">
+            <Sparkles className="h-3.5 w-3.5 text-iris" strokeWidth={2.4} />
+            14 kun bepul
+          </span>
+
+          <h1 className="font-display text-4xl font-extrabold leading-[1.04] tracking-tightest text-ink-900 sm:text-5xl md:text-6xl">
             Mijozlar Telegram orqali yoziladi
           </h1>
-          <p className="max-w-xl text-base text-white/80 md:text-lg">
+          <p className="max-w-xl text-base text-ink-500 md:text-lg">
             Barbershop, salon, klinika va boshqa xizmatlar uchun slotlar, eslatmalar
             va analitika — bitta platformada.
           </p>
@@ -35,13 +39,17 @@ export function Hero() {
           <div className="flex flex-wrap gap-3 pt-2">
             <Link
               href="/auth/login"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3.5 font-display text-[15px] font-bold text-indigo-700 shadow-[0_10px_30px_rgba(0,0,0,0.2)] tap"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 font-display text-[15px] font-bold text-white tap"
+              style={{
+                background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+                boxShadow: "0 16px 32px -14px rgba(72,83,245,0.65)",
+              }}
             >
               Boshlash · 14 kun bepul <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="#pricing"
-              className="inline-flex items-center justify-center rounded-2xl bg-white/15 px-6 py-3.5 font-display text-[15px] font-bold text-white backdrop-blur tap"
+              className="inline-flex items-center justify-center rounded-2xl border border-ink-200 bg-white px-6 py-3.5 font-display text-[15px] font-bold text-ink-900 shadow-soft-sm tap"
             >
               Tariflar
             </Link>
@@ -49,34 +57,39 @@ export function Hero() {
         </div>
 
         <div className="flex-1">
-          <div className="relative mx-auto w-full max-w-sm overflow-hidden rounded-[28px] bg-white p-5 shadow-[0_30px_60px_-20px_rgba(11,15,31,0.45)]">
+          <div className="relative mx-auto w-full max-w-sm overflow-hidden rounded-4xl border border-ink-100 bg-white p-5 shadow-soft-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <YzLogo size={28} />
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-ink-400">
-                    YOZUV · PRO
-                  </div>
-                  <div className="font-display text-sm font-bold text-ink-900">
+                  <div className="eyebrow">YOZUV · PRO</div>
+                  <div className="font-display text-sm font-bold tracking-tight text-ink-900">
                     Stil Studio
                   </div>
                 </div>
               </div>
-              <div className="grid h-8 w-8 place-items-center rounded-xl bg-ink-100">
-                <Bell className="h-4 w-4 text-ink-500" />
+              <div className="grid h-9 w-9 place-items-center rounded-2xl bg-ink-50 text-ink-500">
+                <Bell className="h-4 w-4" strokeWidth={2} />
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100 p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-xl bg-indigo-600 text-white">
+            <div
+              className="relative mt-4 overflow-hidden rounded-3xl p-4 text-white"
+              style={{
+                background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+                boxShadow: "0 16px 32px -18px rgba(72,83,245,0.6)",
+              }}
+            >
+              <div className="pointer-events-none absolute -right-5 -top-6 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
+              <div className="relative flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15 text-white backdrop-blur">
                   <CalendarDays className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-400">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-white/70">
                     Bugungi yozilishlar
                   </div>
-                  <div className="font-display text-2xl font-extrabold tracking-tight text-ink-900">
+                  <div className="tnum font-display text-2xl font-extrabold tracking-tighter text-white">
                     8
                   </div>
                 </div>
@@ -85,21 +98,21 @@ export function Hero() {
 
             <div className="mt-3 space-y-2">
               {[
-                { t: "10:00", n: "Diyora S.", s: "Soch turmagi", c: "bg-[#E6FAF3] text-[#0E9577]", l: "Tasdiq." },
-                { t: "11:00", n: "Sardor I.", s: "Soch olish", c: "bg-[#E6FAF3] text-[#0E9577]", l: "Tasdiq." },
-                { t: "12:30", n: "Nilufar K.", s: "Manikyur", c: "bg-[#FFF3DA] text-[#A8751A]", l: "Kutilmoqda" },
+                { t: "10:00", n: "Diyora S.", s: "Soch turmagi", c: "pill-success", l: "Tasdiq." },
+                { t: "11:00", n: "Sardor I.", s: "Soch olish", c: "pill-success", l: "Tasdiq." },
+                { t: "12:30", n: "Nilufar K.", s: "Manikyur", c: "pill-warn", l: "Kutilmoqda" },
               ].map((b) => (
                 <div key={b.t} className="flex items-center gap-3 rounded-2xl bg-ink-50 p-3">
                   <div className="min-w-[46px]">
-                    <div className="font-display text-[15px] font-extrabold tracking-tight text-ink-900">
+                    <div className="tnum font-display text-[15px] font-extrabold tracking-tight text-indigo-700">
                       {b.t}
                     </div>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-display text-sm font-bold text-ink-900">{b.n}</div>
+                    <div className="truncate font-display text-sm font-bold tracking-tight text-ink-900">{b.n}</div>
                     <div className="truncate text-xs text-ink-500">{b.s}</div>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${b.c}`}>
+                  <span className={`${b.c} text-[10px]`}>
                     {b.l}
                   </span>
                 </div>
