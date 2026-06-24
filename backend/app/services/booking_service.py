@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
+from app.utils.clock import local_now
 
 
 def _slot_lock_key_for(business_id: UUID, slot_date: _date, slot_start: _time) -> int:
@@ -127,8 +128,18 @@ def _check_slot_available(
 
 
 def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
-    business = db.query(Business).filter(Business.id == payload.business_id).first()
+    business = (
+        db.query(Business)
+        .filter(
+            Business.id == payload.business_id,
+            Business.is_active.is_(True),
+            Business.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not business:
+        # Also rejects deactivated/soft-deleted businesses, matching the
+        # public read endpoints — an offline business must not take bookings.
         raise ValueError("Business not found")
     service = (
         db.query(Service)
@@ -264,12 +275,22 @@ def _maybe_apply_loyalty(
     n = int(getattr(service, "loyalty_after_visits", 0) or 0)
     if n <= 0:
         return base_price
+    # Count in-flight bookings (PENDING/CONFIRMED) as well as COMPLETED so a
+    # free stamp already claimed by an un-completed booking advances the
+    # counter — otherwise two concurrent bookings on the stamp boundary both
+    # see the same COMPLETED count and both get priced free.
     completed = (
         db.query(func.count(Booking.id))
         .filter(
             Booking.service_id == service.id,
             Booking.client_id == client_id,
-            Booking.status == BookingStatus.COMPLETED,
+            Booking.status.in_(
+                [
+                    BookingStatus.PENDING,
+                    BookingStatus.CONFIRMED,
+                    BookingStatus.COMPLETED,
+                ]
+            ),
         )
         .scalar()
         or 0
@@ -365,8 +386,6 @@ def cancel_booking(
     business's ``cancel_window_hours`` policy and flag the cancel as
     ``late_cancel`` if it falls inside the window. Owner-side cancels
     don't get the flag — the late-cancel signal is about clients."""
-    from datetime import timezone as _tz
-
     b = (
         db.query(Booking)
         .filter(Booking.id == booking_id, Booking.business_id == business_id)
@@ -379,9 +398,11 @@ def cancel_booking(
         window_hours = int(getattr(biz, "cancel_window_hours", 0) or 0)
         if window_hours > 0:
             slot_dt = datetime.combine(b.date, b.start_time)
-            # Naive compare — slot_dt is local and the window is wall-clock
-            # hours; using utcnow() here would shift by TZ_OFFSET.
-            now_local = datetime.now(_tz.utc).astimezone().replace(tzinfo=None)
+            # slot_dt is Asia/Tashkent-local wall-clock; compare against the
+            # same zone. .astimezone() with no arg uses the SERVER tz (UTC on
+            # Render), which shifts the late-cancel window by ~5h. clock.py
+            # mandates its helpers for exactly this reason.
+            now_local = local_now().replace(tzinfo=None)
             if slot_dt - now_local < timedelta(hours=window_hours):
                 b.late_cancel = True
     b.status = BookingStatus.CANCELLED

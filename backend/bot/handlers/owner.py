@@ -36,10 +36,15 @@ async def owner_confirm(cb: CallbackQuery):
         if not biz or biz.owner_id != owner.id:
             await cb.answer("Ruxsat yo'q", show_alert=True)
             return
-        if booking.status == BookingStatus.CONFIRMED:
-            await cb.answer("Allaqachon tasdiqlangan", show_alert=True)
+        # Only a still-pending booking may be confirmed. The original
+        # notification keeps this inline keyboard forever, but the booking
+        # can be cancelled (client self-cancel) or NO_SHOW-flipped meanwhile
+        # — tapping the stale button must not resurrect it. Route through
+        # booking_service so confirmation stays centralized, like reject does.
+        if booking.status != BookingStatus.PENDING:
+            await cb.answer("Allaqachon ko'rib chiqilgan", show_alert=True)
             return
-        booking.status = BookingStatus.CONFIRMED
+        booking_service.confirm_booking(db, UUID(bid), biz.id)
         db.commit()
         client = db.query(Client).filter(Client.id == booking.client_id).first()
         svc = db.query(Service).filter(Service.id == booking.service_id).first()

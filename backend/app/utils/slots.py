@@ -32,16 +32,20 @@ def is_holiday(db: Session, business_id, d: date) -> bool:
     )
 
 
-def get_bookings_for_date(db: Session, business_id, d: date) -> list[Booking]:
-    return (
-        db.query(Booking)
-        .filter(
-            Booking.business_id == business_id,
-            Booking.date == d,
-            Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
-        )
-        .all()
+def get_bookings_for_date(
+    db: Session, business_id, d: date, staff_id=None
+) -> list[Booking]:
+    q = db.query(Booking).filter(
+        Booking.business_id == business_id,
+        Booking.date == d,
+        Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
     )
+    # When a specific master is requested, only that master's bookings
+    # block the slot — matching booking_service's per-staff conflict
+    # check. NULL staff_id (legacy / no-staff calendar) is the shared case.
+    if staff_id is not None:
+        q = q.filter(Booking.staff_id == staff_id)
+    return q.all()
 
 
 def get_available_slots(
@@ -49,6 +53,7 @@ def get_available_slots(
     d: date,
     service_duration: int,
     db: Session,
+    staff_id=None,
 ) -> list[time]:
     schedule = get_schedule_for_weekday(db, business_id, d.weekday())
     if not schedule or not schedule.is_working:
@@ -57,7 +62,7 @@ def get_available_slots(
     if is_holiday(db, business_id, d):
         return []
 
-    existing_bookings = get_bookings_for_date(db, business_id, d)
+    existing_bookings = get_bookings_for_date(db, business_id, d, staff_id)
 
     start_dt = _combine(d, schedule.start_time)
     end_dt = _combine(d, schedule.end_time)

@@ -30,6 +30,7 @@ from app.services import booking_service, waitlist_service
 from app.services.booking_service import acquire_slot_lock
 from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
+from app.utils.clock import local_today
 from app.utils.ratelimit import rate_limit
 from app.utils.slots import get_available_slots
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
@@ -285,7 +286,11 @@ def update_booking(
     # an overlap.
     acquire_slot_lock(db, business.id, new_date, new_start)
 
-    conflict = (
+    # Scope the conflict check by the booking's staff (per-staff when set,
+    # per-business when NULL) — matching create_owner_booking/create_recurring.
+    # Without this a multi-staff edit either falsely blocks on another
+    # master's slot or misses a genuine same-master overlap.
+    conflict_q = (
         db.query(Booking)
         .filter(
             Booking.business_id == business.id,
@@ -295,9 +300,10 @@ def update_booking(
             Booking.start_time < new_end,
             Booking.end_time > new_start,
         )
-        .with_for_update()
-        .first()
     )
+    if booking.staff_id is not None:
+        conflict_q = conflict_q.filter(Booking.staff_id == booking.staff_id)
+    conflict = conflict_q.with_for_update().first()
     if conflict:
         raise HTTPException(400, "Vaqt band")
 
@@ -569,6 +575,11 @@ def create_recurring(
         )
         end_time = end_dt.time()
 
+        # Mirror the single-booking write path: take the advisory slot lock
+        # and SELECT FOR UPDATE so two concurrent series-creates (or a series
+        # racing a normal booking) can't both pass the empty-slot check.
+        acquire_slot_lock(db, business.id, slot_date, body.start_time)
+
         conflict_q = (
             db.query(Booking)
             .filter(
@@ -583,7 +594,7 @@ def create_recurring(
         )
         if staff_id is not None:
             conflict_q = conflict_q.filter(Booking.staff_id == staff_id)
-        conflict = conflict_q.first()
+        conflict = conflict_q.with_for_update().first()
         if conflict is not None:
             if body.strict:
                 for b in created:
@@ -629,7 +640,9 @@ def cancel_recurring(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    today = date.today()
+    # Business-local "today" (Asia/Tashkent), not the server's UTC date —
+    # near midnight date.today() is off by a day in UZT (UTC+5).
+    today = local_today()
     q = (
         db.query(Booking)
         .filter(
@@ -658,15 +671,30 @@ def slots_for_date(
     slug: str,
     service_id: UUID,
     date: date = Query(...),
+    staff_id: UUID | None = Query(None),
     db: Session = Depends(get_db),
 ):
     if slug == "me":
         raise HTTPException(404, "Not found")
-    b = db.query(Business).filter(Business.slug == slug).first()
+    # Only active, non-deleted businesses expose a booking surface — matches
+    # the other public read endpoints (a deactivated business is offline).
+    b = (
+        db.query(Business)
+        .filter(
+            Business.slug == slug,
+            Business.is_active.is_(True),
+            Business.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not b:
         raise HTTPException(404, "Not found")
     service = db.query(Service).filter(Service.id == service_id, Service.business_id == b.id).first()
     if not service:
         raise HTTPException(404, "Service not found")
-    times = get_available_slots(b.id, date, service.duration_minutes, db)
+    # When a specific master is requested, compute that master's free slots
+    # so the offered times match what create_booking will actually accept.
+    times = get_available_slots(
+        b.id, date, service.duration_minutes, db, staff_id=staff_id
+    )
     return {"slots": [t.strftime("%H:%M") for t in times]}
