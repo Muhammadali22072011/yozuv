@@ -11,7 +11,7 @@ from app.models import Booking, BookingStatus, Business, Client, Review, Service
 from app.utils.clock import local_today
 from app.utils.htmlsafe import h
 from bot.keyboards.inline import back_to_menu_kb
-from bot.utils import safe_edit_text
+from bot.utils import safe_edit_text, user_can_review
 
 router = Router()
 
@@ -318,13 +318,14 @@ def _save_review_from_state(data: dict, telegram_id: int, comment: str) -> bool:
         biz = db.query(Business).filter(Business.slug == slug).first()
         if not biz:
             return False
+        # Eligibility gate: only users with a real COMPLETED booking here may
+        # review. Without it anyone could open a business deep-link and post
+        # fake ratings (which feed the public discovery sort/average).
+        if not user_can_review(db, biz.id, telegram_id):
+            return False
         client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
         if not client:
-            # Clients usually come from a booking; for standalone reviews we
-            # auto-create a minimal record so the review has an author.
-            client = Client(telegram_id=telegram_id)
-            db.add(client)
-            db.flush()
+            return False
         existing = (
             db.query(Review)
             .filter(

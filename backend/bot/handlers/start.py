@@ -23,7 +23,7 @@ from app.utils.clock import local_today
 from app.utils.htmlsafe import h
 from app.utils.uz_geo import list_tumans, list_viloyats
 from bot.keyboards.inline import back_to_menu_kb, business_menu_kb, role_choice_kb
-from bot.utils import safe_edit_text
+from bot.utils import safe_edit_text, user_can_review
 
 logger = logging.getLogger("bot.start")
 
@@ -45,26 +45,6 @@ def _logo_local_path(logo_url: str) -> Path | None:
 
 router = Router()
 settings = get_settings()
-
-
-def _user_can_review(db: Session, business_id, telegram_id: int | None) -> bool:
-    """True if this user has any past COMPLETED booking in the business."""
-    if not telegram_id:
-        return False
-    client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
-    if not client:
-        return False
-    exists = (
-        db.query(Booking.id)
-        .filter(
-            Booking.client_id == client.id,
-            Booking.business_id == business_id,
-            Booking.status == BookingStatus.COMPLETED,
-            Booking.date <= local_today(),
-        )
-        .first()
-    )
-    return exists is not None
 
 
 def _owner_kb() -> InlineKeyboardMarkup:
@@ -114,7 +94,7 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
                     b.slug,
                     owner_view=is_owner,
                     app_url=settings.public_app_url,
-                    can_review=not is_owner,
+                    can_review=(not is_owner) and user_can_review(db, b.id, tg_id),
                 ),
             )
             return
@@ -423,7 +403,7 @@ async def back_to_menu(cb: CallbackQuery):
                 b.slug,
                 owner_view=is_owner,
                 app_url=settings.public_app_url,
-                can_review=not is_owner,
+                can_review=(not is_owner) and user_can_review(db, b.id, tg_id),
             ),
         )
     finally:
