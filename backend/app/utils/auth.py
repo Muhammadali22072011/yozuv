@@ -29,6 +29,19 @@ def create_refresh_token(subject: str) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
+def create_ephemeral_token(subject: str, ttl_minutes: int | None = None) -> str:
+    """Mint a purpose-locked token for URLs the browser navigates to
+    directly (SSE stream, PDF download) where a custom Authorization header
+    isn't possible. type='ephemeral' is rejected by get_user_from_token, so
+    even if this leaks (logs / Referer / Telegram link handler) it can only
+    open those read-only endpoints — never authenticate a mutating API call.
+    The primary access JWT must never travel in a URL."""
+    minutes = ttl_minutes if ttl_minutes is not None else settings.access_token_expire_minutes
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    to_encode = {"exp": expire, "sub": subject, "type": "ephemeral"}
+    return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+
+
 def decode_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
 
@@ -37,6 +50,24 @@ def get_user_from_token(db: Session, token: str) -> User | None:
     try:
         payload = decode_token(token)
         if payload.get("type") != "access":
+            return None
+        sub = payload.get("sub")
+        if not sub:
+            return None
+        user_id = UUID(sub)
+    except (JWTError, ValueError):
+        return None
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def get_user_from_browser_token(db: Session, token: str) -> User | None:
+    """Resolve a user from an access OR ephemeral token. Used only by the
+    browser-navigable download/stream endpoints, which accept a `?token=`
+    query param. Mutating endpoints keep using get_user_from_token (access
+    only), so an ephemeral token can't be replayed against them."""
+    try:
+        payload = decode_token(token)
+        if payload.get("type") not in ("access", "ephemeral"):
             return None
         sub = payload.get("sub")
         if not sub:

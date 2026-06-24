@@ -15,7 +15,7 @@ import {
   Tag,
   TrendingUp,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, mintEphemeralToken } from "@/lib/api";
 import type { BookingRow, BusinessMe } from "@/types";
 import {
   BookingCard,
@@ -215,32 +215,37 @@ export default function DashboardHome() {
     // don't bother retrying — useEffect will rebuild it on the next
     // mount, and we still keep a 5-min safety poll so a misbehaving
     // proxy can't strand the bell.
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("yozuv_access")
-        : null;
     let es: EventSource | null = null;
-    try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
-      const url =
-        `${base}/api/business/me/notifications/stream` +
-        (token ? `?token=${encodeURIComponent(token)}` : "");
-      es = new EventSource(url, { withCredentials: false });
-      const onEvent = () => loadNotifications();
-      es.addEventListener("booking_new", onEvent);
-      es.addEventListener("booking_cancelled", onEvent);
-      es.addEventListener("review_new", onEvent);
-      es.addEventListener("subscription_expiring", onEvent);
-      es.addEventListener("subscription_expired", onEvent);
-    } catch {
-      // EventSource ctor can throw on iOS Telegram WebView in rare
-      // cases. Fall back to the safety poll below.
-    }
+    let cancelled = false;
+
+    // EventSource can't set headers, so the token rides in the URL — which
+    // means it must NOT be the primary access JWT (URLs leak into logs,
+    // history, Referer). Mint a short-lived, purpose-locked ephemeral token
+    // that can only open this stream, never a mutating API call.
+    (async () => {
+      const token = await mintEphemeralToken();
+      if (cancelled || !token) return; // 5-min safety poll below covers us
+      try {
+        const base = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
+        const url = `${base}/api/business/me/notifications/stream?token=${encodeURIComponent(token)}`;
+        es = new EventSource(url, { withCredentials: false });
+        const onEvent = () => loadNotifications();
+        es.addEventListener("booking_new", onEvent);
+        es.addEventListener("booking_cancelled", onEvent);
+        es.addEventListener("review_new", onEvent);
+        es.addEventListener("subscription_expiring", onEvent);
+        es.addEventListener("subscription_expired", onEvent);
+      } catch {
+        // EventSource ctor can throw on iOS Telegram WebView in rare
+        // cases. Fall back to the safety poll below.
+      }
+    })();
 
     // Safety net: if SSE silently dies (proxy timeout, mobile network
     // sleep) the user still sees fresh notifications within 5 minutes.
     const poll = window.setInterval(loadNotifications, 5 * 60_000);
     return () => {
+      cancelled = true;
       if (es) es.close();
       window.clearInterval(poll);
     };

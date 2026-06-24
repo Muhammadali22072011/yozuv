@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.models import Business, Membership, MembershipRole, User
-from app.utils.auth import decode_token, get_user_from_token
+from app.utils.auth import (
+    decode_token,
+    get_user_from_browser_token,
+    get_user_from_token,
+)
 
 security = HTTPBearer(auto_error=False)
 
@@ -41,7 +45,11 @@ def get_owned_business_download(
     (e.g. PDF download from a Telegram WebApp). Accepts the access
     token via Authorization header *or* `?token=` query param so the
     URL alone is enough to trigger a download — mobile WebApps can't
-    inject custom headers when navigating to a link."""
+    inject custom headers when navigating to a link.
+
+    The `?token=` value should be a short-lived ephemeral token (minted via
+    POST /auth/ephemeral-token), not the primary access JWT — so accept both
+    access and ephemeral tokens here. Mutating endpoints stay access-only."""
     raw: str | None = None
     if creds and creds.scheme.lower() == "bearer":
         raw = creds.credentials
@@ -49,7 +57,7 @@ def get_owned_business_download(
         raw = token
     if not raw:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    user = get_user_from_token(db, raw)
+    user = get_user_from_browser_token(db, raw)
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user")
     b = db.query(Business).filter(Business.owner_id == user.id).first()

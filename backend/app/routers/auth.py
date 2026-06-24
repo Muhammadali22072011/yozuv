@@ -8,7 +8,12 @@ from app.database import get_db
 from app.models import User
 from app.schemas.auth import RefreshRequest, TelegramAuthRequest, TokenPair, UserMe
 from app.deps import get_current_user
-from app.utils.auth import create_access_token, create_refresh_token, decode_token
+from app.utils.auth import (
+    create_access_token,
+    create_ephemeral_token,
+    create_refresh_token,
+    decode_token,
+)
 from app.utils.ratelimit import rate_limit
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
@@ -84,6 +89,17 @@ def refresh(
         access_token=create_access_token(sub),
         refresh_token=create_refresh_token(sub),
     )
+
+
+@router.post("/ephemeral-token")
+def ephemeral_token(user: User = Depends(get_current_user)):
+    """Mint a short-lived, purpose-locked token for browser-navigable
+    endpoints (SSE notifications stream, PDF brochure) so the primary access
+    JWT never appears in a URL. Authenticated via the normal Bearer header."""
+    return {
+        "token": create_ephemeral_token(str(user.id)),
+        "expires_in": settings.access_token_expire_minutes * 60,
+    }
 
 
 @router.get("/me", response_model=UserMe)

@@ -94,3 +94,19 @@ export async function apiFetch<T>(
 export function apiBase(): string {
   return API;
 }
+
+// Mint a short-lived, purpose-locked token for URLs the browser navigates to
+// directly (SSE stream, PDF download). Keeps the primary access JWT out of
+// URLs / logs / Referer. The server rejects this token for any mutating API
+// call (its type is "ephemeral", not "access"). Returns null on failure so
+// callers can fall back gracefully.
+export async function mintEphemeralToken(): Promise<string | null> {
+  try {
+    const r = await apiFetch<{ token: string }>("/api/auth/ephemeral-token", {
+      method: "POST",
+    });
+    return r.token;
+  } catch {
+    return null;
+  }
+}

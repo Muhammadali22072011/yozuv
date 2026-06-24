@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Download, FileDown, Share2 } from "lucide-react";
 import { ScreenHeader, TourFloat, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
-import { apiBase, apiFetch, getToken } from "@/lib/api";
+import { apiBase, apiFetch, getToken, mintEphemeralToken } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 import { usePageTour } from "@/lib/use-page-tour";
 
@@ -84,19 +84,24 @@ export default function QrPage() {
     if (!biz) return;
     setDownloading(true);
     try {
-      const token = getToken();
       // In Telegram WebApp (especially mobile) blob downloads don't
       // trigger the OS save dialog. Hand off to the system browser via
-      // WebApp.openLink with a token-in-query URL.
+      // WebApp.openLink — but with a short-lived ephemeral token, never the
+      // primary access JWT (openLink exposes the full URL to the external
+      // browser / Telegram link handler).
       type TgWebApp = { openLink?: (u: string, opts?: { try_instant_view?: boolean }) => void };
       const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
-      if (tg?.openLink && token) {
-        const url = `${apiBase()}/api/business/me/brochure?token=${encodeURIComponent(token)}`;
-        tg.openLink(url, { try_instant_view: false });
-        toast("Brauzerda ochilmoqda…");
-        return;
+      if (tg?.openLink) {
+        const ephemeral = await mintEphemeralToken();
+        if (ephemeral) {
+          const url = `${apiBase()}/api/business/me/brochure?token=${encodeURIComponent(ephemeral)}`;
+          tg.openLink(url, { try_instant_view: false });
+          toast("Brauzerda ochilmoqda…");
+          return;
+        }
       }
       // Plain browser path — blob + <a download> works.
+      const token = getToken();
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${apiBase()}/api/business/me/brochure`, { headers });
       if (!res.ok) throw new Error(await res.text());
