@@ -226,7 +226,16 @@ def refund_transaction(db: Session, tx_id: UUID, business_id: UUID) -> PaymentTr
     Raises ValueError if transaction is not found, belongs to another business,
     or is not in COMPLETED state.
     """
-    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
+    # Lock the tx row and re-check status under the lock, mirroring
+    # activate_subscription. Without this a webhook retry (activate) and a
+    # manual refund can interleave: the refund reads a stale ACTIVE sub,
+    # activation swaps it, and the refund then cancels the wrong row.
+    tx = (
+        db.query(PaymentTransaction)
+        .filter(PaymentTransaction.id == tx_id)
+        .with_for_update()
+        .first()
+    )
     if not tx:
         raise ValueError("Transaction not found")
     if tx.business_id != business_id:
@@ -246,6 +255,7 @@ def refund_transaction(db: Session, tx_id: UUID, business_id: UUID) -> PaymentTr
             Subscription.expires_at > now,
         )
         .order_by(Subscription.expires_at.desc())
+        .with_for_update()
         .first()
     )
     if active_sub:

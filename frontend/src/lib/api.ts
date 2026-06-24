@@ -1,7 +1,19 @@
 // Build-time env var (Next.js inlines NEXT_PUBLIC_* into the client bundle).
 // The render.com URL stays as a fallback so a miss-configured deploy still
 // boots, but production should always set NEXT_PUBLIC_API_URL explicitly.
-const API = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
+const ENV_API = process.env.NEXT_PUBLIC_API_URL;
+if (
+  !ENV_API &&
+  process.env.NODE_ENV === "production" &&
+  typeof window !== "undefined"
+) {
+  // Loud, not silent: a credentialed client shouldn't quietly default to a
+  // hardcoded backend. Surface the misconfiguration so it gets fixed.
+  console.error(
+    "[yozuv] NEXT_PUBLIC_API_URL is not set — using the default host. Set it explicitly in production."
+  );
+}
+const API = ENV_API || "https://yozuv.onrender.com";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

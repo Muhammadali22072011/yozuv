@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 type Toast = { id: number; text: string };
 
@@ -18,12 +18,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setItems((p) => [...p, { id, text }]);
     setTimeout(() => setItems((p) => p.filter((t) => t.id !== id)), 2400);
   }, []);
-
-  useEffect(() => {
-    // Back-compat with prototype helper
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__yzToast = push;
-  }, [push]);
 
   const value = useMemo(() => push, [push]);
 

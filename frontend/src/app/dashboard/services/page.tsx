@@ -169,8 +169,16 @@ export default function ServicesPage() {
   }
 
   async function removeSvc(id: string) {
-    await apiFetch(`/api/business/me/services/${id}`, { method: "DELETE" }).catch(() => {});
-    await load();
+    // Confirm before a destructive, one-tap delete (matches the staff page),
+    // and surface failures instead of silently swallowing them.
+    if (!window.confirm("Bu xizmatni o'chirishni tasdiqlaysizmi?")) return;
+    try {
+      await apiFetch(`/api/business/me/services/${id}`, { method: "DELETE" });
+      toast("Xizmat o'chirildi");
+      await load();
+    } catch (e) {
+      toast((e as Error).message || "O'chirib bo'lmadi");
+    }
   }
 
   async function toggle(id: string) {
