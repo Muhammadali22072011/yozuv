@@ -11,6 +11,10 @@ from urllib.parse import parse_qsl
 # referrer header / log line / proxied request is useless by the time
 # an attacker can replay it.
 INIT_DATA_TTL_SECONDS = 3600
+# Allow a small clock skew, but reject auth_date set meaningfully in the
+# FUTURE — otherwise the one-sided "age > TTL" check below never expires a
+# forward-dated token (negative age always passes), defeating the replay cap.
+INIT_DATA_CLOCK_SKEW_SECONDS = 300
 
 
 def validate_telegram_init_data(init_data: str, bot_token: str) -> dict[str, str]:
@@ -38,8 +42,11 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict[str, str
         auth_date = int(auth_date_raw)
     except ValueError:
         raise ValueError("Invalid auth_date")
-    if time.time() - auth_date > INIT_DATA_TTL_SECONDS:
+    age = time.time() - auth_date
+    if age > INIT_DATA_TTL_SECONDS:
         raise ValueError("auth_date expired")
+    if age < -INIT_DATA_CLOCK_SKEW_SECONDS:
+        raise ValueError("auth_date is in the future")
 
     return parsed
 
@@ -50,4 +57,16 @@ def parse_user_from_init(parsed: dict[str, str]) -> dict:
     user_raw = parsed.get("user")
     if not user_raw:
         raise ValueError("Missing user in initData")
-    return json.loads(user_raw)
+    try:
+        user = json.loads(user_raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Malformed user in initData") from exc
+    # Callers immediately do int(user["id"]); validate the shape here so a
+    # signed-but-malformed payload yields a clean 401, not an unhandled error.
+    if not isinstance(user, dict) or "id" not in user:
+        raise ValueError("Malformed user in initData")
+    try:
+        int(user["id"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Malformed user id in initData") from exc
+    return user
