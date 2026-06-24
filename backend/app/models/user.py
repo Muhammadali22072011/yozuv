@@ -21,6 +21,9 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(255), default="")
     last_name: Mapped[str] = mapped_column(String(255), default="")
     phone: Mapped[str] = mapped_column(String(32), default="")
+    # Bcrypt hash for standalone (non-Telegram) login. NULL = password
+    # login disabled for this user; they can still sign in via Telegram.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
