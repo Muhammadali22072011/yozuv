@@ -218,8 +218,12 @@ def _get_frontend_client() -> httpx.AsyncClient:
 )
 async def frontend_proxy(path: str, request: Request):
     """Catch-all: forward non-API requests to the Next.js frontend."""
+    # Strip Authorization too: the Next.js frontend never needs the API
+    # bearer token, and forwarding it leaks the owner's credential into the
+    # frontend server's request handlers / logs.
+    _drop_req = _HOP_BY_HOP | {"authorization"}
     headers = {
-        k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP
+        k: v for k, v in request.headers.items() if k.lower() not in _drop_req
     }
     upstream_path = request.url.path
     if request.url.query:

@@ -62,16 +62,12 @@ const TIPS: Tip[] = [
     a: "Mijoz kartochkasiga sanasini kiriting. O'sha kuni soat 09:30 da bot avtomatik tabriklaydi va so'nggi tashrif bo'lgan biznesingizni eslatadi.",
   },
   {
-    q: "Hafta jadvali (kalendar) qayerda?",
-    a: "Bosh menyu → Kalendar. 7 kun × 14 soat to'r — bron kartasini bosib boshqa kunga sudrab tashlasangiz, vaqti avtomatik o'zgaradi.",
-  },
-  {
     q: "Bildirishnoma qo'ng'iroqchasini bosganda nima ko'raman?",
     a: "Yangi bron, otmen, izoh va obuna haqidagi xabarlar. Tepada raqam — yangi (hali ko'rilmagan) xabarlar soni. Karta yozish bilan o'qilgan deb belgilanadi.",
   },
   {
     q: "Bir nechta bizneslarim bor — qanday almashtirish mumkin?",
-    a: "Bosh sahifada biznes nomi yonida tugma — bosing va ro'yxatdan tanlang. Sozlamalar va kalendar tanlangan biznes uchun ko'rsatiladi.",
+    a: "Bosh sahifada biznes nomi yonida tugma — bosing va ro'yxatdan tanlang. Sozlamalar tanlangan biznes uchun ko'rsatiladi.",
   },
 ];
 
