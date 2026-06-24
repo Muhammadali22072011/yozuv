@@ -134,8 +134,22 @@ def create_owner_booking(
     )
     if not service:
         raise HTTPException(404, "Service not found")
+    # Tenant scope: the client must already have a booking with THIS
+    # business (clients are global, linked to a tenant only via bookings).
+    # Mirrors clients._client_in_business_or_404 and stops an owner from
+    # binding another tenant's client UUID to their own business.
     client = db.query(Client).filter(Client.id == body.client_id).first()
     if not client:
+        raise HTTPException(404, "Client not found")
+    client_has_booking = (
+        db.query(Booking.id)
+        .filter(
+            Booking.business_id == business.id,
+            Booking.client_id == client.id,
+        )
+        .first()
+    )
+    if not client_has_booking:
         raise HTTPException(404, "Client not found")
 
     # If owner targets a specific staff, validate ownership and active.

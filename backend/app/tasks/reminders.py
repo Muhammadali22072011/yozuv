@@ -154,11 +154,14 @@ def send_birthday_greetings() -> None:
             biz = db.query(Business).filter(Business.id == last_biz_id).first()
             if not biz:
                 continue
-            name = (client.first_name or "").strip() or "Aziz mijoz"
+            # Escape user-controlled values: client.first_name comes from
+            # the Telegram profile and biz.name from owner input — both can
+            # carry HTML/<a> phishing payloads (parse_mode=HTML is always on).
+            name = h((client.first_name or "").strip() or "Aziz mijoz")
             send_telegram_message(
                 int(client.telegram_id),
                 f"🎂 Tug'ilgan kuningiz bilan, <b>{name}</b>!\n"
-                f"<b>{biz.name}</b> sizni har doim kutadi.",
+                f"<b>{h(biz.name)}</b> sizni har doim kutadi.",
             )
             client.last_outreach_at = now_utc
         db.commit()
@@ -209,11 +212,12 @@ def send_reengagement_nudges() -> None:
             biz = db.query(Business).filter(Business.id == last_biz_id).first()
             if not biz:
                 continue
-            name = (client.first_name or "").strip() or "Aziz mijoz"
+            # Same injection surface as birthday greetings — escape both.
+            name = h((client.first_name or "").strip() or "Aziz mijoz")
             send_telegram_message(
                 int(client.telegram_id),
                 f"👋 <b>{name}</b>, ancha vaqt bo'ldi!\n"
-                f"<b>{biz.name}</b> da yozilishni unutmang.",
+                f"<b>{h(biz.name)}</b> da yozilishni unutmang.",
             )
             client.last_outreach_at = now_utc
         db.commit()

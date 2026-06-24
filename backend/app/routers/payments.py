@@ -387,6 +387,35 @@ def _find_tx_id(obj) -> UUID | None:
     return None
 
 
+def _payme_account_tx_id(body: dict) -> UUID | None:
+    """Payme binds our PaymentTransaction id to params.account.id
+    (account_field_name='id' at create_payment time). Prefer that
+    documented location over a blind UUID scan of the whole payload."""
+    try:
+        acc = (body.get("params") or {}).get("account") or {}
+        val = acc.get("id")
+        if val:
+            return UUID(str(val))
+    except (ValueError, AttributeError, TypeError):
+        pass
+    return None
+
+
+def _reported_amount_matches(reported, expected_uzs) -> bool:
+    """tx.amount is stored in so'm (UZS). Providers may report so'm
+    (Click) or tiyin = so'm*100 (Payme). Accept either unit; reject
+    anything matching neither so an under/over-payment cannot unlock a
+    plan."""
+    if reported is None or reported == "":
+        return False
+    try:
+        val = float(reported)
+        expected = float(expected_uzs)
+    except (ValueError, TypeError):
+        return False
+    return abs(val - expected) < 1 or abs(val - expected * 100) < 1
+
+
 def _verify_payme_auth(request: Request) -> bool:
     if not settings.payme_secret_key:
         # Fail closed: an unconfigured secret must reject all callbacks,
@@ -433,7 +462,7 @@ async def payme_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception:
         raise HTTPException(400, "Invalid JSON") from None
 
-    tx_id = _find_tx_id(body)
+    tx_id = _payme_account_tx_id(body) or _find_tx_id(body)
     if not tx_id:
         return {"ok": True}
 
@@ -444,6 +473,15 @@ async def payme_webhook(request: Request, db: Session = Depends(get_db)):
     method = body.get("method", "")
     if method != "PerformTransaction":
         return {"ok": True}
+
+    # Reconcile the paid amount before activating: a callback reporting an
+    # underpayment must not grant the full plan. Only enforced when the
+    # payload carries an amount (PerformTransaction may omit it).
+    reported_amount = (body.get("params") or {}).get("amount")
+    if reported_amount is not None and not _reported_amount_matches(
+        reported_amount, tx.amount
+    ):
+        raise HTTPException(400, "Amount mismatch")
 
     complete_transaction_and_notify(db, tx)
     db.commit()
@@ -474,6 +512,12 @@ async def click_webhook(request: Request, db: Session = Depends(get_db)):
     tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
     if not tx or tx.status == PaymentRecordStatus.COMPLETED:
         return {"ok": True}
+
+    # Reconcile the signed amount against the plan price. Click always
+    # includes amount (it is part of the verified signature), so a
+    # mismatch here is a genuine under/over-payment — refuse to activate.
+    if not _reported_amount_matches(body.get("amount"), tx.amount):
+        raise HTTPException(400, "Amount mismatch")
 
     complete_transaction_and_notify(db, tx)
     db.commit()

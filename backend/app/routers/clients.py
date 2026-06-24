@@ -68,9 +68,10 @@ def client_detail(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    c = db.query(Client).filter(Client.id == client_id).first()
-    if not c:
-        raise HTTPException(404, "Not found")
+    # Tenant scope: only clients who have booked with THIS business are
+    # readable. Without this any owner could enumerate the global Client
+    # table and read PII (name/phone/telegram_id) of strangers.
+    c = _client_in_business_or_404(db, business.id, client_id)
     bookings = (
         db.query(Booking)
         .filter(Booking.business_id == business.id, Booking.client_id == client_id)
