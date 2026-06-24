@@ -3,36 +3,47 @@ import { Check } from "lucide-react";
 
 const tiers = [
   {
-    name: "Trial",
-    price: "Bepul",
-    note: "14 kun",
-    cta: "Boshlash",
+    name: "Bepul sinov",
+    price: "0 so‘m",
+    note: "14 kun · karta kerak emas",
+    cta: "Bepul boshlash",
     href: "/auth/login",
-    perks: ["Barcha imkoniyatlar", "14 kun bepul", "Karta talab qilinmaydi"],
+    perks: [
+      "Barcha imkoniyatlar ochiq",
+      "Cheksiz yozilishlar",
+      "Istalgan vaqtda bekor qilasiz",
+    ],
     featured: false,
+    badge: "",
   },
   {
     name: "Oylik",
-    price: "$15",
-    note: "187 500 so‘m / oy",
-    cta: "To‘lash",
+    price: "187 500 so‘m",
+    note: "oyiga · ≈ $15",
+    cta: "Oylik tarifni tanlash",
     href: "/dashboard/settings",
     perks: [
+      "Kuniga ~6 200 so‘m — bitta mijozdan kam",
       "Cheksiz yozilishlar",
       "Analitika va eslatmalar",
       "QR va broshyura",
-      "Premium qo‘llab-quvvatlash",
     ],
     featured: true,
+    badge: "MASHHUR",
   },
   {
     name: "Yillik",
-    price: "$150",
-    note: "1 875 000 so‘m / yil",
-    cta: "To‘lash",
+    price: "1 875 000 so‘m",
+    note: "yiliga · 2 oy bepul",
+    cta: "Yillik tarifni tanlash",
     href: "/dashboard/settings",
-    perks: ["2 oy bepul", "Hammasi Oylik tarifdan", "Prioritet yordam"],
+    perks: [
+      "2 oy sovg‘a — yiliga 375 000 so‘m tejaysiz",
+      "Hammasi Oylik tarifdan",
+      "Prioritet yordam",
+    ],
     featured: false,
+    badge: "15% TEJASH",
   },
 ];
 
@@ -44,8 +55,12 @@ export function Pricing() {
           Tariflar
         </div>
         <h2 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
-          Siz uchun mos reja
+          Avval 14 kun bepul sinab ko&apos;ring
         </h2>
+        <p className="mt-3 max-w-xl text-sm text-ink-500">
+          Karta kerak emas. Yoqmasa — to&apos;lamaysiz. To&apos;lov faqat Payme yoki
+          Click orqali, sumda.
+        </p>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {tiers.map((t) => (
@@ -60,15 +75,20 @@ export function Pricing() {
               {t.featured && (
                 <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10" />
               )}
-              {t.featured && (
+              {t.featured && t.badge && (
                 <div className="absolute right-4 top-4 rounded-full bg-lemon px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-ink-900">
-                  MASHHUR
+                  {t.badge}
                 </div>
               )}
               <div className="relative">
                 <h3 className={`font-display text-xl font-extrabold tracking-tight ${t.featured ? "text-white" : "text-ink-900"}`}>
                   {t.name}
                 </h3>
+                {!t.featured && t.badge && (
+                  <span className="mt-2 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-emerald-700">
+                    {t.badge}
+                  </span>
+                )}
                 <p
                   className={`mt-4 font-display text-4xl font-extrabold tracking-[-0.03em] ${
                     t.featured ? "text-white" : "text-ink-900"
