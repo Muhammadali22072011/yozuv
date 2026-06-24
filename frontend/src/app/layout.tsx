@@ -10,9 +10,23 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://yozuv.uz";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Yozuv — Telegram orqali onlayn yozilish",
-  description: "Kichik biznes uchun yozilishlar, eslatmalar va analitika.",
+  description:
+    "Toshkent va butun O'zbekiston bo'ylab barbershop, salon, stomatologiya va boshqa xizmatlarga Telegram orqali onlayn yozilish.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    locale: "uz_UZ",
+    siteName: "Yozuv",
+    url: SITE_URL,
+    title: "Yozuv — Telegram orqali onlayn yozilish",
+    description:
+      "Barbershop, salon, klinika va xizmatlarga Telegram orqali onlayn yozilish — O'zbekiston bo'ylab.",
+  },
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
