@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Yozuv</string>
+    <string name="title_activity_main">Yozuv</string>
+    <string name="package_name">uz.yozuv.app</string>
+    <string name="custom_url_scheme">uz.yozuv.app</string>
+</resources>

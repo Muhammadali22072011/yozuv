@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Send, Shield, Sparkles } from "lucide-react";
+import { ArrowRight, KeyRound, Lock, Send, Shield, Sparkles, User as UserIcon } from "lucide-react";
 import { HeroGradient } from "@/components/yz/HeroGradient";
 import { YzLogo } from "@/components/yz/Logo";
 import { apiBase } from "@/lib/api";
@@ -33,6 +33,42 @@ export default function LoginPage() {
   const [info, setInfo] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [debug, setDebug] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+
+  async function loginWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (pwBusy) return;
+    setPwBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`${apiBase()}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ login: loginId.trim(), password }),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        let msg = text;
+        try {
+          msg = (JSON.parse(text) as { detail?: string }).detail ?? text;
+        } catch {
+          // keep raw text
+        }
+        setErr(msg || `HTTP ${res.status}`);
+        return;
+      }
+      const tokens = JSON.parse(text) as { access_token: string; refresh_token: string };
+      localStorage.setItem("yozuv_access", tokens.access_token);
+      localStorage.setItem("yozuv_refresh", tokens.refresh_token);
+      window.location.href = "/dashboard";
+    } catch (e) {
+      setErr((e as Error).message || "Xatolik");
+    } finally {
+      setPwBusy(false);
+    }
+  }
 
   async function loginWithTelegram() {
     if (busy) return;
@@ -176,6 +212,67 @@ export default function LoginPage() {
               </li>
             </ul>
           </div>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-ink-200" />
+            <div className="text-xs font-semibold text-ink-400">yoki</div>
+            <div className="h-px flex-1 bg-ink-200" />
+          </div>
+
+          <form onSubmit={loginWithPassword} className="card-soft p-6">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-600/10 text-indigo-600">
+                <KeyRound className="h-6 w-6" strokeWidth={2.2} />
+              </div>
+              <div>
+                <div className="font-display text-[15px] font-extrabold tracking-tight text-ink-900">
+                  Login va parol bilan
+                </div>
+                <div className="text-xs text-ink-500">
+                  Telefon raqami yoki username
+                </div>
+              </div>
+            </div>
+
+            <label className="mt-5 block">
+              <span className="sr-only">Login</span>
+              <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-3.5 py-3 focus-within:border-indigo-500">
+                <UserIcon className="h-4 w-4 text-ink-400" strokeWidth={2.2} />
+                <input
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  autoComplete="username"
+                  inputMode="text"
+                  placeholder="+998 90 123 45 67 yoki username"
+                  className="w-full bg-transparent text-sm text-ink-900 outline-none placeholder:text-ink-400"
+                />
+              </div>
+            </label>
+
+            <label className="mt-3 block">
+              <span className="sr-only">Parol</span>
+              <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-3.5 py-3 focus-within:border-indigo-500">
+                <Lock className="h-4 w-4 text-ink-400" strokeWidth={2.2} />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  placeholder="Parol"
+                  className="w-full bg-transparent text-sm text-ink-900 outline-none placeholder:text-ink-400"
+                />
+              </div>
+            </label>
+
+            <button
+              type="submit"
+              disabled={pwBusy || loginId.trim().length < 3 || password.length < 6}
+              className="btn-primary mt-5 w-full justify-center disabled:opacity-50"
+            >
+              {pwBusy ? "Kutilmoqda…" : "Kirish"}
+              {!pwBusy && <ArrowRight className="ml-2 h-4 w-4" />}
+            </button>
+          </form>
 
           {err && (
             <div className="mt-4 rounded-[22px] bg-[#FFE7E3] p-4">

@@ -1,14 +1,28 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.models import User
-from app.schemas.auth import RefreshRequest, TelegramAuthRequest, TokenPair, UserMe
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    SetPasswordRequest,
+    TelegramAuthRequest,
+    TokenPair,
+    UserMe,
+)
 from app.deps import get_current_user
-from app.utils.auth import create_access_token, create_refresh_token, decode_token
+from app.utils.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.utils.ratelimit import rate_limit
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
@@ -17,6 +31,8 @@ settings = get_settings()
 
 # 30 attempts/min per IP — enough for a legit user retrying, blocks brute-force.
 _auth_rate = rate_limit("auth_tg", limit=30, window_seconds=60)
+# Password login is a brute-force target — keep the window tight.
+_login_rate = rate_limit("auth_login", limit=10, window_seconds=60)
 _refresh_rate = rate_limit("auth_refresh", limit=60, window_seconds=60)
 
 
@@ -59,6 +75,58 @@ def auth_telegram(
         access_token=create_access_token(sub),
         refresh_token=create_refresh_token(sub),
     )
+
+
+@router.post("/login", response_model=TokenPair)
+def login(
+    body: LoginRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_login_rate),
+):
+    """Standalone login by phone or username + password.
+
+    Used by the native app and the web app outside Telegram. Existing
+    Telegram users enable this by setting a password via /set-password.
+    """
+    ident = body.login.strip().lstrip("@")
+    user = (
+        db.query(User)
+        .filter(
+            or_(User.username == ident, User.phone == ident),
+            User.password_hash.isnot(None),
+        )
+        .first()
+    )
+    # Run verify even on miss to keep timing roughly constant.
+    if not user or not user.is_active or not verify_password(body.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Login yoki parol noto'g'ri",
+        )
+
+    sub = str(user.id)
+    return TokenPair(
+        access_token=create_access_token(sub),
+        refresh_token=create_refresh_token(sub),
+    )
+
+
+@router.post("/set-password")
+def set_password(
+    body: SetPasswordRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Set/replace the password for the signed-in account so it can log
+    in standalone (outside Telegram). Optionally assigns a username as
+    the login if the account doesn't already have one."""
+    if body.login:
+        ident = body.login.strip().lstrip("@")
+        if ident and not user.username:
+            user.username = ident
+    user.password_hash = hash_password(body.password)
+    db.commit()
+    return {"ok": True, "login": user.username or user.phone}
 
 
 @router.post("/refresh", response_model=TokenPair)

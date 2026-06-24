@@ -15,6 +15,20 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
 
 
+def hash_password(plain: str) -> str:
+    return pwd_context.hash(plain)
+
+
+def verify_password(plain: str, hashed: str | None) -> bool:
+    if not hashed:
+        return False
+    try:
+        return pwd_context.verify(plain, hashed)
+    except ValueError:
+        # Malformed/unknown hash in DB — treat as no-match, never 500.
+        return False
+
+
 def create_access_token(subject: str, extra: dict[str, Any] | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode: dict[str, Any] = {"exp": expire, "sub": subject, "type": "access"}

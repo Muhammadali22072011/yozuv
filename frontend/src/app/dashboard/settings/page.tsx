@@ -10,6 +10,7 @@ import {
   CreditCard,
   GraduationCap,
   HelpCircle,
+  KeyRound,
   LogOut,
   MapPin,
   Pencil,
@@ -372,6 +373,13 @@ export default function SettingsPage() {
             bg="#EEF0FF"
             label="Obuchenie qaytadan"
             sub="Har bir sahifa o'z izohini qaytadan ko'rsatadi"
+          />
+          <Row
+            href="/dashboard/security"
+            icon={<KeyRound className="h-5 w-5 text-indigo-600" />}
+            bg="#EEF0FF"
+            label="Login va parol"
+            sub="Ilovaga Telegramsiz kirish uchun parol o‘rnating"
           />
           <Row
             onClick={openSupport}
