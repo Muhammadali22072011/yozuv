@@ -5,6 +5,18 @@ import { ArrowRight, Clock, MapPin, Phone, Sparkles, Star } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
 const BOT = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://yozuv.uz";
+
+// Map our business category to the most specific schema.org type so the
+// LocalBusiness JSON-LD is eligible for the right local rich results.
+const SCHEMA_TYPE: Record<string, string> = {
+  barbershop: "HairSalon",
+  salon: "BeautySalon",
+  dentist: "Dentist",
+  massage: "DaySpa",
+  fitness: "ExerciseGym",
+  clinic: "MedicalClinic",
+};
 
 type Business = {
   id: string;
@@ -87,14 +99,22 @@ export async function generateMetadata(
   // Absolute URL for OG — relative `/api/...` won't work in WhatsApp /
   // Twitter previews where the crawler isn't on our domain.
   const logoAbs = biz.logo_url ? `${API}${biz.logo_url}` : `${API}/logo.png`;
+  // Local-intent title: "{name} — {category}, {city} | Onlayn yozilish"
+  // targets "{name} {category} {city} yozilish" queries.
+  const loc = biz.tuman || biz.viloyat || "";
+  const title = loc
+    ? `${biz.name} — ${cat}, ${loc} | Onlayn yozilish`
+    : `${biz.name} — ${cat} | Onlayn yozilish`;
   return {
-    title: `${biz.name} — Yozuv`,
+    title,
     description: desc,
+    alternates: { canonical: `/biz/${biz.slug}` },
     openGraph: {
       title: `${biz.name} — ${cat}`,
       description: desc,
       images: [{ url: logoAbs }],
       type: "website",
+      locale: "uz_UZ",
     },
     twitter: {
       card: "summary",
@@ -127,8 +147,60 @@ export default async function BusinessPage({
   const botLink = `https://t.me/${BOT}?start=${encodeURIComponent(biz.slug)}`;
   const logo = biz.logo_url ? `${API}${biz.logo_url}` : null;
 
+  // LocalBusiness JSON-LD — the local-SEO centerpiece. The page already has
+  // name/address/geo/phone/category/rating; emit it as structured data so the
+  // business is eligible for the local pack and rich results.
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": SCHEMA_TYPE[biz.category] || "LocalBusiness",
+    "@id": `${SITE}/biz/${biz.slug}`,
+    name: biz.name,
+    url: `${SITE}/biz/${biz.slug}`,
+    image: logo || `${SITE}/logo.png`,
+    ...(biz.phone ? { telephone: biz.phone } : {}),
+    address: {
+      "@type": "PostalAddress",
+      ...(biz.address ? { streetAddress: biz.address } : {}),
+      ...(biz.tuman ? { addressLocality: biz.tuman } : {}),
+      ...(biz.viloyat ? { addressRegion: biz.viloyat } : {}),
+      addressCountry: "UZ",
+    },
+    ...(biz.latitude != null && biz.longitude != null
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: biz.latitude,
+            longitude: biz.longitude,
+          },
+        }
+      : {}),
+    ...(summary.count > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: summary.average_rating.toFixed(1),
+            reviewCount: summary.count,
+          },
+        }
+      : {}),
+    ...(services.length
+      ? {
+          makesOffer: services.map((s) => ({
+            "@type": "Offer",
+            priceCurrency: "UZS",
+            price: s.price,
+            itemOffered: { "@type": "Service", name: s.name },
+          })),
+        }
+      : {}),
+  };
+
   return (
     <main className="min-h-screen bg-ink-50">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }}
+      />
       {/* Hero — светлая «воздушная» шапка (Havodor): тёмный текст на
           холсте, лого в мягком пастельном чипе, единственный яркий
           акцент — кнопка «Yozilish» (индиго-градиент). */}

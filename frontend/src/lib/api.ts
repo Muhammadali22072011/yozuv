@@ -1,7 +1,19 @@
 // Build-time env var (Next.js inlines NEXT_PUBLIC_* into the client bundle).
 // The render.com URL stays as a fallback so a miss-configured deploy still
 // boots, but production should always set NEXT_PUBLIC_API_URL explicitly.
-const API = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
+const ENV_API = process.env.NEXT_PUBLIC_API_URL;
+if (
+  !ENV_API &&
+  process.env.NODE_ENV === "production" &&
+  typeof window !== "undefined"
+) {
+  // Loud, not silent: a credentialed client shouldn't quietly default to a
+  // hardcoded backend. Surface the misconfiguration so it gets fixed.
+  console.error(
+    "[yozuv] NEXT_PUBLIC_API_URL is not set — using the default host. Set it explicitly in production."
+  );
+}
+const API = ENV_API || "https://yozuv.onrender.com";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -85,6 +97,28 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const text = await res.text();
+    let detailMessage: string | null = null;
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (parsed && typeof parsed === "object" && "detail" in parsed) {
+        const detail = (parsed as { detail: unknown }).detail;
+        if (typeof detail === "string") {
+          detailMessage = detail;
+        } else if (Array.isArray(detail)) {
+          const message = detail
+            .map((item) =>
+              item && typeof item === "object" && "msg" in item
+                ? String((item as { msg: unknown }).msg)
+                : String(item)
+            )
+            .join("; ");
+          if (message) detailMessage = message;
+        }
+      }
+    } catch {
+      // Non-JSON body (JSON.parse threw) — fall through to raw text below.
+    }
+    if (detailMessage) throw new Error(detailMessage);
     throw new Error(text || res.statusText);
   }
   if (res.status === 204) return undefined as T;

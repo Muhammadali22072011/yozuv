@@ -19,11 +19,12 @@ from aiogram.types import (
 from app.database import SessionLocal
 from app.models import Business, Client, Service, Staff, User
 from app.schemas.booking import BookingCreatePublic
-from app.services import booking_service
+from app.services import booking_service, waitlist_service
 from app.services.notification_service import send_telegram_message
 from app.utils.clock import local_today
 from app.utils.slots import (
     get_available_slots,
+    get_bookings_for_date,
     get_schedule_for_weekday,
     is_holiday,
     next_working_dates,
@@ -337,12 +338,95 @@ async def pick_day(cb: CallbackQuery):
                 ),
                 reason,
             )
+            # Every slot booked out (not a holiday / missing schedule): instead
+            # of a dead-end alert, offer to waitlist the client. If anything
+            # that day cancels, the existing notify_first_for_slot pings them.
+            # Recovers demand that would otherwise just walk away.
+            if reason == "barcha vaqtlar band":
+                wl_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🔔 Bo'shaganda xabar bering",
+                                callback_data=f"wl:{sid}:{d_iso}",
+                            )
+                        ],
+                        [InlineKeyboardButton(text="🏠 Menyu", callback_data=f"menu:{b.slug}")],
+                    ]
+                )
+                await safe_edit_text(
+                    cb,
+                    "Bu kuni barcha vaqtlar band 😕\n"
+                    "Joy bo'shasa — birinchi bo'lib sizga xabar beraylikmi?",
+                    reply_markup=wl_kb,
+                )
+                await cb.answer()
+                return
             await cb.answer(f"Bo'sh vaqt yo'q ({reason})", show_alert=True)
             return
         await safe_edit_text(cb, "Vaqtni tanlang:", reply_markup=times_kb(b.slug, sid, d_iso, times))
     finally:
         db.close()
     await cb.answer()
+
+
+def _join_waitlist_sync(
+    sid: str, d_iso: str, tg_id: int, first_name: str, last_name: str
+) -> tuple[int, str | None]:
+    """Register the client on the waitlist for every booked slot that day.
+    Whichever booking later cancels, notify_first_for_slot (in the cancel
+    path) pings the queue head for that exact (service, slot). Idempotent via
+    the waitlist unique constraint. Returns (slots_queued, business_slug)."""
+    db = SessionLocal()
+    try:
+        service = db.query(Service).filter(Service.id == UUID(sid)).first()
+        if not service:
+            return 0, None
+        b = db.query(Business).filter(Business.id == service.business_id).first()
+        if not b:
+            return 0, None
+        d = date.fromisoformat(d_iso)
+        booked = get_bookings_for_date(db, b.id, d)
+        pairs = {(bk.service_id, bk.start_time) for bk in booked}
+        for svc_id, start in pairs:
+            waitlist_service.join(
+                db,
+                business_id=b.id,
+                service_id=svc_id,
+                slot_date=d,
+                slot_start=start,
+                client_telegram_id=tg_id,
+                client_first_name=first_name,
+                client_last_name=last_name,
+            )
+        db.commit()
+        return len(pairs), b.slug
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data.startswith("wl:"))
+async def join_waitlist(cb: CallbackQuery):
+    _, sid, d_iso = cb.data.split(":", 2)
+    u = cb.from_user
+    count, slug = await asyncio.to_thread(
+        _join_waitlist_sync,
+        sid,
+        d_iso,
+        u.id,
+        u.first_name or "",
+        u.last_name or "",
+    )
+    if count:
+        await safe_edit_text(
+            cb,
+            "🔔 Navbatga qo'shildingiz!\n"
+            "Shu kuni biror joy bo'shasa — sizga darhol xabar beramiz.",
+            reply_markup=back_to_menu_kb(slug) if slug else None,
+        )
+        await cb.answer("✅ Qo'shildingiz")
+    else:
+        await cb.answer("Hozircha kutadigan band vaqt yo'q.", show_alert=True)
 
 
 def _promo_prompt_kb(slug: str, sid: str, d_iso: str, t_str: str) -> InlineKeyboardMarkup:

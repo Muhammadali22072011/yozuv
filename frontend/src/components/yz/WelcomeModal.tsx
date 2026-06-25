@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Sparkles, ArrowRight, Scissors, Share2, CalendarCheck } from "lucide-react";
 
 /**
@@ -22,11 +23,30 @@ export function WelcomeModal({
   onTour: () => void;
   onSkip: () => void;
 }) {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onSkip();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    modalRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onSkip]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[2900] flex items-center justify-center bg-ink-900/45 px-4 backdrop-blur-sm">
-      <div className="card-lg animate-card-in w-full max-w-md overflow-hidden">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="welcome-modal-title"
+        tabIndex={-1}
+        className="card-lg animate-card-in w-full max-w-md overflow-hidden outline-none"
+      >
         <div className="yz-feature relative overflow-hidden px-6 pt-7 pb-7 text-white">
           <div
             aria-hidden
@@ -35,7 +55,10 @@ export function WelcomeModal({
           <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-white/20 backdrop-blur">
             <Sparkles className="h-6 w-6 text-lemon" />
           </div>
-          <h2 className="relative mt-4 font-display text-2xl font-extrabold tracking-tighter">
+          <h2
+            id="welcome-modal-title"
+            className="relative mt-4 font-display text-2xl font-extrabold tracking-tighter"
+          >
             Xush kelibsiz, {ownerName}!
           </h2>
           <p className="relative mt-1.5 text-[14px] leading-relaxed text-white/90">

@@ -53,10 +53,10 @@ const config: Config = {
         foreground: "hsl(var(--foreground))",
       },
       fontFamily: {
-        display: ["Plus Jakarta Sans", "var(--font-geist)", "system-ui", "sans-serif"],
-        sans: ["var(--font-geist)", "Plus Jakarta Sans", "system-ui", "sans-serif"],
-        serif: ["var(--font-geist)", "Plus Jakarta Sans", "Georgia", "serif"],
-        mono: ["Spline Sans Mono", "SF Mono", "ui-monospace", "Menlo", "monospace"],
+        display: ["Plus Jakarta Sans", "var(--font-geist-sans)", "system-ui", "sans-serif"],
+        sans: ["var(--font-geist-sans)", "Plus Jakarta Sans", "system-ui", "sans-serif"],
+        serif: ["var(--font-geist-sans)", "Plus Jakarta Sans", "Georgia", "serif"],
+        mono: ["SF Mono", "ui-monospace", "Menlo", "monospace"],
       },
       // Единая шкала отступов/радиусов — мягкие, крупные («дружелюбный» продукт).
       borderRadius: {

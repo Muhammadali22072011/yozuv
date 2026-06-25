@@ -1,47 +1,62 @@
-import { Bell, CalendarClock, LineChart, QrCode, ShieldCheck, Users } from "lucide-react";
+import {
+  Bell,
+  BellRing,
+  CalendarClock,
+  LineChart,
+  QrCode,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 
 const items = [
   {
     icon: CalendarClock,
-    title: "Slotlar avtomatik",
-    desc: "Ish vaqti, tanaffus va band vaqtlar hisobga olinadi.",
+    title: "Ikki marta band bo‘lmaydi",
+    desc: "Bot ish vaqti, tanaffus va band slotlarni o‘zi hisoblaydi — bitta vaqtga ikki mijoz tushmaydi.",
     bg: "#EEF0FF",
     fg: "#4853F5",
   },
   {
     icon: Bell,
-    title: "Eslatmalar",
-    desc: "1 soat oldin mijozga Telegram orqali eslatma.",
+    title: "Neyavkalar kamayadi",
+    desc: "Tashrifdan 1 soat oldin bot mijozga Telegramda eslatadi — «esimdan chiqibdi» deyilmaydi.",
     bg: "#FFF3DA",
     fg: "#A8751A",
   },
   {
     icon: Users,
-    title: "Mijozlar bazasi",
-    desc: "Takroriy tashriflar va tarix — bitta joyda.",
+    title: "Har bir mijoz yodda",
+    desc: "Tashriflar tarixi, promokodlar va sodiqlik kartasi — har N-tashrif bepul. Mijoz qaytib keladi.",
     bg: "#E6FAF3",
     fg: "#0E9577",
   },
   {
     icon: LineChart,
-    title: "Analitika",
-    desc: "Daromad, mashhur xizmatlar va bandlik.",
+    title: "Daromadingizni ko‘rasiz",
+    desc: "Qaysi xizmat ko‘p daromad keltirdi, qachon band bo‘ldingiz — raqamlar bilan, taxminsiz.",
     bg: "#FFE7E3",
     fg: "#FF7A6B",
   },
   {
     icon: QrCode,
-    title: "QR va PDF",
-    desc: "Biznes uchun tayyor broshyura.",
+    title: "Yangi mijozlar o‘zi topadi",
+    desc: "Shaxsiy sahifa, karta-katalog, QR va tayyor PDF-broshyura — bir bosishda. Mijoz to‘g‘ri botga tushadi.",
     bg: "#EEF0FF",
     fg: "#4853F5",
   },
   {
     icon: ShieldCheck,
-    title: "To‘lovlar",
-    desc: "Payme va Click orqali obuna to‘lovi.",
+    title: "Sumda, oson to‘lov",
+    desc: "Obunani Payme yoki Click orqali to‘laysiz — chet el kartasi kerak emas.",
     bg: "#E6FAF3",
     fg: "#22C8A8",
+  },
+  {
+    icon: BellRing,
+    title: "Bo‘sh slot bekorga ketmaydi",
+    desc: "Mijoz bekor qilsa, bot navbatdagi mijozga bo‘shagan vaqtni o‘zi taklif qiladi.",
+    bg: "#FFF3DA",
+    fg: "#A8751A",
   },
 ];
 
@@ -53,10 +68,11 @@ export function Features() {
           Imkoniyatlar
         </div>
         <h2 className="mt-3 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
-          Kundalik jarayonlarni soddalashtiring
+          Yozuvni siz emas — Yozuv boshqaradi
         </h2>
         <p className="mt-4 text-lg leading-relaxed text-ink-500">
-          Mijoz oqimi, eslatmalar va tahlildan vaqt ayirmang — Yozuv o‘zi qiladi.
+          Slot hisoblash, eslatma yuborish va hisobotlar — hammasi avtomatik. Siz
+          mijoz bilan ishlaysiz, qolganini bot qiladi.
         </p>
       </div>
 

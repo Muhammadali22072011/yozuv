@@ -160,15 +160,23 @@ export default function DashboardHome() {
   }
 
   function finishDashboardTour() {
-    // The user just closed the dashboard's own 5-step tour, either by
-    // finishing or X-ing out. Mark seen, and — since they chose the
-    // guided path — kick off the multi-page onboarding chain. They
-    // can still skip individual pages from there.
+    // The user reached the natural end of the dashboard's own 5-step
+    // tour (last step's "Tayyor"). Mark seen, and — since they chose
+    // the guided path and saw it through — kick off the multi-page
+    // onboarding chain. They can still skip individual pages from there.
     markTourSeen(DASHBOARD_TOUR_ID);
     setTourOpen(false);
     setTimeout(() => {
       startOnboarding((p) => router.push(p));
     }, 250);
+  }
+
+  function dismissDashboardTour() {
+    // User X-ed out or hit "O'tkazib yuborish" on the dashboard tour.
+    // They opted out of the guided path, so just mark seen and close —
+    // no forced onboarding chain (mirrors skipWelcome).
+    markTourSeen(DASHBOARD_TOUR_ID);
+    setTourOpen(false);
   }
 
   function startTour() {
@@ -527,7 +535,8 @@ export default function DashboardHome() {
       <Tour
         open={tourOpen}
         steps={DASHBOARD_TOUR_STEPS}
-        onClose={finishDashboardTour}
+        onClose={dismissDashboardTour}
+        onComplete={finishDashboardTour}
       />
 
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
@@ -538,39 +547,6 @@ export default function DashboardHome() {
 function clientName(b: BookingRow, clients: ClientLite[]) {
   const c = clients.find((x) => x.id === b.client_id);
   return c ? `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Mijoz" : "Mijoz";
-}
-
-function StatBox({
-  label,
-  value,
-  sub,
-  color,
-  trend,
-}: {
-  label: string;
-  value: string | number;
-  sub: string;
-  color: string;
-  trend?: string;
-}) {
-  return (
-    <div className="px-2 text-center first:pl-0 last:pr-0">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-400">{label}</div>
-      <div
-        className="mt-1 font-display text-2xl font-extrabold tracking-tight"
-        style={{ color }}
-      >
-        {value}
-      </div>
-      <div className="-mt-0.5 text-[11px] font-semibold text-ink-500">{sub}</div>
-      {trend && (
-        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-bold text-success">
-          <TrendingUp className="h-3 w-3" strokeWidth={2.4} />
-          {trend}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function QuickTile({
@@ -589,13 +565,13 @@ function QuickTile({
   return (
     <Link href={href} className="card-soft flex flex-col gap-2.5 p-3.5 tap">
       <div
-        className="grid h-10 w-10 place-items-center rounded-xl"
+        className="grid h-10 w-10 place-items-center rounded-2xl"
         style={{ background: bg }}
       >
         {icon}
       </div>
       <div>
-        <div className="font-display text-sm font-bold tracking-tight text-ink-900">{label}</div>
+        <div className="font-display text-sm font-bold tracking-tighter text-ink-900">{label}</div>
         <div className="mt-0.5 text-xs text-ink-400">{sub}</div>
       </div>
     </Link>

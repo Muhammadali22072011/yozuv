@@ -3,24 +3,24 @@ import { Store, Send, CalendarClock, TrendingUp } from "lucide-react";
 const steps = [
   {
     n: "01",
-    title: "Biznes yarating",
-    desc: "Nom, kategoriya va xizmatlarni qo‘shing.",
+    title: "Biznesni qo‘shing",
+    desc: "Nom, kategoriya va xizmatlarni kiriting — 2 daqiqa.",
     tile: "tile-indigo",
     accent: "#4853F5",
     icon: Store,
   },
   {
     n: "02",
-    title: "Telegramda ulaning",
-    desc: "Havola va QR — mijozlar bot orqali yoziladi.",
+    title: "Telegramga ulang",
+    desc: "Havola va QR tayyor — mijozlar shu zahoti bot orqali yozila boshlaydi.",
     tile: "tile-sky",
     accent: "#2E8BE6",
     icon: Send,
   },
   {
     n: "03",
-    title: "Slotlarni boshqaring",
-    desc: "Tasdiqlash rejimi: avto, qo‘lda yoki oldindan to‘lov.",
+    title: "Yozuvlarni qabul qiling",
+    desc: "Tasdiqni o‘zingiz tanlaysiz: avto, qo‘lda yoki oldindan to‘lov bilan.",
     tile: "tile-mint",
     accent: "#16A37B",
     icon: CalendarClock,
@@ -28,7 +28,7 @@ const steps = [
   {
     n: "04",
     title: "O‘sing",
-    desc: "Analitika va eslatmalar bilan qayta tashriflarni oshiring.",
+    desc: "Eslatma va analitika qayta tashriflarni oshiradi — daromad ko‘rinib turadi.",
     tile: "tile-lemon",
     accent: "#C98A1E",
     icon: TrendingUp,
@@ -41,7 +41,7 @@ export function HowItWorks() {
       <div className="mx-auto max-w-6xl px-6 py-20">
         <div className="eyebrow text-indigo-600">Qanday ishlaydi</div>
         <h2 className="mt-2 section-title text-3xl tracking-[-0.02em] md:text-4xl">
-          4 ta qadam — va sizda biznes onlayn
+          5 daqiqada ishga tushasiz
         </h2>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">

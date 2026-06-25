@@ -19,8 +19,8 @@ const PROMO_TOUR: TourStep[] = [
     targetSelector: "[data-tour='promo-add']",
     title: "Birinchi promo-kodingiz",
     body:
-      "Mijozlarga maxsus kod bering — masalan SUMMER20. Mijoz uni yozilishda kiritsa, narxdan chegirma avtomatik chiqib ketadi. Foydalanish chegarasini ham qo'ysangiz bo'ladi.",
-    mode: "action",
+      "Shu tugma orqali mijozlarga maxsus kod berasiz — masalan SUMMER20. Mijoz uni yozilishda kiritsa, narxdan chegirma avtomatik chiqib ketadi. Foydalanish chegarasini ham qo'ysangiz bo'ladi.",
+    mode: "info",
   },
 ];
 
@@ -118,6 +118,7 @@ export default function PromoPage() {
             className="grid h-11 w-11 place-items-center rounded-2xl text-white shadow-soft-sm tap"
             style={{ background: "linear-gradient(135deg,#7C5CFF,#4853F5)" }}
             aria-label="Yangi promo-kod"
+            title="Yangi promo-kod"
           >
             <Plus className="h-5 w-5" strokeWidth={2.6} />
           </button>

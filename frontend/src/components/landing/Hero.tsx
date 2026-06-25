@@ -25,15 +25,17 @@ export function Hero() {
 
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-bold text-indigo-700 shadow-soft-sm">
             <Sparkles className="h-3.5 w-3.5 text-iris" strokeWidth={2.4} />
-            14 kun bepul
+            14 kun bepul · Karta kerak emas
           </span>
 
           <h1 className="font-display text-4xl font-extrabold leading-[1.04] tracking-tightest text-ink-900 sm:text-5xl md:text-6xl">
-            Mijozlar Telegram orqali yoziladi
+            Daftarni unuting — mijozlar o&apos;zi Telegramda yoziladi
           </h1>
           <p className="max-w-xl text-base text-ink-500 md:text-lg">
-            Barbershop, salon, klinika va boshqa xizmatlar uchun slotlar, eslatmalar
-            va analitika — bitta platformada.
+            Barbershop, salon va klinikalar uchun. Bot mijozni qabul qiladi, bo&apos;sh
+            slotni o&apos;zi topadi va tashrifdan 1 soat oldin eslatadi —
+            &laquo;keluvdim, esimdan chiqibdi&raquo; kamayadi. Sayt ham, ilova ham
+            kerak emas.
           </p>
 
           <div className="flex flex-wrap gap-3 pt-2">
@@ -45,14 +47,22 @@ export function Hero() {
                 boxShadow: "0 16px 32px -14px rgba(72,83,245,0.65)",
               }}
             >
-              Boshlash · 14 kun bepul <ArrowRight className="h-4 w-4" />
+              Bepul boshlash — 14 kun <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="#pricing"
               className="inline-flex items-center justify-center rounded-2xl border border-ink-200 bg-white px-6 py-3.5 font-display text-[15px] font-bold text-ink-900 shadow-soft-sm tap"
             >
-              Tariflar
+              Tariflarni ko&apos;rish
             </Link>
+          </div>
+          <p className="text-[13px] font-medium text-ink-500">
+            Karta kerak emas · Payme/Click orqali to&apos;lov
+          </p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-[13px] font-semibold text-ink-600">
+            <span>📱 Telegram ichida</span>
+            <span>💳 Payme va Click</span>
+            <span>🔔 Avtomatik eslatmalar</span>
           </div>
         </div>
 

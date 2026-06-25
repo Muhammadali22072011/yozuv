@@ -112,6 +112,10 @@ export default function OnboardingPage() {
         setErr("Biznes nomi va URL-slug majburiy");
         return;
       }
+      if (biz.slug.trim().length < 2) {
+        setErr("URL-slug kamida 2 ta belgidan iborat bo‘lishi kerak");
+        return;
+      }
       if (!biz.phone.trim()) {
         setErr("Telefon raqamingizni kiriting");
         return;
@@ -145,23 +149,40 @@ export default function OnboardingPage() {
       return;
     }
 
+    const badDay = days.find((d) => d.is_working && d.end_time <= d.start_time);
+    if (badDay) {
+      setErr(
+        `Tugash vaqti boshlanish vaqtidan keyin bo‘lishi kerak (${DAY_NAMES[badDay.day_of_week]})`,
+      );
+      setStep(3);
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await apiFetch("/api/business", {
-        method: "POST",
-        body: JSON.stringify({
-          name: biz.name.trim(),
-          slug: biz.slug.trim(),
-          category: biz.category,
-          description: biz.description.trim(),
-          address: biz.address.trim(),
-          phone: biz.phone.trim(),
-          viloyat: biz.viloyat,
-          tuman: biz.tuman,
-          latitude: biz.latitude,
-          longitude: biz.longitude,
-        }),
-      });
+      try {
+        await apiFetch("/api/business", {
+          method: "POST",
+          body: JSON.stringify({
+            name: biz.name.trim(),
+            slug: biz.slug.trim(),
+            category: biz.category,
+            description: biz.description.trim(),
+            address: biz.address.trim(),
+            phone: biz.phone.trim(),
+            viloyat: biz.viloyat.trim(),
+            tuman: biz.tuman.trim(),
+            latitude: biz.latitude,
+            longitude: biz.longitude,
+          }),
+        });
+      } catch (e) {
+        const msg = (e as Error).message || "";
+        if (!/already exists/i.test(msg)) {
+          throw e;
+        }
+        // Biznes oldingi urinishdan allaqachon yaratilgan — davom etamiz.
+      }
 
       for (let i = 0; i < filledSvc.length; i++) {
         const s = filledSvc[i];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, MousePointerClick, X } from "lucide-react";
 
 /**
@@ -28,50 +28,114 @@ export type TourStep = {
 
 const PAD = 8;
 const TIP_W = 320;
+const TIP_H_FALLBACK = 260;
+/** How long to keep retrying to find a not-yet-mounted target before giving up. */
+const FIND_RETRY_MS = 1200;
 
 export function Tour({
   steps,
   open,
   onClose,
+  onComplete,
 }: {
   steps: TourStep[];
   open: boolean;
   onClose: () => void;
+  /**
+   * Called INSTEAD of onClose when the tour ends naturally (last "info"
+   * step's "Tayyor" button, or the last "action" step being consumed).
+   * Falls back to onClose when not provided. Early dismissal (X button,
+   * skip link, bailing on a missing element) always calls onClose.
+   */
+  onComplete?: () => void;
 }) {
   const [idx, setIdx] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [vw, setVw] = useState(0);
   const [vh, setVh] = useState(0);
+  const tipRef = useRef<HTMLDivElement | null>(null);
+  const [tipH, setTipH] = useState(TIP_H_FALLBACK);
 
   useEffect(() => {
     if (open) setIdx(0);
   }, [open]);
 
   const step = steps[idx];
+  const isLast = idx === steps.length - 1;
+
+  // Natural end of the tour: prefer onComplete, fall back to onClose.
+  const finish = () => (onComplete ?? onClose)();
+
+  // Re-measure from scratch on every step: a fresh step must not reuse
+  // the previous step's rect.
+  useEffect(() => {
+    setRect(null);
+  }, [idx]);
 
   useLayoutEffect(() => {
     if (!open || !step) return;
-    const measure = () => {
-      const el = document.querySelector(step.targetSelector) as HTMLElement | null;
-      if (!el) {
-        setRect(null);
-        return;
-      }
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      requestAnimationFrame(() => {
+
+    let raf = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    const deadline = Date.now() + FIND_RETRY_MS;
+
+    const readRect = (el: HTMLElement) => {
+      raf = requestAnimationFrame(() => {
+        if (cancelled) return;
         setRect(el.getBoundingClientRect());
         setVw(window.innerWidth);
         setVh(window.innerHeight);
       });
     };
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
+
+    // First locate + scroll, retrying while the target is not yet mounted.
+    const locate = () => {
+      if (cancelled) return;
+      const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+      if (el) {
+        // Scroll exactly once per step (not on every scroll/resize tick).
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        readRect(el);
+        return;
+      }
+      // Element genuinely not there yet: retry within the budget.
+      if (Date.now() < deadline) {
+        retryTimer = setTimeout(locate, 120);
+        return;
+      }
+      // Retry budget exhausted, element truly absent: advance / finish.
+      if (!isLast) setIdx(idx + 1);
+      else finish();
     };
+
+    locate();
+
+    // Scroll/resize listeners only re-read the rect — they never re-scroll.
+    const reread = () => {
+      const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+      if (el) readRect(el);
+    };
+    window.addEventListener("resize", reread);
+    window.addEventListener("scroll", reread, true);
+
+    return () => {
+      cancelled = true;
+      if (raf) cancelAnimationFrame(raf);
+      if (retryTimer) clearTimeout(retryTimer);
+      window.removeEventListener("resize", reread);
+      window.removeEventListener("scroll", reread, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, idx, step]);
+
+  // Measure the rendered tooltip height so we can clamp it into the viewport.
+  useLayoutEffect(() => {
+    if (tipRef.current) {
+      const h = tipRef.current.offsetHeight;
+      if (h) setTipH(h);
+    }
+  }, [idx, rect, vh]);
 
   // Action mode: listen for clicks anywhere; if the click landed
   // inside the target subtree, advance the tour. Capture phase so we
@@ -80,33 +144,43 @@ export function Tour({
   useEffect(() => {
     if (!open || !step) return;
     if ((step.mode || "info") !== "action") return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let consumed = false;
     const onClick = (e: MouseEvent) => {
       const target = e.target as Element | null;
       if (!target) return;
       if (!target.closest(step.targetSelector)) return;
-      setTimeout(() => {
+      // Guard against a fast double-click advancing twice.
+      if (consumed) return;
+      consumed = true;
+      timer = setTimeout(() => {
         if (idx + 1 < steps.length) setIdx(idx + 1);
-        else onClose();
+        else finish();
       }, 50);
     };
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
-  }, [open, idx, step, steps.length, onClose]);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, idx, step, steps.length, onClose, onComplete]);
 
   if (!open || !step) return null;
 
+  // Measurement pending (or briefly between steps): show a plain dim with
+  // no spotlight cutout. Never mutate state during render — the effects
+  // above own all advancement.
   if (rect === null) {
-    queueMicrotask(() => {
-      if (idx + 1 < steps.length) setIdx(idx + 1);
-      else onClose();
-    });
-    return null;
+    return <div className="fixed inset-0 z-[3000] bg-black/60" aria-hidden />;
   }
 
   const mode = step.mode || "info";
-  const isLast = idx === steps.length - 1;
   const tooltipBelow = rect.top < vh / 2;
-  const tipTop = tooltipBelow ? rect.bottom + 24 : rect.top - 16;
+  const desiredTop = tooltipBelow ? rect.bottom + 24 : rect.top - 16 - tipH;
+  // Clamp vertically so the tooltip (and its buttons) stay on-screen on
+  // short / mobile viewports.
+  const tipTop = Math.max(12, Math.min(vh - tipH - 12, desiredTop));
   const tipLeftRaw = rect.left + rect.width / 2 - TIP_W / 2;
   const tipLeft = Math.max(12, Math.min(vw - TIP_W - 12, tipLeftRaw));
 
@@ -172,10 +246,10 @@ export function Tour({
       )}
 
       <div
+        ref={tipRef}
         className="absolute rounded-3xl bg-white p-5 shadow-[0_24px_60px_-12px_rgba(11,15,31,0.35),0_8px_24px_-8px_rgba(72,83,245,0.18)] ring-1 ring-black/5 animate-card-in"
         style={{
           top: tipTop,
-          transform: tooltipBelow ? "translateY(0)" : "translateY(-100%)",
           left: tipLeft,
           width: TIP_W,
         }}
@@ -215,7 +289,7 @@ export function Tour({
           {mode === "info" ? (
             <button
               onClick={() => {
-                if (isLast) onClose();
+                if (isLast) finish();
                 else setIdx(idx + 1);
               }}
               className="tap inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 font-display text-xs font-bold text-white"
