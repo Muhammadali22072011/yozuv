@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { Sparkles, ArrowRight, Scissors, Share2, CalendarCheck } from "lucide-react";
 
 /**
  * One-shot welcome modal shown the very first time an owner opens the
@@ -38,85 +38,86 @@ export function WelcomeModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[2900] flex items-center justify-center bg-black/55 px-4">
+    <div className="fixed inset-0 z-[2900] flex items-center justify-center bg-ink-900/45 px-4 backdrop-blur-sm">
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="welcome-modal-title"
         tabIndex={-1}
-        className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.4)] outline-none"
+        className="card-lg animate-card-in w-full max-w-md overflow-hidden outline-none"
       >
-        <div
-          className="px-6 pt-7 pb-6 text-white"
-          style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
-        >
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/14 backdrop-blur">
-            <Sparkles className="h-6 w-6 text-yellow-300" />
+        <div className="yz-feature relative overflow-hidden px-6 pt-7 pb-7 text-white">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10 blur-xl"
+          />
+          <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-white/20 backdrop-blur">
+            <Sparkles className="h-6 w-6 text-lemon" />
           </div>
           <h2
             id="welcome-modal-title"
-            className="mt-4 break-words font-display text-2xl font-extrabold tracking-tight"
+            className="relative mt-4 font-display text-2xl font-extrabold tracking-tighter"
           >
             Xush kelibsiz, {ownerName}!
           </h2>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-white/85">
+          <p className="relative mt-1.5 text-[14px] leading-relaxed text-white/90">
             Yozuv — Telegram orqali onlayn yozilish. Bir necha qadam va biznesingiz mijozlarni qabul qila boshlaydi.
           </p>
         </div>
 
-        <ul className="space-y-3 px-6 py-5">
-          <li className="flex gap-3">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-indigo-50 font-display text-sm font-extrabold text-indigo-700">
-              1
+        <ul className="space-y-2.5 px-5 py-5">
+          <li className="tile-indigo flex items-start gap-3.5">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 text-indigo-600 shadow-soft-sm">
+              <Scissors className="h-5 w-5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="font-display text-sm font-bold text-ink-900">
                 Xizmatlarni qo&apos;shing
               </div>
-              <div className="mt-0.5 text-xs text-ink-500">
+              <div className="mt-0.5 text-xs leading-relaxed text-ink-500">
                 Stomatologiya, soch olish, massaj — narx va vaqt bilan.
               </div>
             </div>
           </li>
-          <li className="flex gap-3">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-indigo-50 font-display text-sm font-extrabold text-indigo-700">
-              2
+          <li className="tile-mint flex items-start gap-3.5">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 text-success shadow-soft-sm">
+              <Share2 className="h-5 w-5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="font-display text-sm font-bold text-ink-900">
                 Mijozlar havolasini ulashing
               </div>
-              <div className="mt-0.5 text-xs text-ink-500">
+              <div className="mt-0.5 text-xs leading-relaxed text-ink-500">
                 Bot havolasini WhatsApp / Instagram / vizit kartochkasiga joylang.
               </div>
             </div>
           </li>
-          <li className="flex gap-3">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-indigo-50 font-display text-sm font-extrabold text-indigo-700">
-              3
+          <li className="tile-lemon flex items-start gap-3.5">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 text-warn shadow-soft-sm">
+              <CalendarCheck className="h-5 w-5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="font-display text-sm font-bold text-ink-900">
                 Yozilishlarni boshqaring
               </div>
-              <div className="mt-0.5 text-xs text-ink-500">
+              <div className="mt-0.5 text-xs leading-relaxed text-ink-500">
                 Bron, eslatma, izohlar — hammasi bitta dashboardda.
               </div>
             </div>
           </li>
         </ul>
 
-        <div className="flex gap-2 border-t border-ink-100 bg-ink-50 px-6 py-4">
+        <div className="flex gap-2.5 border-t border-ink-100 bg-ink-50 px-5 py-4">
           <button
             onClick={onSkip}
-            className="flex-1 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink-700 hover:bg-ink-100"
+            className="btn-soft tap flex-1 px-4 py-3 text-sm"
           >
             O&apos;zim ko&apos;raman
           </button>
           <button
             onClick={onTour}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+            className="btn-primary tap flex-1 gap-1.5 px-4 py-3 text-sm"
           >
             Qisqa tur
             <ArrowRight className="h-4 w-4" />

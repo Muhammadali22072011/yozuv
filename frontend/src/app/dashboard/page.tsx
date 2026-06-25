@@ -320,12 +320,26 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Статистика — яркая feature-карта дохода + пастель-плитки */}
+      {/* Статистика — яркая feature-карта дохода + пастель-плитки.
+          Градиент задан инлайн-стилем — гарантированно виден независимо
+          от Tailwind purge/HMR (текст белый, фон обязан быть тёмным). */}
       <div data-tour="hero-stats" className="mt-5 px-4 md:px-0">
-        <div className="yz-feature relative overflow-hidden rounded-4xl p-5">
+        <div
+          className="relative overflow-hidden rounded-4xl p-5 text-white"
+          style={{
+            // Сплошной фон-фолбэк ПЕРЕД градиентом: даже если градиент-картинку
+            // что-то срежет (forced-colors, странный браузер), под белым текстом
+            // остаётся тёмный #4853F5 — карточка никогда не «белеет».
+            backgroundColor: "#4853F5",
+            backgroundImage: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+            boxShadow: "0 18px 36px -18px rgba(72,83,245,0.6)",
+          }}
+        >
           <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
           <div className="relative text-[13px] font-semibold text-white/75">Bugungi daromad</div>
-          <div className="relative mt-1 tnum display-xl text-[30px] text-white">{fmtSum(summary.revenue)}</div>
+          <div className="relative mt-1 tnum font-display text-[30px] font-extrabold tracking-tightest text-white">
+            {fmtSum(summary.revenue)}
+          </div>
           <div className="relative mt-2.5 flex items-center gap-2">
             {summary.weekRevenue > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white">
@@ -340,7 +354,7 @@ export default function DashboardHome() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <div className="tile-indigo">
+          <div className="rounded-3xl bg-indigo-50 p-4">
             <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-indigo-600">
               <CalendarDays className="h-5 w-5" />
             </div>
@@ -349,7 +363,7 @@ export default function DashboardHome() {
             </div>
             <div className="text-[12px] font-semibold text-indigo-700/70">Bugun · yozilish</div>
           </div>
-          <div className="tile-mint">
+          <div className="rounded-3xl p-4" style={{ background: "#E7F8F2" }}>
             <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-success">
               <Users className="h-5 w-5" />
             </div>

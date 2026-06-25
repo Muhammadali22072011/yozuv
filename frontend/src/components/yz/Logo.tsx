@@ -12,7 +12,17 @@ export function YzLogo({
 }) {
   return (
     <span
-      className={cn("relative inline-block shrink-0", className)}
+      className={cn(
+        "relative inline-block shrink-0 rounded-2xl",
+        // Havodor — the logo PNG already carries its own white circle, so we
+        // never put an opaque plate behind it (that would erase its edge).
+        // The only refinement is the signature soft indigo glow on light
+        // surfaces (gradient variant); on dark/branded tops (light/dark) the
+        // white mark already pops, so we keep it clean.
+        variant === "gradient" &&
+          "shadow-[0_6px_18px_-8px_rgba(72,83,245,0.30)]",
+        className,
+      )}
       style={{ width: size, height: size }}
       aria-label="Yozuv"
     >

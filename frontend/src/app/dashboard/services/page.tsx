@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Clock, Pencil, Plus, Scissors, Trash2 } from "lucide-react";
 import { ScreenHeader, TourFloat, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import {
@@ -195,27 +195,51 @@ export default function ServicesPage() {
           <button
             data-tour="services-add"
             onClick={openCreate}
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-900 text-white tap"
+            aria-label="Yangi xizmat"
+            className="grid h-11 w-11 place-items-center rounded-2xl text-white tap"
+            style={{
+              background: "linear-gradient(135deg,#7C5CFF,#4853F5)",
+              boxShadow: "0 12px 26px -10px rgba(72,83,245,0.55)",
+            }}
           >
             <Plus className="h-5 w-5" strokeWidth={2.6} />
           </button>
         }
       />
 
-      <div data-tour="services-list" className="mt-3 flex flex-col gap-2.5 px-4 md:px-0">
+      <div data-tour="services-list" className="mt-3 flex flex-col gap-3 px-4 md:px-0">
         {loadErr ? (
-          <div className="rounded-[22px] bg-[#FFE7E3] p-4 text-sm text-[#C93A2A]">{loadErr}</div>
-        ) : loading ? (
-          <div className="rounded-[22px] bg-white p-6 text-center text-sm text-ink-400 shadow-soft">
-            Yuklanmoqda…
+          <div className="tile-coral flex items-center gap-3 text-sm font-semibold text-danger">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white/70 text-danger">
+              <Trash2 className="h-4.5 w-4.5" />
+            </div>
+            {loadErr}
           </div>
+        ) : loading ? (
+          <>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card-soft flex items-center gap-3.5 p-3.5">
+                <div className="skeleton h-14 w-14 shrink-0 rounded-2xl" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton h-3.5 w-2/3 rounded-full" />
+                  <div className="skeleton h-3 w-1/3 rounded-full" />
+                </div>
+                <div className="skeleton h-3.5 w-12 rounded-full" />
+              </div>
+            ))}
+          </>
         ) : rows.length === 0 ? (
-          <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
-            Hali xizmat yo‘q — yuqoridan qo‘shing
+          <div className="card-soft flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <Scissors className="h-6 w-6" />
+            </div>
+            <div className="text-sm font-medium text-ink-400">
+              Hali xizmat yo‘q — yuqoridan qo‘shing
+            </div>
           </div>
         ) : (
           rows.map((s, i) => (
-            <div key={s.id} className="card-soft flex items-center gap-3.5 p-3.5">
+            <div key={s.id} className="card flex items-center gap-3.5 p-3.5">
               <div
                 className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl"
                 style={{ background: SWATCHES[i % SWATCHES.length] }}
@@ -223,7 +247,7 @@ export default function ServicesPage() {
                 ✂️
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-display text-[15px] font-bold text-ink-900">
+                <div className="truncate font-display text-[15px] font-bold tracking-tight text-ink-900">
                   {s.name}
                 </div>
                 {s.description && (
@@ -231,16 +255,16 @@ export default function ServicesPage() {
                     {s.description}
                   </div>
                 )}
-                <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-ink-500">
+                <div className="mt-1.5 flex items-center gap-2 text-xs font-semibold text-ink-500">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-ink-400" />
-                    {s.duration_minutes} daq
+                    <span className="tnum">{s.duration_minutes}</span> daq
                   </span>
-                  <span>·</span>
+                  <span className="text-ink-300">·</span>
                   <button
                     onClick={() => toggle(s.id)}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      s.is_active ? "bg-[#E6FAF3] text-[#0E9577]" : "bg-ink-100 text-ink-500"
+                    className={`tap rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide ${
+                      s.is_active ? "bg-[var(--success-bg)] text-success" : "bg-ink-100 text-ink-500"
                     }`}
                   >
                     {s.is_active ? "FAOL" : "O‘CHIQ"}
@@ -248,7 +272,7 @@ export default function ServicesPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-display text-[13px] font-extrabold text-ink-900">
+                <div className="tnum font-display text-[14px] font-extrabold tracking-tight text-ink-900">
                   {formatPriceRange(s.price, s.price_max)}
                 </div>
                 <div className="text-[10px] font-semibold text-ink-400">so‘m</div>
@@ -256,14 +280,14 @@ export default function ServicesPage() {
               <div className="flex flex-col gap-1.5">
                 <button
                   onClick={() => openEdit(s)}
-                  className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-700 tap"
+                  className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-50 text-indigo-600 tap"
                   aria-label="Tahrirlash"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => removeSvc(s.id)}
-                  className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-500 tap"
+                  className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-400 tap"
                   aria-label="O‘chirish"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -335,13 +359,17 @@ export default function ServicesPage() {
                   className="yz-input mt-1 resize-none"
                 />
               </div>
-              {err && <p className="text-sm text-[#C93A2A]">{err}</p>}
+              {err && (
+                <p className="rounded-2xl bg-[var(--danger-bg)] px-3.5 py-2.5 text-sm font-semibold text-danger">
+                  {err}
+                </p>
+              )}
             </SheetBody>
             <SheetFooter>
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}
-                className="flex-1 rounded-2xl bg-ink-100 px-4 py-4 font-display text-[15px] font-bold text-ink-900 tap"
+                className="flex-1 rounded-2xl border border-ink-200 bg-white px-4 py-4 font-display text-[15px] font-bold text-ink-900 shadow-soft-sm tap"
               >
                 Bekor
               </button>

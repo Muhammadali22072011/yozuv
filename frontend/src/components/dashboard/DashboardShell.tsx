@@ -29,7 +29,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               with HeroGradient (its own pt-14) or ScreenHeader (its
               own pt-4). A wrapper pt-* would let bg-ink-50 show as a
               light strip between Telegram's chrome and the hero. */}
-          <div className="mx-auto w-full max-w-md px-4 pb-4 md:max-w-6xl md:px-8 md:pt-8">
+          <div className="mx-auto w-full max-w-md px-4 pb-4 md:max-w-3xl md:px-8 md:pt-8">
             {children}
           </div>
         </main>

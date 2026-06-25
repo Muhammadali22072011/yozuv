@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     uploads_dir: str = "/tmp/yozuv_uploads"
     public_api_url: str = "http://localhost:8000"
 
+    # Google OAuth (Sign in with Google). Blank = Google login disabled.
+    # Redirect URI to register in Google Cloud console:
+    #   {public_api_url}/api/auth/google/callback
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # Sentry — optional in dev, recommended in prod. Empty DSN disables init.
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.0  # set to e.g. 0.1 for 10% perf samples

@@ -65,8 +65,8 @@ export default function SecurityPage() {
       />
 
       <div className="px-4 md:px-0">
-        <div className="card-soft mb-4 flex items-start gap-3 p-4">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-600/10 text-indigo-600">
+        <div className="tile-indigo mb-4 flex items-start gap-3.5">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/70 text-indigo-600">
             <ShieldCheck className="h-5 w-5" strokeWidth={2.2} />
           </div>
           <div className="text-[13px] leading-relaxed text-ink-600">
@@ -76,13 +76,13 @@ export default function SecurityPage() {
           </div>
         </div>
 
-        <form onSubmit={submit} className="card-soft space-y-3 p-5">
+        <form onSubmit={submit} className="card-lg space-y-4 p-5">
           <div>
-            <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-400">
+            <div className="eyebrow mb-2 px-1">
               Login
             </div>
-            <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-3.5 py-3 focus-within:border-indigo-500">
-              <UserIcon className="h-4 w-4 text-ink-400" strokeWidth={2.2} />
+            <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-4 py-3.5 transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/15">
+              <UserIcon className="h-4.5 w-4.5 text-ink-400" strokeWidth={2.2} />
               <input
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
@@ -93,18 +93,18 @@ export default function SecurityPage() {
               />
             </div>
             {hasLogin && (
-              <div className="mt-1 px-1 text-[11px] text-ink-400">
+              <div className="mt-1.5 px-1 text-[11px] font-medium text-ink-400">
                 Login profilingizdan olinadi
               </div>
             )}
           </div>
 
           <div>
-            <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-400">
+            <div className="eyebrow mb-2 px-1">
               Yangi parol
             </div>
-            <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-3.5 py-3 focus-within:border-indigo-500">
-              <Lock className="h-4 w-4 text-ink-400" strokeWidth={2.2} />
+            <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-4 py-3.5 transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/15">
+              <Lock className="h-4.5 w-4.5 text-ink-400" strokeWidth={2.2} />
               <input
                 type="password"
                 value={password}
@@ -117,11 +117,11 @@ export default function SecurityPage() {
           </div>
 
           <div>
-            <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-400">
+            <div className="eyebrow mb-2 px-1">
               Parolni tasdiqlang
             </div>
-            <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-3.5 py-3 focus-within:border-indigo-500">
-              <KeyRound className="h-4 w-4 text-ink-400" strokeWidth={2.2} />
+            <div className="flex items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-4 py-3.5 transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/15">
+              <KeyRound className="h-4.5 w-4.5 text-ink-400" strokeWidth={2.2} />
               <input
                 type="password"
                 value={confirm}
@@ -132,14 +132,14 @@ export default function SecurityPage() {
               />
             </div>
             {confirm.length > 0 && confirm !== password && (
-              <div className="mt-1 px-1 text-[11px] text-[#C93A2A]">Parollar mos emas</div>
+              <div className="mt-1.5 px-1 text-[11px] font-semibold text-danger">Parollar mos emas</div>
             )}
           </div>
 
           <button
             type="submit"
             disabled={!canSubmit}
-            className="btn-primary w-full justify-center disabled:opacity-50"
+            className="btn-primary tap mt-1 w-full justify-center"
           >
             {busy ? "Saqlanmoqda…" : "Parolni saqlash"}
           </button>

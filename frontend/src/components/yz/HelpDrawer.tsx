@@ -84,53 +84,64 @@ export function HelpDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[2800] flex items-end justify-center bg-black/45 sm:items-center"
+      className="fixed inset-0 z-[2800] flex items-end justify-center bg-ink-900/40 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl"
+        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-4xl bg-ink-50 shadow-soft-lg sm:rounded-4xl"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <HelpCircle className="h-5 w-5 text-indigo-600" />
-            <span className="font-display text-lg font-extrabold text-ink-900">
+        <div className="flex items-center justify-between gap-2 border-b border-ink-100 bg-white px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl tile-indigo">
+              <HelpCircle className="h-5 w-5 text-indigo-600" strokeWidth={2.2} />
+            </span>
+            <span className="font-display text-lg font-extrabold tracking-tight text-ink-900">
               Yordam
             </span>
           </div>
           <button
             onClick={onClose}
             aria-label="Yopish"
-            className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-ink-100"
+            className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-ink-100 tap"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-3">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {TIPS.map((t, i) => {
               const isOpen = openIdx === i;
               return (
                 <div
                   key={i}
-                  className="rounded-2xl border border-ink-100 bg-white"
+                  className={`overflow-hidden rounded-3xl bg-white transition-shadow ${
+                    isOpen ? "shadow-soft ring-1 ring-indigo-100" : "shadow-soft"
+                  }`}
                 >
                   <button
                     onClick={() => setOpenIdx(isOpen ? null : i)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left tap"
                   >
-                    <span className="font-display text-sm font-bold text-ink-900">
+                    <span className="font-display text-sm font-bold tracking-tight text-ink-900">
                       {t.q}
                     </span>
-                    {isOpen ? (
-                      <ChevronUp className="h-4 w-4 shrink-0 text-ink-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-ink-400" />
-                    )}
+                    <span
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl transition-colors ${
+                        isOpen ? "tile-indigo text-indigo-600" : "bg-ink-50 text-ink-400"
+                      }`}
+                    >
+                      {isOpen ? (
+                        <ChevronUp className="h-4 w-4" strokeWidth={2.4} />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" strokeWidth={2.4} />
+                      )}
+                    </span>
                   </button>
                   {isOpen && (
-                    <div className="border-t border-ink-100 px-4 py-3 text-sm leading-relaxed text-ink-700">
+                    <div className="px-4 pb-4 text-sm leading-relaxed text-ink-700">
                       {t.a}
                     </div>
                   )}
@@ -140,23 +151,23 @@ export function HelpDrawer({
           </div>
         </div>
 
-        <div className="border-t border-ink-100 bg-ink-50 px-5 py-3">
+        <div className="border-t border-ink-100 bg-white px-5 py-4">
           <div className="text-xs font-semibold text-ink-500">
             Javob topa olmadingizmi?
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-2 text-xs">
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
             <a
               href="https://t.me/yozuv_support"
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 font-bold text-white"
+              className="btn-primary inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold tap"
             >
               <Send className="h-3.5 w-3.5" />
               Telegram support
             </a>
             <a
               href="mailto:support@yozuv.com"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 font-bold text-indigo-700 ring-1 ring-ink-200"
+              className="btn-soft inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-bold text-indigo-700 tap"
             >
               <Mail className="h-3.5 w-3.5" />
               Pochta

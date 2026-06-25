@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, FileDown, Share2 } from "lucide-react";
+import { Download, FileDown, FileText, Share2 } from "lucide-react";
 import { ScreenHeader, TourFloat, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
@@ -147,16 +147,28 @@ export default function QrPage() {
       <ScreenHeader title="QR kod" subtitle="Mijozlar uchun havola" />
 
       <div className="mt-2 px-4 md:px-0">
-        <div className="rounded-[28px] border-[1.5px] border-ink-100 bg-gradient-to-b from-white to-ink-50 px-5 py-6 text-center shadow-soft-lg">
-          <div className="mb-1 flex items-center justify-center gap-2">
-            <YzLogo size={24} />
-            <div className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
+        {/* QR feature-карта — единственный яркий момент экрана. Тёмный
+            indigo-градиент, на нём «парящая» белая карточка с QR. */}
+        <div
+          data-tour="qr-image"
+          className="relative overflow-hidden rounded-4xl p-6 text-center text-white"
+          style={{
+            background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+            boxShadow: "0 18px 36px -18px rgba(72,83,245,0.6)",
+          }}
+        >
+          <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/20 blur-2xl" />
+          <div className="pointer-events-none absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+
+          <div className="relative mb-1 flex items-center justify-center gap-2">
+            <YzLogo size={26} variant="light" />
+            <div className="font-display text-[17px] font-extrabold tracking-tight text-white">
               {biz?.name || "Yozuv"}
             </div>
           </div>
-          <div className="text-[13px] font-medium text-ink-500">Skanerlang va yoziling</div>
+          <div className="relative text-[13px] font-semibold text-white/80">Skanerlang va yoziling</div>
 
-          <div data-tour="qr-image" className="mx-auto mt-4 grid h-60 w-60 place-items-center rounded-[20px] bg-white p-4 shadow-[0_10px_30px_rgba(11,15,31,0.08),_inset_0_0_0_1px_rgba(11,15,31,0.06)]">
+          <div className="relative mx-auto mt-5 grid h-60 w-60 place-items-center rounded-[26px] bg-white p-4 shadow-[0_24px_50px_-20px_rgba(11,15,31,0.45)]">
             {qrUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={qrUrl} alt="QR" className="h-full w-full" />
@@ -165,7 +177,9 @@ export default function QrPage() {
             )}
           </div>
 
-          <div className="mt-4 break-all font-mono text-xs text-ink-500">{telegramLink || "—"}</div>
+          <div className="relative mx-auto mt-5 inline-block max-w-full break-all rounded-full bg-white/15 px-3.5 py-1.5 font-mono text-[11px] font-medium text-white/85 backdrop-blur">
+            {telegramLink || "—"}
+          </div>
         </div>
 
         <div data-tour="qr-download">

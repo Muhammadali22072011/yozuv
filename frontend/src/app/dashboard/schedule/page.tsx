@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { CalendarOff, Clock3, Pencil, Plus, Trash2 } from "lucide-react";
 import { ScreenHeader, useToast } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -178,59 +178,73 @@ export default function SchedulePage() {
       />
 
       <div className="mt-2 px-4 md:px-0">
-        <div className="card-soft divide-y divide-ink-100 p-1.5">
+        <div className="card-soft divide-y divide-ink-100 p-2">
           {rows.map((d, i) => (
-            <div key={d.day_of_week} className="px-3 py-3.5">
+            <div key={d.day_of_week} className="px-2.5 py-3.5">
               <div className="flex items-center gap-3">
                 <div className="flex-1">
                   <div
                     className={cn(
-                      "font-display text-[15px] font-bold",
+                      "font-display text-[15px] font-bold tracking-tight",
                       d.is_working ? "text-ink-900" : "text-ink-300"
                     )}
                   >
                     {DAY_NAMES[i]}
                   </div>
-                  <div className="mt-0.5 font-mono text-xs text-ink-400">
-                    {d.is_working
-                      ? `${toHM(d.start_time)} – ${toHM(d.end_time)}`
-                      : "Dam olish kuni"}
+                  <div className="mt-1">
+                    {d.is_working ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-success-bg px-2.5 py-1 tnum text-xs font-bold text-success">
+                        <Clock3 className="h-3.5 w-3.5" strokeWidth={2.4} />
+                        {toHM(d.start_time)} – {toHM(d.end_time)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-400">
+                        <CalendarOff className="h-3.5 w-3.5" strokeWidth={2.2} />
+                        Dam olish kuni
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
                   onClick={() => toggle(i)}
                   className={cn(
-                    "h-[26px] w-11 rounded-full p-[3px] transition-colors",
+                    "h-[28px] w-12 rounded-full p-[3px] transition-colors tap",
                     d.is_working ? "bg-indigo-600" : "bg-ink-200"
                   )}
                   aria-label={d.is_working ? "Yopish" : "Ochish"}
                 >
                   <span
                     className={cn(
-                      "block h-5 w-5 rounded-full bg-white shadow transition-transform",
-                      d.is_working ? "translate-x-[18px]" : ""
+                      "block h-[22px] w-[22px] rounded-full bg-white shadow-soft-sm transition-transform",
+                      d.is_working ? "translate-x-[19px]" : ""
                     )}
                   />
                 </button>
                 {d.is_working && (
                   <button
                     onClick={() => setEdit(edit === i ? null : i)}
-                    className="ml-1 rounded-lg bg-ink-100 px-2.5 py-1.5 text-xs font-bold text-ink-700 tap"
+                    className={cn(
+                      "ml-0.5 inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold tap transition-colors",
+                      edit === i
+                        ? "bg-indigo-600 text-white"
+                        : "bg-indigo-50 text-indigo-700"
+                    )}
                   >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={2.4} />
                     {edit === i ? "Yopish" : "Tahrir"}
                   </button>
                 )}
               </div>
 
               {d.is_working && edit === i && (
-                <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl bg-ink-50 p-3">
                   <div>
                     <label className="block text-xs font-semibold text-ink-500">Boshlanish</label>
                     <input
                       type="time"
                       value={toHM(d.start_time)}
                       onChange={(e) => update(i, { start_time: e.target.value })}
-                      className="yz-input mt-1"
+                      className="yz-input mt-1 tnum"
                     />
                   </div>
                   <div>
@@ -239,7 +253,7 @@ export default function SchedulePage() {
                       type="time"
                       value={toHM(d.end_time)}
                       onChange={(e) => update(i, { end_time: e.target.value })}
-                      className="yz-input mt-1"
+                      className="yz-input mt-1 tnum"
                     />
                   </div>
                 </div>
@@ -250,7 +264,10 @@ export default function SchedulePage() {
       </div>
 
       <div className="mt-6 px-4 md:px-0">
-        <div className="mb-3 flex items-end justify-between">
+        <div className="mb-3 flex items-center gap-2.5">
+          <div className="grid h-9 w-9 place-items-center rounded-2xl bg-coral/10 text-coral">
+            <CalendarOff className="h-4.5 w-4.5" strokeWidth={2.2} />
+          </div>
           <div>
             <div className="font-display text-[15px] font-extrabold tracking-tight text-ink-900">
               Dam olish kunlari
@@ -294,15 +311,26 @@ export default function SchedulePage() {
 
           <div className="mt-3.5">
             {holidays.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-5 text-center text-sm text-ink-400">
-                Hozircha dam olish kunlari yo'q
+              <div className="flex flex-col items-center gap-3 rounded-3xl bg-ink-50 px-5 py-7 text-center">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/70 text-ink-300 shadow-soft-sm">
+                  <CalendarOff className="h-6 w-6" strokeWidth={2} />
+                </div>
+                <div className="text-sm font-medium text-ink-400">
+                  Hozircha dam olish kunlari yo'q
+                </div>
               </div>
             ) : (
-              <ul className="divide-y divide-ink-100">
+              <ul className="flex flex-col gap-2">
                 {holidays.map((h) => (
-                  <li key={h.id} className="flex items-center gap-3 py-2.5">
+                  <li
+                    key={h.id}
+                    className="flex items-center gap-3 rounded-2xl bg-ink-50 px-3 py-2.5"
+                  >
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-coral shadow-soft-sm">
+                      <CalendarOff className="h-4.5 w-4.5" strokeWidth={2.2} />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-display text-sm font-bold text-ink-900">
+                      <div className="tnum font-display text-sm font-bold text-ink-900">
                         {h.date}
                       </div>
                       {h.reason && (
@@ -313,7 +341,7 @@ export default function SchedulePage() {
                     </div>
                     <button
                       onClick={() => removeHoliday(h.id)}
-                      className="grid h-9 w-9 place-items-center rounded-xl bg-[#FFE7E3] text-[#C93A2A] tap"
+                      className="grid h-9 w-9 place-items-center rounded-xl bg-danger-bg text-danger tap"
                       aria-label="O'chirish"
                     >
                       <Trash2 className="h-4 w-4" strokeWidth={2.2} />

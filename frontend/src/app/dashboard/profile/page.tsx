@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  FileText,
+  MapPin,
+  Phone,
+  Store,
+  Trash2,
+} from "lucide-react";
 import { ScreenHeader, TourFloat, YzLoader, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import { MapPicker } from "@/components/yz/MapPicker";
@@ -175,25 +183,37 @@ export default function ProfilePage() {
       />
 
       <div className="mt-2 px-4 md:px-0">
-        <div data-tour="profile-logo" className="card-soft p-5 text-center">
-          <div className="mx-auto grid h-20 w-20 place-items-center overflow-hidden rounded-2xl bg-ink-50">
-            {biz.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`${apiBase()}${biz.logo_url}`}
-                alt={biz.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <YzLogo size={80} />
-            )}
+        <div data-tour="profile-logo" className="card-lg p-6 text-center">
+          <div className="relative mx-auto h-24 w-24">
+            <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-3xl bg-ink-50 ring-1 ring-ink-100">
+              {biz.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`${apiBase()}${biz.logo_url}`}
+                  alt={biz.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <YzLogo size={84} />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoBusy}
+              aria-label={biz.logo_url ? "Logotipni almashtirish" : "Logotip yuklash"}
+              className="absolute -bottom-1.5 -right-1.5 grid h-9 w-9 place-items-center rounded-2xl text-white shadow-soft tap disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg,#7C5CFF,#4853F5)" }}
+            >
+              <Camera className="h-4 w-4" strokeWidth={2.2} />
+            </button>
           </div>
-          <div className="mt-3 font-display text-[22px] font-extrabold tracking-tight text-ink-900">
+          <div className="mt-4 font-display text-[22px] font-extrabold tracking-tight text-ink-900">
             {biz.name}
           </div>
           <div className="mt-0.5 text-[13px] text-ink-500">{biz.description || "—"}</div>
           {sub && (
-            <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold text-indigo-600">
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3.5 py-1.5 text-[11px] font-bold text-indigo-600">
               💎 {sub.plan} · {sub.status}
             </div>
           )}
@@ -207,13 +227,14 @@ export default function ProfilePage() {
               if (f) uploadLogo(f);
             }}
           />
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => logoInputRef.current?.click()}
               disabled={logoBusy}
-              className="rounded-full bg-indigo-600 px-3.5 py-1.5 text-[12px] font-bold text-white tap disabled:opacity-50"
+              className="chip tap disabled:opacity-50"
             >
+              <Camera className="h-3.5 w-3.5" strokeWidth={2.2} />
               {logoBusy ? "…" : biz.logo_url ? "Logotipni almashtirish" : "Logotip yuklash"}
             </button>
             {biz.logo_url && (
@@ -221,39 +242,40 @@ export default function ProfilePage() {
                 type="button"
                 onClick={removeLogo}
                 disabled={logoBusy}
-                className="rounded-full bg-ink-100 px-3.5 py-1.5 text-[12px] font-bold text-ink-700 tap disabled:opacity-50"
+                className="chip tap text-danger disabled:opacity-50"
               >
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
                 O'chirish
               </button>
             )}
           </div>
-          <div className="mt-1.5 text-[11px] text-ink-400">JPG / PNG / WEBP, 4 MB gacha</div>
+          <div className="mt-2 text-[11px] text-ink-400">JPG / PNG / WEBP, 4 MB gacha</div>
         </div>
 
-        <div className="mt-3 space-y-2.5">
+        <div className="mt-4 space-y-2.5">
           <Field
-            icon="🏪"
+            icon={<Store className="h-5 w-5 text-indigo-600" strokeWidth={2} />}
             bg="#EEF0FF"
             label="Nomi"
             value={form.name}
             onChange={(v) => setForm({ ...form, name: v })}
           />
           <Field
-            icon="📞"
+            icon={<Phone className="h-5 w-5 text-warn" strokeWidth={2} />}
             bg="#FFF3DA"
             label="Telefon"
             value={form.phone}
             onChange={(v) => setForm({ ...form, phone: v })}
           />
           <Field
-            icon="📍"
+            icon={<MapPin className="h-5 w-5 text-success" strokeWidth={2} />}
             bg="#E6FAF3"
             label="Manzil"
             value={form.address}
             onChange={(v) => setForm({ ...form, address: v })}
           />
           <Field
-            icon="📝"
+            icon={<FileText className="h-5 w-5 text-coral" strokeWidth={2} />}
             bg="#FFE7E3"
             label="Tavsif"
             value={form.description}
@@ -262,7 +284,7 @@ export default function ProfilePage() {
           />
         </div>
 
-        <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
+        <div className="eyebrow mt-6 px-1 pb-2">
           Joylashuv
         </div>
         <div className="card-soft space-y-3 p-4">
@@ -314,7 +336,7 @@ export default function ProfilePage() {
           />
         </div>
 
-        <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
+        <div className="eyebrow mt-6 px-1 pb-2">
           Bot matnlari
         </div>
         <div data-tour="profile-bot-texts" className="card-soft space-y-3 p-4">
@@ -347,10 +369,10 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="mt-5 text-[12px] font-bold uppercase tracking-wide text-ink-400 px-1 pb-2">
+        <div className="eyebrow mt-6 px-1 pb-2">
           Tasdiqlash rejimi
         </div>
-        <div className="card-soft p-2">
+        <div className="card-soft space-y-1 p-2">
           {(
             [
               ["AUTO", "Avtomatik", "Avtomatik tasdiqlanadi"],
@@ -363,12 +385,12 @@ export default function ProfilePage() {
               <button
                 key={val}
                 onClick={() => setForm({ ...form, confirmation_mode: val })}
-                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left tap ${
-                  active ? "bg-indigo-50" : ""
+                className={`flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-colors tap ${
+                  active ? "bg-indigo-50 ring-1 ring-indigo-100" : "hover:bg-ink-50"
                 }`}
               >
                 <span
-                  className={`grid h-5 w-5 place-items-center rounded-full border-2 ${
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition-colors ${
                     active ? "border-indigo-600" : "border-ink-200"
                   }`}
                 >
@@ -398,7 +420,7 @@ function Field({
   multi,
   placeholder,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   bg: string;
   label: string;
   value: string;
@@ -407,12 +429,12 @@ function Field({
   placeholder?: string;
 }) {
   return (
-    <label className="card-soft flex cursor-text items-start gap-3 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30">
+    <label className="card-soft flex cursor-text items-start gap-3 p-3.5 transition focus-within:shadow-soft-lg focus-within:ring-2 focus-within:ring-indigo-500/25">
       <div
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl"
         style={{ background: bg }}
       >
-        {icon}
+        <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/70">{icon}</span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-xs font-semibold text-ink-400">{label}</div>

@@ -1,40 +1,35 @@
 const cats = [
-  { name: "Barbershop", emoji: "💈", bg: "#EEF0FF" },
-  { name: "Salon", emoji: "💇", bg: "#FFE7E3" },
-  { name: "Stomatologiya", emoji: "🦷", bg: "#E6FAF3" },
-  { name: "Repetitor", emoji: "📚", bg: "#FFF3DA" },
-  { name: "Foto", emoji: "📸", bg: "#EEF0FF" },
-  { name: "Massaj", emoji: "💆", bg: "#FFE7E3" },
-  { name: "Fitness", emoji: "🏋️", bg: "#E6FAF3" },
-  { name: "Klinika", emoji: "⚕️", bg: "#FFF3DA" },
+  { name: "Barbershop", emoji: "💈", tile: "tile-indigo" },
+  { name: "Salon", emoji: "💇", tile: "tile-coral" },
+  { name: "Stomatologiya", emoji: "🦷", tile: "tile-mint" },
+  { name: "Repetitor", emoji: "📚", tile: "tile-lemon" },
+  { name: "Foto", emoji: "📸", tile: "tile-lilac" },
+  { name: "Massaj", emoji: "💆", tile: "tile-coral" },
+  { name: "Fitness", emoji: "🏋️", tile: "tile-mint" },
+  { name: "Klinika", emoji: "⚕️", tile: "tile-sky" },
 ];
 
 export function Categories() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-20">
-      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600">
-        Kategoriyalar
-      </div>
-      <h2 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.02em] text-ink-900 md:text-4xl">
+      <div className="eyebrow text-indigo-600">Kategoriyalar</div>
+      <h2 className="mt-2.5 font-display text-3xl font-extrabold tracking-tighter text-ink-900 md:text-4xl">
         Sizning sohangiz uchun ham ishlaydi
       </h2>
       <p className="mt-3 max-w-xl text-ink-500">
         Yozuv orqali yoziladigan har qanday xizmat — barberdan klinikagacha.
       </p>
 
-      <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mt-10 grid grid-cols-2 gap-3.5 md:grid-cols-4">
         {cats.map((c) => (
           <div
             key={c.name}
-            className="card-soft flex items-center gap-3 px-4 py-3.5"
+            className={`${c.tile} tap flex items-center gap-3.5 p-4`}
           >
-            <div
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl"
-              style={{ background: c.bg }}
-            >
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/70 text-xl shadow-soft-sm">
               {c.emoji}
             </div>
-            <span className="font-display text-sm font-bold text-ink-900">
+            <span className="font-display text-sm font-bold tracking-tight text-ink-900">
               {c.name}
             </span>
           </div>

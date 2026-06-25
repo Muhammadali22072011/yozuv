@@ -36,16 +36,19 @@ export function BookingCard({
       onClick={onClick}
       className="card-soft flex w-full items-center gap-3 p-3 text-left tap"
     >
-      <div className="min-w-[52px]">
-        <div className="font-display text-base font-extrabold tracking-tight text-ink-900">
+      <div
+        className="min-w-[58px] rounded-2xl px-2.5 py-2 text-center"
+        style={{ background: "linear-gradient(135deg,#EEF0FF,#E0E4FF)" }}
+      >
+        <div className="tnum font-display text-[17px] font-extrabold tracking-tighter text-indigo-700">
           {hm(b.start_time)}
         </div>
-        <div className="text-[11px] font-semibold text-ink-400">{dur} daq</div>
+        <div className="tnum -mt-0.5 text-[11px] font-semibold text-ink-500">{dur} daq</div>
       </div>
-      <div className="h-10 w-[3px] rounded-full" style={{ background: accent }} />
+      <div className="h-9 w-[3px] rounded-full" style={{ background: accent }} />
       <Avatar name={name} size={36} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-display text-sm font-bold text-ink-900">{name}</div>
+        <div className="truncate font-display text-sm font-bold tracking-tight text-ink-900">{name}</div>
         <div className="truncate text-xs text-ink-500">{svc?.name || "Xizmat"}</div>
       </div>
       <StatusBadge status={b.status} compact />

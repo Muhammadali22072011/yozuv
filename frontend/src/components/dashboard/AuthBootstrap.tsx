@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { YzLoader } from "@/components/yz/Loader";
 import { apiBase } from "@/lib/api";
+import { isTelegramMiniApp } from "@/lib/platform";
 
 declare global {
   interface Window {
@@ -102,7 +103,11 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
               sessionStorage.getItem("yz_auth_redirect_attempt") === "1";
             if (cameFromLogin) {
               if (!cancelled) {
-                setError("Telegram initData yo'q. Mini App orqali qayta oching.");
+                setError(
+                  isTelegramMiniApp()
+                    ? "Telegram initData yo'q. Mini App orqali qayta oching."
+                    : "Tizimga kiring — login va parol bilan.",
+                );
                 setState("failed");
               }
               return;
@@ -137,14 +142,25 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
   }
 
   if (state === "failed") {
+    const inTelegram = isTelegramMiniApp();
     return (
       <div className="flex min-h-[80vh] flex-col items-center justify-center gap-3 px-6 text-center">
         <div className="font-display text-lg font-extrabold text-ink-900">
           Kirish amalga oshmadi
         </div>
         <div className="text-sm text-ink-500">
-          Mini App orqali qayta oching yoki botga /start yuboring.
+          {inTelegram
+            ? "Mini App orqali qayta oching yoki botga /start yuboring."
+            : "Login va parol bilan tizimga kiring."}
         </div>
+        {!inTelegram && (
+          <a
+            href="/auth/login"
+            className="btn-primary mt-1 justify-center px-6"
+          >
+            Tizimga kirish
+          </a>
+        )}
         {error && (
           <pre className="mt-2 max-w-sm overflow-auto rounded-2xl bg-ink-100 p-3 text-left text-[10px] text-ink-500">
             {error}

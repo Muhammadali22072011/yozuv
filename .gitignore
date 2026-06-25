@@ -53,3 +53,6 @@ ngrok.zip
 
 # Claude
 .claude/
+
+# graphify knowledge-graph output (generated, large)
+graphify-out/
