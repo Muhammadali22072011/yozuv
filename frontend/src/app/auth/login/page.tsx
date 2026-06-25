@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, Lock, Send, Shield, Sparkles, User as UserIcon } from "lucide-react";
 import { YzLogo } from "@/components/yz/Logo";
 import { apiBase } from "@/lib/api";
+import { isNativeApp, isTelegramMiniApp } from "@/lib/platform";
+
+const BOT = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
 
 declare global {
   interface Window {
@@ -35,6 +38,11 @@ export default function LoginPage() {
   const [pwBusy, setPwBusy] = useState(false);
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  // Resolved on the client (SSR can't see window.Telegram/Capacitor) — drives
+  // which auth path leads: Telegram in the Mini App, password in the APK,
+  // password + Telegram escape-hatch in a plain browser.
+  const [inTelegram, setInTelegram] = useState(false);
+  const [nativeApp, setNativeApp] = useState(false);
 
   async function loginWithPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -141,8 +149,18 @@ export default function LoginPage() {
   }
 
   useEffect(() => {
-    const initData = window.Telegram?.WebApp?.initData;
-    if (initData) void loginWithTelegram();
+    const tg = isTelegramMiniApp();
+    setInTelegram(tg);
+    setNativeApp(isNativeApp());
+    // Surface a failed Google round-trip (backend bounced us here with ?e=).
+    const e = new URLSearchParams(window.location.search).get("e");
+    if (e === "google_unverified") {
+      setErr("Google pochta manzili tasdiqlanmagan.");
+    } else if (e === "google") {
+      setErr("Google bilan kirishda xatolik. Qayta urinib ko'ring.");
+    }
+    // Inside the Mini App we have signed initData — log in automatically.
+    if (tg) void loginWithTelegram();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -175,10 +193,18 @@ export default function LoginPage() {
               Kabinetga kiring
             </h1>
             <p className="mt-2.5 max-w-xs text-sm text-ink-500">
-              Telegram Mini App orqali bir bosishda avtorizatsiya.
+              {inTelegram
+                ? "Telegram Mini App orqali bir bosishda avtorizatsiya."
+                : nativeApp
+                  ? "Login va parol bilan kiring."
+                  : "Login va parol bilan kiring yoki Telegramda davom eting."}
             </p>
           </div>
 
+          {/* Telegram block — hidden in the native APK (no initData there,
+              and embedded-WebView OAuth is blocked); password is the path. */}
+          {!nativeApp && (
+          <>
           {/* Telegram — the single bright feature moment */}
           <div className="yz-feature mt-7 rounded-4xl p-6 text-white animate-card-in">
             <div className="flex items-center gap-3">
@@ -195,14 +221,28 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button
-              onClick={loginWithTelegram}
-              disabled={busy}
-              className="btn-soft mt-5 w-full justify-center text-indigo-600 disabled:opacity-50"
-            >
-              {busy ? "Kutilmoqda…" : "Telegram bilan kirish"}
-              {!busy && <ArrowRight className="ml-2 h-4 w-4" />}
-            </button>
+            {inTelegram ? (
+              <button
+                onClick={loginWithTelegram}
+                disabled={busy}
+                className="btn-soft mt-5 w-full justify-center text-indigo-600 disabled:opacity-50"
+              >
+                {busy ? "Kutilmoqda…" : "Telegram bilan kirish"}
+                {!busy && <ArrowRight className="ml-2 h-4 w-4" />}
+              </button>
+            ) : (
+              // In a browser there is no signed initData — sending the user to
+              // the bot is the only working Telegram path; password is primary.
+              <a
+                href={`https://t.me/${BOT}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-soft mt-5 w-full justify-center text-indigo-600"
+              >
+                Telegramda ochish
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+            )}
 
             <ul className="mt-5 space-y-2.5 text-sm">
               <li className="flex items-start gap-2.5 text-white/90">
@@ -221,6 +261,8 @@ export default function LoginPage() {
             <div className="text-xs font-semibold text-ink-400">yoki</div>
             <div className="h-px flex-1 bg-ink-200" />
           </div>
+          </>
+          )}
 
           <form onSubmit={loginWithPassword} className="card-lg p-6 animate-card-in">
             <div className="flex items-center gap-3">
@@ -282,6 +324,24 @@ export default function LoginPage() {
               {!pwBusy && <ArrowRight className="ml-2 h-4 w-4" />}
             </button>
           </form>
+
+          {/* Google — browser only. The APK (Capacitor WebView) needs the
+              Browser plugin to open OAuth in a Custom Tab (Google blocks
+              embedded-WebView OAuth); that's a follow-up. */}
+          {!inTelegram && !nativeApp && (
+            <a
+              href={`${apiBase()}/api/auth/google/start`}
+              className="btn-soft mt-3 w-full justify-center border border-ink-200 bg-white text-ink-800"
+            >
+              <svg className="mr-2 h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 12.9 3 4 11.9 4 23s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-2.5z" />
+                <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16.3 3 9.7 7.3 6.3 14.7z" />
+                <path fill="#4CAF50" d="M24 43c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 34 26.7 35 24 35c-5.3 0-9.7-2.6-11.3-7l-6.5 5C9.6 38.6 16.2 43 24 43z" />
+                <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C39.9 36.1 44 30.6 44 23c0-1.3-.1-2.3-.4-2.5z" />
+              </svg>
+              Google bilan kirish
+            </a>
+          )}
 
           {err && (
             <div className="tile-coral mt-4 animate-card-in">

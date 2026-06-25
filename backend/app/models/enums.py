@@ -68,6 +68,20 @@ class PaymentRecordStatus(str, enum.Enum):
     REFUNDED = "REFUNDED"
 
 
+class AuthProvider(str, enum.Enum):
+    """External login method backing an auth_identities row.
+
+    One User (the account) can have several linked identities — at most
+    one per provider. Stored as the lowercase .value in a String(16)
+    column, matching the MembershipRole pattern (no native DB enum).
+    """
+
+    TELEGRAM = "telegram"
+    GOOGLE = "google"
+    PASSWORD = "password"
+    APPLE = "apple"  # reserved; no code path yet
+
+
 class MembershipRole(str, enum.Enum):
     """Permission level a user has against a business.
 

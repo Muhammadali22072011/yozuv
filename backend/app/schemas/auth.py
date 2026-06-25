@@ -32,7 +32,8 @@ class RefreshRequest(BaseModel):
 
 class UserMe(BaseModel):
     id: UUID
-    telegram_id: int
+    # None for Google/password-only accounts that never linked Telegram.
+    telegram_id: int | None = None
     username: str = ""
     first_name: str
     last_name: str

@@ -1,4 +1,5 @@
 from app.models.admin_audit_log import AdminAuditLog
+from app.models.auth_identity import AuthIdentity
 from app.models.booking import Booking
 from app.models.broadcast_message import BroadcastMessage
 from app.models.business import Business
@@ -7,6 +8,7 @@ from app.models.client import Client
 from app.models.client_block import ClientBlock
 from app.models.membership import Membership
 from app.models.enums import (
+    AuthProvider,
     BookingStatus,
     BusinessCategory,
     ConfirmationMode,
@@ -31,6 +33,8 @@ from app.models.waitlist_entry import WaitlistEntry
 
 __all__ = [
     "AdminAuditLog",
+    "AuthIdentity",
+    "AuthProvider",
     "BroadcastMessage",
     "User",
     "Business",

@@ -1,0 +1,48 @@
+# Yozuv — Feature Ideas (grounded in existing code)
+
+| feature | effort | impact |
+|---------|--------|--------|
+| Client-facing waitlist: 'Notify me when a slot opens' in the bot | S | high |
+| Owner-to-clients broadcast (announcements & re-fill blasts) | M | high |
+| Deposit / prepayment on booking (wire the dead PREPAYMENT mode) | L | high |
+| Per-staff schedules & correct multi-staff availability | L | high |
+| Client reschedule from the bot (move, don't cancel+rebook) | M | medium |
+| Owner reply to reviews (shown on public profile) | S | medium |
+| Client reliability score + auto-flag repeat no-shows | M | medium |
+
+---
+
+### 1. Client-facing waitlist: 'Notify me when a slot opens' in the bot  _(effort S · impact high)_
+The entire waitlist demand-capture loop is already built server-side — WaitlistEntry model with a uq_waitlist_unique_entry constraint, waitlist_service.join, the owner GET /business/me/waitlist endpoint, and cancel() in bookings.py already calls notify_first_for_slot to ping the head of the queue on Telegram when a slot frees. But it is completely unreachable by clients: bot/handlers/booking.py pick_day (line 340) just shows a 'Bo'sh vaqt yo'q' alert when a day is full and dead-ends. This feature wires a '🔔 Bo'shaganda xabar bering' inline button into that exact branch, calling the existing waitlist_service.join via asyncio.to_thread (same pattern as _create_booking_sync). Zero new DB/service code — it activates dark infrastructure on the primary client surface, turning lost bookings (full day = client leaves) into recovered revenue. Directly serves the no-show/cancel churn the codebase already tracks.
+
+**Touches:** `backend/bot/handlers/booking.py (pick_day no-slots branch + new wl: callback handler)`, `backend/bot/keyboards/inline.py (waitlist button in dates/times keyboards)`, `backend/app/services/waitlist_service.py (reuse join/notify_first_for_slot)`
+
+### 2. Owner-to-clients broadcast (announcements & re-fill blasts)  _(effort M · impact high)_
+Owners today have only automated, system-triggered outreach (birthday + 30-60d re-engagement in app/tasks/reminders.py) and passive promo codes — no way to message their own client list on demand ('closed tomorrow', 'Tuesday 20% off', 'new master joined'). Yet the platform already proves this pattern at the admin tier: admin.py has BroadcastBody, _select_broadcast_recipients with category/plan filters, batched send_telegram_message, and the BroadcastMessage model logging sent_count/failed_count/failed_recipients. This feature mirrors that pattern down one level: a new POST /business/me/broadcast that selects the owner's own Clients (distinct telegram_id from Booking joins, exactly as business.py my_dashboard already builds the clients list), respects OUTREACH_COOLDOWN, HTML-escapes via h() (the htmlsafe util already used in reminders), and logs to a per-business broadcast row. High leverage for a Telegram-bot-first product where the owner's whole audience is one sendMessage away.
+
+**Touches:** `backend/app/routers/business.py or new broadcast router`, `backend/app/models/broadcast_message.py (add business_id or new owner-scoped table)`, `backend/app/services/notification_service.py (batched send)`, `frontend/src/app/dashboard/clients/page.tsx + new compose sheet`
+
+### 3. Deposit / prepayment on booking (wire the dead PREPAYMENT mode)  _(effort L · impact high)_
+ConfirmationMode.PREPAYMENT exists in models/enums.py but is wired NOWHERE — every handler (booking_service.create_booking, bookings.py create_owner_booking, create_recurring) treats anything non-AUTO as plain PENDING, so the value is dead. Meanwhile no-shows are a first-class, instrumented pain: flag_no_shows nightly task, Booking.late_cancel, Business.cancel_window_hours, NO_SHOW status. The financial deterrent is missing even though paytechuz (Payme/Click) is ALREADY integrated for subscriptions (payment_service.create_payme_payment/create_click_payment build gateway links). This feature reuses that gateway-link plumbing to charge a deposit (a % of Service.price) when a business is in PREPAYMENT mode: booking is held PENDING until the paytechuz webhook confirms, then flips to CONFIRMED. Turns an enum stub + existing payment rails into the single most-requested anti-no-show lever for salons/clinics.
+
+**Touches:** `backend/app/services/booking_service.py (PREPAYMENT branch)`, `backend/app/services/payment_service.py (booking-deposit gateway link reusing Payme/Click)`, `backend/app/models/booking.py (deposit fields) + payment.py`, `backend/bot/handlers/booking.py (pay-link step before confirm)`, `frontend/src/app/dashboard/profile (mode toggle + deposit %)`
+
+### 4. Per-staff schedules & correct multi-staff availability  _(effort L · impact high)_
+The staff subsystem is explicitly a two-step rollout (staff.py docstring), and step two is half-done: bookings carry staff_id, conflict checks are per-staff (booking_service._check_slot_available), and the bot has a staff picker. But two real gaps remain. (1) Schedule is business-scoped only — models/schedule.py has no staff_id and the uq_schedule_business_day constraint forbids per-master hours, so every barber in a shop is forced onto identical working hours/breaks. (2) get_available_slots in utils/slots.py ignores staff_id entirely (per-business booking scan only), which is the confirmed 'public slots endpoint ignores staff_id' bug — when a client picks a specific master, offered times don't reflect that master's actual free slots. This feature adds an optional staff_id to Schedule (NULL = business default, backward-compatible like the staff rollout intended) and threads staff_id through get_available_slots and the public /slots endpoint. Unlocks the salon/clinic/barbershop categories the product targets.
+
+**Touches:** `backend/app/models/schedule.py (+ migration)`, `backend/app/utils/slots.py (staff-aware get_available_slots)`, `backend/app/routers/bookings.py (/slots passes staff_id)`, `backend/app/routers/schedule.py (per-staff CRUD)`, `backend/bot/handlers/booking.py (staff-aware day/time)`
+
+### 5. Client reschedule from the bot (move, don't cancel+rebook)  _(effort M · impact medium)_
+my_bookings.py only offers clients 'Bekor qilish' (cancel) — to change a time a client must cancel (which may trip late_cancel and frees the slot to others) then rebuild the whole book→service→staff→date→time flow from scratch. The owner-side reschedule already exists and is safe: PATCH /business/me/bookings/{id} (update_booking) recomputes end_time/price, takes acquire_slot_lock, and re-runs the per-staff conflict query. This feature adds a client '🔄 Vaqtni o'zgartirish' button that reuses the same date/time picker keyboards from booking.py and the same slot-conflict path, keeping the original booking row (preserving recurrence_id, promo, loyalty stamp progress) instead of churning it. Reduces accidental late-cancel penalties and the slot-loss-to-competitor problem inherent in cancel+rebook on a shared calendar.
+
+**Touches:** `backend/bot/handlers/my_bookings.py (reschedule callback + FSM)`, `backend/bot/handlers/booking.py (reuse dates/times keyboards)`, `backend/app/services/booking_service.py (move helper with lock + conflict)`, `backend/bot/keyboards/inline.py`
+
+### 6. Owner reply to reviews (shown on public profile)  _(effort S · impact medium)_
+The Review model and flows are mature — per-booking and standalone reviews, owner list at GET /business/me/reviews, public reviews-summary on biz/[slug], and SSE 'review_new' bell events. But it is strictly one-way: Review has rating + comment and no reply field, so owners can read feedback but cannot respond. Public profile pages (biz/[slug], SSR with OG metadata for share previews) show only an aggregate rating. Adding an owner reply (a reply_text/replied_at column on Review, a PUT /business/me/reviews/{id}/reply endpoint scoped by get_owned_business, and rendering replies under each review on the public profile) is a well-understood trust/conversion lever especially for a discovery-driven marketplace. Small, self-contained extension of an existing subsystem with clear customer value (public reputation management).
+
+**Touches:** `backend/app/models/review.py (+ migration)`, `backend/app/routers/reviews.py (reply endpoint + include reply in ReviewOut)`, `frontend/src/app/dashboard/reviews/page.tsx (reply UI)`, `frontend/src/app/biz/[slug]/page.tsx (render replies)`
+
+### 7. Client reliability score + auto-flag repeat no-shows  _(effort M · impact medium)_
+The platform captures rich client-behavior signals but never surfaces or acts on them: Booking.late_cancel, BookingStatus.NO_SHOW (set nightly by flag_no_shows), and the per-business ClientBlock model with a reason field. Today an owner can manually block a client but has zero visibility into WHO keeps no-showing — the clients page and owner booking-create show no history. This feature computes a lightweight per-(business,client) reliability summary (completed / no_show / late_cancel counts) from existing Booking rows — no new write paths — exposes it on the clients page and in NewBookingSheet, and optionally surfaces a 'block this client?' prompt after the Nth no-show, reusing the existing ClientBlock create path. Turns already-collected data into an actionable retention/risk tool, and feeds naturally into the deposit feature (require prepayment from low-reliability clients).
+
+**Touches:** `backend/app/routers/clients.py (reliability aggregate endpoint)`, `backend/app/models/client_block.py (reuse)`, `frontend/src/app/dashboard/clients/page.tsx`, `frontend/src/components/yz/NewBookingSheet.tsx (reliability hint)`
