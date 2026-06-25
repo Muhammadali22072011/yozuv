@@ -2,29 +2,37 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import User
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
+# bcrypt hashes at most the first 72 bytes of a password; bcrypt >=4.1 raises
+# instead of truncating silently, so we slice to 72 bytes ourselves. Slicing on
+# the raw UTF-8 bytes (not the str) matches bcrypt's own byte-level truncation.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _encode(plain: str) -> bytes:
+    return plain.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(_encode(plain), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str | None) -> bool:
     if not hashed:
         return False
     try:
-        return pwd_context.verify(plain, hashed)
-    except ValueError:
+        return bcrypt.checkpw(_encode(plain), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
         # Malformed/unknown hash in DB — treat as no-match, never 500.
         return False
 
