@@ -319,7 +319,11 @@ export default function DashboardHome() {
         <div
           className="relative overflow-hidden rounded-4xl p-5 text-white"
           style={{
-            background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+            // Сплошной фон-фолбэк ПЕРЕД градиентом: даже если градиент-картинку
+            // что-то срежет (forced-colors, странный браузер), под белым текстом
+            // остаётся тёмный #4853F5 — карточка никогда не «белеет».
+            backgroundColor: "#4853F5",
+            backgroundImage: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
             boxShadow: "0 18px 36px -18px rgba(72,83,245,0.6)",
           }}
         >
