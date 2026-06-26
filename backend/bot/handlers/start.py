@@ -114,7 +114,7 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
                     b.slug,
                     owner_view=is_owner,
                     app_url=settings.public_app_url,
-                    can_review=not is_owner,
+                    can_review=True,
                 ),
             )
             return
@@ -423,7 +423,7 @@ async def back_to_menu(cb: CallbackQuery):
                 b.slug,
                 owner_view=is_owner,
                 app_url=settings.public_app_url,
-                can_review=not is_owner,
+                can_review=True,
             ),
         )
     finally:
