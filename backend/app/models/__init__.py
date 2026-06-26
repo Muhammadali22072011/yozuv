@@ -18,12 +18,14 @@ from app.models.enums import (
     PaymentProvider,
     PaymentRecordStatus,
     PaymentStatus,
+    ReferralStatus,
     SubscriptionPlan,
     SubscriptionStatus,
 )
 from app.models.payment import PaymentTransaction
 from app.models.platform_settings import PlatformSettings
 from app.models.promo_code import PromoCode
+from app.models.referral import Referral, ReferralCode
 from app.models.review import Review
 from app.models.schedule import HolidayDate, Schedule
 from app.models.service import Service
@@ -54,6 +56,9 @@ __all__ = [
     "PaymentTransaction",
     "PlatformSettings",
     "PromoCode",
+    "Referral",
+    "ReferralCode",
+    "ReferralStatus",
     "Review",
     "BusinessCategory",
     "ConfirmationMode",

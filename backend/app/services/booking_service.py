@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
+from app.services import referral_service
 
 
 def _slot_lock_key_for(business_id: UUID, slot_date: _date, slot_start: _time) -> int:
@@ -236,6 +237,12 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
         db, service, client.id, base_price=final_price
     )
 
+    # Referral: a friend invited by an existing client gets a one-time
+    # discount on their first booking here; the referrer is rewarded after
+    # the booking row exists (needs booking.id).
+    referral_ctx = _referral_friend_context(db, business, client, final_price)
+    final_price = referral_ctx["price"]
+
     booking = Booking(
         business_id=business.id,
         service_id=service.id,
@@ -252,7 +259,41 @@ def create_booking(db: Session, payload: BookingCreatePublic) -> Booking:
     db.flush()
     if promo is not None:
         promo.uses_count = (promo.uses_count or 0) + 1
+    if referral_ctx["referral"] is not None:
+        referral_service.complete_referral(
+            db, referral_ctx["referral"], booking, referral_ctx["reward_percent"]
+        )
     return booking
+
+
+def _referral_friend_context(db: Session, business, client, base_price: int) -> dict:
+    """Resolve a pending referral for this (business, client) and compute the
+    friend discount. Only the client's first-ever booking at the business
+    converts a referral. Returns the (possibly discounted) price, the
+    Referral to complete after insert, and the referrer's reward percent."""
+    out = {"price": base_price, "referral": None, "reward_percent": 0}
+    if not getattr(business, "referral_enabled", False):
+        return out
+    ref = referral_service.find_pending_referral(db, business.id, client.id)
+    if ref is None:
+        return out
+    prior = (
+        db.query(Booking.id)
+        .filter(Booking.business_id == business.id, Booking.client_id == client.id)
+        .first()
+    )
+    if prior is not None:
+        return out  # not a new client — don't convert
+    friend_percent = int(getattr(business, "referral_friend_percent", 0) or 0)
+    price = base_price
+    if friend_percent > 0:
+        price = max(0, base_price - base_price * friend_percent // 100)
+    out.update(
+        price=price,
+        referral=ref,
+        reward_percent=int(getattr(business, "referral_reward_percent", 0) or 0),
+    )
+    return out
 
 
 def _maybe_apply_loyalty(
