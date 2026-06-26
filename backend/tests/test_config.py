@@ -25,7 +25,13 @@ class TestSecretKeyValidation:
         monkeypatch.setenv("APP_ENV", "production")
         strong_key = "a" * 32
         monkeypatch.setenv("SECRET_KEY", strong_key)
+        # Provide every other production-required setting so this test asserts
+        # the key check alone and doesn't depend on the ambient environment.
         monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+        monkeypatch.setenv("BOT_TOKEN", "123456:test-token")
+        monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db.internal/app")
+        monkeypatch.setenv("PUBLIC_API_URL", "https://api.example.com")
+        monkeypatch.setenv("WEBHOOK_SECRET", "w" * 16)
 
         from app.config import get_settings
         get_settings.cache_clear()
