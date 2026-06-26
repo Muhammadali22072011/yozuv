@@ -42,8 +42,14 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.reminders.send_reengagement_nudges",
         "schedule": crontab(hour=10, minute=0),
     },
+    # Every minute — deliver any broadcasts whose scheduled_at has passed.
+    "scheduled-broadcasts-every-minute": {
+        "task": "app.tasks.broadcasts.send_scheduled_broadcasts",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 celery_app.autodiscover_tasks(["app.tasks"])
 import app.tasks.reminders  # noqa: E402,F401
 import app.tasks.backup  # noqa: E402,F401
+import app.tasks.broadcasts  # noqa: E402,F401

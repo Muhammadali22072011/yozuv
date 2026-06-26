@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import io
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -9,24 +10,32 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import Base, get_db
 from app.deps import get_admin_user
 from app.models import (
     AdminAuditLog,
+    AdminUser,
     Booking,
     BroadcastMessage,
     Business,
     BusinessCategory,
     BookingStatus,
+    Client,
     PaymentRecordStatus,
+    PaymentStatus,
     PaymentTransaction,
+    PromoCode,
+    Referral,
+    ReferralStatus,
+    Review,
     Subscription,
     SubscriptionPlan,
     SubscriptionStatus,
     User,
+    WaitlistEntry,
 )
 import httpx
 
@@ -144,13 +153,42 @@ def list_businesses(
     _=Depends(get_admin_user),
     limit: int = 100,
     include_deleted: bool = False,
+    q: str | None = None,
+    category: str | None = None,
+    sub: str | None = None,
 ):
+    """List businesses with optional search/filters.
+
+    ``q``        — case-insensitive match on name or slug (and numeric
+                   owner Telegram id).
+    ``category`` — exact business category.
+    ``sub``      — subscription state computed per business:
+                   ``active`` / ``trial`` / ``paid`` / ``none``.
+                   Applied in Python since "active sub" is a derived value.
+    """
     now = datetime.now(timezone.utc)
-    q = db.query(Business)
+    query = db.query(Business)
     if not include_deleted:
-        q = q.filter(Business.deleted_at.is_(None))
+        query = query.filter(Business.deleted_at.is_(None))
+    if q and q.strip():
+        term = q.strip()
+        like = f"%{term.lower()}%"
+        conds = [
+            func.lower(Business.name).like(like),
+            func.lower(Business.slug).like(like),
+        ]
+        if term.isdigit():
+            owner_ids = [
+                u.id
+                for u in db.query(User.id).filter(User.telegram_id == int(term)).all()
+            ]
+            if owner_ids:
+                conds.append(Business.owner_id.in_(owner_ids))
+        query = query.filter(or_(*conds))
+    if category:
+        query = query.filter(Business.category == _validate_category(category))
     rows = (
-        q.order_by(Business.created_at.desc())
+        query.order_by(Business.created_at.desc())
         .limit(min(max(1, limit), 500))
         .all()
     )
@@ -178,7 +216,18 @@ def list_businesses(
         }
     out = []
     for b in rows:
-        sub = subs_by_biz.get(b.id)
+        active_sub = subs_by_biz.get(b.id)
+        # `sub` filter — derived state, applied after the active-sub lookup.
+        if sub in ("active", "trial", "paid") and active_sub is None:
+            continue
+        if sub == "none" and active_sub is not None:
+            continue
+        if active_sub is not None:
+            is_trial = active_sub.plan == SubscriptionPlan.TRIAL
+            if sub == "trial" and not is_trial:
+                continue
+            if sub == "paid" and is_trial:
+                continue
         owner = owners_by_id.get(b.owner_id) if b.owner_id else None
         out.append(
             {
@@ -194,10 +243,10 @@ def list_businesses(
                     "name": f"{owner.first_name or ''} {owner.last_name or ''}".strip() if owner else "",
                 },
                 "subscription": {
-                    "plan": getattr(sub.plan, "value", str(sub.plan)) if sub else None,
-                    "expires_at": sub.expires_at.isoformat() if sub and sub.expires_at else None,
+                    "plan": getattr(active_sub.plan, "value", str(active_sub.plan)),
+                    "expires_at": active_sub.expires_at.isoformat() if active_sub.expires_at else None,
                 }
-                if sub
+                if active_sub is not None
                 else None,
             }
         )
@@ -749,10 +798,110 @@ def list_broadcasts(
             "sent_count": int(r.sent_count),
             "failed_count": int(r.failed_count),
             "failed_recipients": r.failed_recipients or [],
+            "status": getattr(r, "status", "sent") or "sent",
+            "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
             "created_at": r.created_at.isoformat() if r.created_at else "",
         }
         for r in rows
     ]
+
+
+def recipients_from_filter_dict(
+    db: Session, filters: dict
+) -> list[tuple[Business, User]]:
+    """Rebuild a broadcast recipient list from a stored filters dict.
+
+    Used by the scheduled-broadcast Celery task, which only has the
+    persisted filters (not the original request body).
+    """
+    only_active = bool(filters.get("only_active", True))
+    bf = BroadcastFilters(
+        category=filters.get("category"),
+        plan=filters.get("plan"),
+        subscription_status=filters.get("subscription_status"),
+        is_active=filters.get("is_active"),
+    )
+    return _select_broadcast_recipients(db, only_active, bf)
+
+
+class BroadcastScheduleBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+    only_active: bool = True
+    filters: BroadcastFilters | None = None
+    scheduled_at: datetime
+
+
+@router.post("/broadcast/schedule", status_code=201)
+def schedule_broadcast(
+    body: BroadcastScheduleBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    """Queue a broadcast for a future time (sent by the beat task)."""
+    when = body.scheduled_at
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    if when <= datetime.now(timezone.utc):
+        raise HTTPException(400, "scheduled_at must be in the future")
+    # Validate filters now so the admin gets immediate feedback rather
+    # than a silent failure when the task runs.
+    recipients_from_filter_dict(
+        db,
+        {
+            "only_active": body.only_active,
+            **(body.filters.model_dump(exclude_none=True) if body.filters else {}),
+        },
+    )
+    msg = BroadcastMessage(
+        sent_by_telegram_id=int(admin.telegram_id),
+        sent_by_name=f"{admin.first_name or ''} {admin.last_name or ''}".strip()
+        or (admin.username or ""),
+        text=body.text,
+        filters={
+            "only_active": body.only_active,
+            **(body.filters.model_dump(exclude_none=True) if body.filters else {}),
+        },
+        sent_count=0,
+        failed_count=0,
+        failed_recipients=[],
+        status="scheduled",
+        scheduled_at=when,
+    )
+    db.add(msg)
+    log_admin_action(
+        db,
+        admin,
+        "broadcast.schedule",
+        "BroadcastMessage",
+        msg.id,
+        {"scheduled_at": when.isoformat(), "preview": body.text[:120]},
+    )
+    db.commit()
+    db.refresh(msg)
+    return {
+        "id": str(msg.id),
+        "status": msg.status,
+        "scheduled_at": msg.scheduled_at.isoformat() if msg.scheduled_at else None,
+    }
+
+
+@router.post("/broadcasts/{broadcast_id}/cancel")
+def cancel_scheduled_broadcast(
+    broadcast_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    msg = db.query(BroadcastMessage).filter(BroadcastMessage.id == broadcast_id).first()
+    if not msg:
+        raise HTTPException(404, "Broadcast not found")
+    if getattr(msg, "status", "sent") != "scheduled":
+        raise HTTPException(409, "Only scheduled broadcasts can be cancelled")
+    msg.status = "cancelled"
+    log_admin_action(
+        db, admin, "broadcast.cancel", "BroadcastMessage", msg.id, {}
+    )
+    db.commit()
+    return {"id": str(msg.id), "status": msg.status}
 
 
 @router.post("/broadcasts/{broadcast_id}/retry")
@@ -1012,3 +1161,604 @@ def list_payments(
             }
         )
     return out
+
+
+@router.get("/payments/export")
+def export_payments_csv(
+    db: Session = Depends(get_db),
+    _=Depends(get_admin_user),
+    limit: int = 5000,
+):
+    """Stream all (most recent first) payments as a CSV for accounting."""
+    rows = (
+        db.query(PaymentTransaction)
+        .order_by(PaymentTransaction.created_at.desc())
+        .limit(min(max(1, limit), 50000))
+        .all()
+    )
+    biz_ids = {tx.business_id for tx in rows if tx.business_id}
+    biz_by_id: dict = {}
+    if biz_ids:
+        biz_by_id = {
+            b.id: b for b in db.query(Business).filter(Business.id.in_(biz_ids)).all()
+        }
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ["created_at", "business", "business_id", "provider", "plan", "amount_uzs", "status"]
+    )
+    for tx in rows:
+        biz = biz_by_id.get(tx.business_id)
+        writer.writerow(
+            [
+                tx.created_at.isoformat() if tx.created_at else "",
+                biz.name if biz else "",
+                str(tx.business_id),
+                str(getattr(tx.provider, "value", tx.provider)),
+                tx.plan,
+                int(tx.amount),
+                str(getattr(tx.status, "value", tx.status)),
+            ]
+        )
+    data = buf.getvalue().encode("utf-8-sig")  # BOM so Excel reads UTF-8
+    filename = f"yozuv-payments-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.csv"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="text/csv",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get("/metrics")
+def admin_metrics(
+    db: Session = Depends(get_db), _=Depends(get_admin_user), days: int = 30
+):
+    """Growth + retention metrics for the dashboard charts.
+
+    Returns daily series (new businesses, completed revenue) plus
+    headline retention numbers: trial→paid conversion, churn over the
+    window, and ARPU across paying businesses.
+    """
+    days = min(max(7, days), 90)
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    # --- daily series -----------------------------------------------------
+    biz_rows = (
+        db.query(Business.created_at)
+        .filter(Business.created_at >= start, Business.deleted_at.is_(None))
+        .all()
+    )
+    pay_rows = (
+        db.query(PaymentTransaction.created_at, PaymentTransaction.amount)
+        .filter(
+            PaymentTransaction.status == PaymentRecordStatus.COMPLETED,
+            PaymentTransaction.created_at >= start,
+        )
+        .all()
+    )
+    by_day_biz: dict[str, int] = {}
+    by_day_rev: dict[str, int] = {}
+    for i in range(days):
+        key = (start + timedelta(days=i)).date().isoformat()
+        by_day_biz[key] = 0
+        by_day_rev[key] = 0
+    for (created,) in biz_rows:
+        if created:
+            key = created.date().isoformat()
+            if key in by_day_biz:
+                by_day_biz[key] += 1
+    for created, amount in pay_rows:
+        if created:
+            key = created.date().isoformat()
+            if key in by_day_rev:
+                by_day_rev[key] += int(amount or 0)
+    growth = [{"day": k, "value": v} for k, v in by_day_biz.items()]
+    revenue = [{"day": k, "value": v} for k, v in by_day_rev.items()]
+
+    # --- retention --------------------------------------------------------
+    active_subs = (
+        db.query(Subscription)
+        .filter(
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.expires_at > now,
+        )
+        .all()
+    )
+    paying = [s for s in active_subs if s.plan != SubscriptionPlan.TRIAL]
+    arpu = int(sum(int(s.amount_paid or 0) for s in paying) / len(paying)) if paying else 0
+
+    # Subscriptions that ever reached a paid plan, of those that started as trial.
+    total_business_ids = {
+        bid for (bid,) in db.query(Subscription.business_id).distinct().all()
+    }
+    paid_business_ids = {
+        bid
+        for (bid,) in db.query(Subscription.business_id)
+        .filter(Subscription.plan != SubscriptionPlan.TRIAL)
+        .distinct()
+        .all()
+    }
+    conversion_pct = (
+        round(100 * len(paid_business_ids) / len(total_business_ids))
+        if total_business_ids
+        else 0
+    )
+
+    # Churn: subs that expired or were cancelled within the window.
+    churned = (
+        db.query(func.count(Subscription.id))
+        .filter(
+            or_(
+                Subscription.status == SubscriptionStatus.CANCELLED,
+                Subscription.expires_at.between(start, now),
+            )
+        )
+        .scalar()
+        or 0
+    )
+    expiring_7d = (
+        db.query(func.count(Subscription.id))
+        .filter(
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.expires_at > now,
+            Subscription.expires_at <= now + timedelta(days=7),
+        )
+        .scalar()
+        or 0
+    )
+
+    return {
+        "days": days,
+        "growth": growth,
+        "revenue": revenue,
+        "arpu_uzs": arpu,
+        "paying_businesses": len(paid_business_ids),
+        "conversion_pct": conversion_pct,
+        "churned_subscriptions": int(churned),
+        "expiring_7d": int(expiring_7d),
+    }
+
+
+@router.get("/subscriptions/expiring")
+def list_expiring(
+    db: Session = Depends(get_db), _=Depends(get_admin_user), days: int = 7
+):
+    """Active subscriptions expiring within ``days`` — for proactive renewal."""
+    days = min(max(1, days), 60)
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=days)
+    subs = (
+        db.query(Subscription)
+        .filter(
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.expires_at > now,
+            Subscription.expires_at <= cutoff,
+        )
+        .order_by(Subscription.expires_at.asc())
+        .all()
+    )
+    biz_ids = {s.business_id for s in subs}
+    biz_by_id = {
+        b.id: b
+        for b in db.query(Business).filter(Business.id.in_(biz_ids)).all()
+    } if biz_ids else {}
+    owner_ids = {b.owner_id for b in biz_by_id.values() if b.owner_id}
+    owners_by_id = {
+        u.id: u for u in db.query(User).filter(User.id.in_(owner_ids)).all()
+    } if owner_ids else {}
+    out = []
+    for s in subs:
+        b = biz_by_id.get(s.business_id)
+        if not b or b.deleted_at is not None:
+            continue
+        owner = owners_by_id.get(b.owner_id) if b and b.owner_id else None
+        days_left = max(0, (s.expires_at - now).days)
+        out.append(
+            {
+                "business_id": str(b.id),
+                "business_name": b.name,
+                "plan": getattr(s.plan, "value", str(s.plan)),
+                "expires_at": s.expires_at.isoformat(),
+                "days_left": days_left,
+                "owner": {
+                    "telegram_id": owner.telegram_id if owner else None,
+                    "name": f"{owner.first_name or ''} {owner.last_name or ''}".strip()
+                    if owner
+                    else "",
+                },
+            }
+        )
+    return out
+
+
+@router.get("/reviews")
+def list_reviews(
+    db: Session = Depends(get_db),
+    _=Depends(get_admin_user),
+    limit: int = 100,
+    max_rating: int | None = None,
+    business_id: UUID | None = None,
+):
+    """Platform-wide review feed for moderation.
+
+    ``max_rating`` surfaces the low-star reviews first worth checking
+    (e.g. ``max_rating=2`` for 1–2★ complaints).
+    """
+    q = db.query(Review)
+    if max_rating is not None:
+        q = q.filter(Review.rating <= max_rating)
+    if business_id is not None:
+        q = q.filter(Review.business_id == business_id)
+    rows = (
+        q.order_by(Review.created_at.desc())
+        .limit(min(max(1, limit), 500))
+        .all()
+    )
+    biz_ids = {r.business_id for r in rows}
+    biz_by_id = {
+        b.id: b for b in db.query(Business).filter(Business.id.in_(biz_ids)).all()
+    } if biz_ids else {}
+    client_ids = {r.client_id for r in rows if r.client_id}
+    clients_by_id = {
+        c.id: c for c in db.query(Client).filter(Client.id.in_(client_ids)).all()
+    } if client_ids else {}
+    out = []
+    for r in rows:
+        biz = biz_by_id.get(r.business_id)
+        client = clients_by_id.get(r.client_id) if r.client_id else None
+        out.append(
+            {
+                "id": str(r.id),
+                "business_id": str(r.business_id),
+                "business_name": biz.name if biz else "—",
+                "rating": int(r.rating),
+                "comment": r.comment or "",
+                "owner_reply": r.owner_reply or "",
+                "client_name": f"{client.first_name or ''} {client.last_name or ''}".strip()
+                if client
+                else "",
+                "created_at": r.created_at.isoformat() if r.created_at else "",
+            }
+        )
+    return out
+
+
+@router.delete("/reviews/{review_id}")
+def delete_review(
+    review_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    """Hard-delete a review (spam / abuse moderation)."""
+    r = db.query(Review).filter(Review.id == review_id).first()
+    if not r:
+        raise HTTPException(404, "Review not found")
+    log_admin_action(
+        db,
+        admin,
+        "review.delete",
+        "Review",
+        r.id,
+        {"business_id": str(r.business_id), "rating": int(r.rating)},
+    )
+    db.delete(r)
+    db.commit()
+    return {"ok": True, "id": str(review_id)}
+
+
+@router.get("/businesses/{business_id}/activity")
+def business_activity(
+    business_id: UUID, db: Session = Depends(get_db), _=Depends(get_admin_user)
+):
+    """Per-business activity snapshot for the admin detail view."""
+    b = db.query(Business).filter(Business.id == business_id).first()
+    if not b:
+        raise HTTPException(404, "Business not found")
+    now = datetime.now(timezone.utc)
+    thirty_ago = now - timedelta(days=30)
+
+    bookings_total = (
+        db.query(func.count(Booking.id))
+        .filter(Booking.business_id == b.id)
+        .scalar()
+        or 0
+    )
+    bookings_30d = (
+        db.query(func.count(Booking.id))
+        .filter(Booking.business_id == b.id, Booking.created_at >= thirty_ago)
+        .scalar()
+        or 0
+    )
+    by_status: dict[str, int] = {}
+    for status, count in (
+        db.query(Booking.status, func.count(Booking.id))
+        .filter(Booking.business_id == b.id)
+        .group_by(Booking.status)
+        .all()
+    ):
+        by_status[str(getattr(status, "value", status))] = int(count)
+
+    clients_total = (
+        db.query(func.count(func.distinct(Booking.client_id)))
+        .filter(Booking.business_id == b.id, Booking.client_id.isnot(None))
+        .scalar()
+        or 0
+    )
+    revenue_total = (
+        db.query(func.coalesce(func.sum(Booking.payment_amount), 0))
+        .filter(
+            Booking.business_id == b.id,
+            Booking.payment_status == PaymentStatus.PAID,
+        )
+        .scalar()
+        or 0
+    )
+    reviews_count = (
+        db.query(func.count(Review.id)).filter(Review.business_id == b.id).scalar() or 0
+    )
+    reviews_avg = (
+        db.query(func.avg(Review.rating)).filter(Review.business_id == b.id).scalar()
+    )
+
+    return {
+        "business_id": str(b.id),
+        "bookings_total": int(bookings_total),
+        "bookings_30d": int(bookings_30d),
+        "bookings_by_status": by_status,
+        "clients_total": int(clients_total),
+        "revenue_total_uzs": int(revenue_total),
+        "reviews_count": int(reviews_count),
+        "reviews_avg": round(float(reviews_avg), 1) if reviews_avg is not None else None,
+    }
+
+
+@router.get("/platform-stats")
+def platform_stats(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    """Platform-wide engagement + system health for the admin overview.
+
+    Aggregates the growth-loop features (referrals, waitlist, promo
+    codes) that otherwise have no admin surface, plus the latest
+    auto-backup snapshot written before the last destructive import.
+    """
+    referrals_total = db.query(func.count(Referral.id)).scalar() or 0
+    referrals_completed = (
+        db.query(func.count(Referral.id))
+        .filter(Referral.status == ReferralStatus.COMPLETED)
+        .scalar()
+        or 0
+    )
+    referral_conv = (
+        round(100 * referrals_completed / referrals_total) if referrals_total else 0
+    )
+
+    waitlist_total = db.query(func.count(WaitlistEntry.id)).scalar() or 0
+    waitlist_waiting = (
+        db.query(func.count(WaitlistEntry.id))
+        .filter(WaitlistEntry.notified_at.is_(None))
+        .scalar()
+        or 0
+    )
+
+    promo_total = db.query(func.count(PromoCode.id)).scalar() or 0
+    promo_active = (
+        db.query(func.count(PromoCode.id))
+        .filter(PromoCode.is_active.is_(True))
+        .scalar()
+        or 0
+    )
+    promo_uses = db.query(func.coalesce(func.sum(PromoCode.uses_count), 0)).scalar() or 0
+
+    bookings_total = db.query(func.count(Booking.id)).scalar() or 0
+    clients_total = db.query(func.count(Client.id)).scalar() or 0
+    reviews_total = db.query(func.count(Review.id)).scalar() or 0
+    reviews_avg = db.query(func.avg(Review.rating)).scalar()
+
+    # Latest auto-snapshot written by backup_import (best-effort).
+    last_backup: dict | None = None
+    try:
+        from app.config import get_settings as _get_settings
+
+        backups_dir = Path(_get_settings().uploads_dir) / "backups"
+        if backups_dir.is_dir():
+            snaps = sorted(backups_dir.glob("auto-*.json"), reverse=True)
+            if snaps:
+                st = snaps[0].stat()
+                last_backup = {
+                    "name": snaps[0].name,
+                    "size_kb": round(st.st_size / 1024, 1),
+                    "modified_at": datetime.fromtimestamp(
+                        st.st_mtime, tz=timezone.utc
+                    ).isoformat(),
+                }
+    except Exception:
+        last_backup = None
+
+    return {
+        "referrals_total": int(referrals_total),
+        "referrals_completed": int(referrals_completed),
+        "referral_conversion_pct": referral_conv,
+        "waitlist_total": int(waitlist_total),
+        "waitlist_waiting": int(waitlist_waiting),
+        "promo_total": int(promo_total),
+        "promo_active": int(promo_active),
+        "promo_uses": int(promo_uses),
+        "bookings_total": int(bookings_total),
+        "clients_total": int(clients_total),
+        "reviews_total": int(reviews_total),
+        "reviews_avg": round(float(reviews_avg), 1) if reviews_avg is not None else None,
+        "last_backup": last_backup,
+    }
+
+
+def _get_or_create_platform_settings(db: Session) -> "PlatformSettings":
+    from app.models import PlatformSettings
+
+    ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    if ps is None:
+        ps = PlatformSettings(id=1)
+        db.add(ps)
+        db.flush()
+    return ps
+
+
+@router.get("/plan-prices")
+def get_plan_prices(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    """Current subscription prices (resolved) plus the raw overrides.
+
+    ``monthly``/``yearly`` are the effective prices used at checkout;
+    ``monthly_override``/``yearly_override`` are the stored values where
+    0 means "use the code default".
+    """
+    from app.models import PlatformSettings
+    from app.services.payment_service import MONTHLY_AMOUNT_UZS, YEARLY_AMOUNT_UZS
+
+    ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    monthly_override = int(ps.monthly_price) if ps else 0
+    yearly_override = int(ps.yearly_price) if ps else 0
+    return {
+        "monthly": monthly_override or MONTHLY_AMOUNT_UZS,
+        "yearly": yearly_override or YEARLY_AMOUNT_UZS,
+        "monthly_override": monthly_override,
+        "yearly_override": yearly_override,
+        "default_monthly": MONTHLY_AMOUNT_UZS,
+        "default_yearly": YEARLY_AMOUNT_UZS,
+    }
+
+
+class PlanPricesBody(BaseModel):
+    # 0 (or null) resets to the code default.
+    monthly_price: int = Field(0, ge=0, le=1_000_000_000)
+    yearly_price: int = Field(0, ge=0, le=1_000_000_000)
+
+
+@router.put("/plan-prices")
+def set_plan_prices(
+    body: PlanPricesBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    from app.services.payment_service import MONTHLY_AMOUNT_UZS, YEARLY_AMOUNT_UZS
+
+    ps = _get_or_create_platform_settings(db)
+    ps.monthly_price = int(body.monthly_price)
+    ps.yearly_price = int(body.yearly_price)
+    log_admin_action(
+        db,
+        admin,
+        "settings.prices",
+        "PlatformSettings",
+        None,
+        {"monthly_price": ps.monthly_price, "yearly_price": ps.yearly_price},
+    )
+    db.commit()
+    return {
+        "monthly": ps.monthly_price or MONTHLY_AMOUNT_UZS,
+        "yearly": ps.yearly_price or YEARLY_AMOUNT_UZS,
+        "monthly_override": ps.monthly_price,
+        "yearly_override": ps.yearly_price,
+    }
+
+
+@router.get("/admins")
+def list_admins(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    """All platform admins: immutable env superadmins + panel-managed rows."""
+    from app.deps import _admin_telegram_ids
+
+    env_ids = _admin_telegram_ids()
+    out = []
+    for tg in sorted(env_ids):
+        out.append(
+            {
+                "telegram_id": int(tg),
+                "name": "",
+                "source": "env",
+                "removable": False,
+                "created_at": None,
+            }
+        )
+    db_rows = db.query(AdminUser).order_by(AdminUser.created_at.desc()).all()
+    for a in db_rows:
+        if int(a.telegram_id) in env_ids:
+            continue  # env wins; don't list twice
+        out.append(
+            {
+                "telegram_id": int(a.telegram_id),
+                "name": a.name or "",
+                "source": "db",
+                "removable": True,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+        )
+    return out
+
+
+class AdminCreateBody(BaseModel):
+    telegram_id: int = Field(..., gt=0)
+    name: str | None = None
+
+
+@router.post("/admins", status_code=201)
+def add_admin(
+    body: AdminCreateBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    from app.deps import _admin_telegram_ids
+
+    if body.telegram_id in _admin_telegram_ids():
+        raise HTTPException(409, "Already a superadmin (env)")
+    existing = (
+        db.query(AdminUser).filter(AdminUser.telegram_id == body.telegram_id).first()
+    )
+    if existing:
+        raise HTTPException(409, "Already an admin")
+    row = AdminUser(
+        telegram_id=body.telegram_id,
+        name=(body.name or "").strip(),
+        added_by_telegram_id=int(admin.telegram_id) if admin.telegram_id else None,
+    )
+    db.add(row)
+    log_admin_action(
+        db,
+        admin,
+        "admin.add",
+        "AdminUser",
+        None,
+        {"telegram_id": body.telegram_id, "name": row.name},
+    )
+    db.commit()
+    db.refresh(row)
+    return {
+        "telegram_id": int(row.telegram_id),
+        "name": row.name,
+        "source": "db",
+        "removable": True,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.delete("/admins/{telegram_id}")
+def remove_admin(
+    telegram_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    from app.deps import _admin_telegram_ids
+
+    if telegram_id in _admin_telegram_ids():
+        raise HTTPException(400, "Cannot remove a superadmin (set via env)")
+    row = db.query(AdminUser).filter(AdminUser.telegram_id == telegram_id).first()
+    if not row:
+        raise HTTPException(404, "Admin not found")
+    log_admin_action(
+        db, admin, "admin.remove", "AdminUser", None, {"telegram_id": telegram_id}
+    )
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "telegram_id": telegram_id}

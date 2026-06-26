@@ -22,6 +22,23 @@ MONTHLY_AMOUNT_UZS = 187_500
 YEARLY_AMOUNT_UZS = 1_875_000
 
 
+def get_plan_amount(db: Session, plan: SubscriptionPlan) -> int:
+    """Resolve a plan price, preferring the admin-configured value.
+
+    PlatformSettings stores 0 when a price hasn't been overridden, in
+    which case we fall back to the historical code constants so pricing
+    is never accidentally set to zero.
+    """
+    from app.models import PlatformSettings
+
+    ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    if plan == SubscriptionPlan.MONTHLY:
+        return int(ps.monthly_price) if ps and ps.monthly_price else MONTHLY_AMOUNT_UZS
+    if plan == SubscriptionPlan.YEARLY:
+        return int(ps.yearly_price) if ps and ps.yearly_price else YEARLY_AMOUNT_UZS
+    return 0
+
+
 def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan, amount_paid: int) -> Subscription:
     now = datetime.now(timezone.utc)
     if plan == SubscriptionPlan.MONTHLY:
@@ -58,7 +75,7 @@ def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan
 
 
 def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
-    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    amount = get_plan_amount(db, plan)
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.PAYME,
@@ -92,7 +109,7 @@ def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
 
 
 def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
-    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    amount = get_plan_amount(db, plan)
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.CLICK,
@@ -137,7 +154,7 @@ def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
 def create_card_payment(
     db: Session, business_id: UUID, plan: SubscriptionPlan
 ) -> PaymentTransaction:
-    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    amount = get_plan_amount(db, plan)
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.CARD,

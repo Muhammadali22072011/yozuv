@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  Activity as ActivityIcon,
   AlertTriangle,
   BarChart3,
   Building2,
@@ -10,20 +11,28 @@ import {
   Clock,
   CreditCard,
   Database,
+  Download,
+  Gauge,
+  Gift,
   Megaphone,
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Shield,
   Sparkles,
+  Star,
   Trash2,
+  TrendingDown,
   TrendingUp,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
 import { ScreenHeader, YzLoader, fmtShort, fmtSum, useToast } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { RevenueChart } from "../analytics/RevenueChart";
 
 type Summary = {
   businesses_total: number;
@@ -113,6 +122,13 @@ type Pending = {
 
 type CardInfo = { card_number: string; card_holder: string; payment_comment: string };
 
+type PlanPrices = {
+  monthly: number;
+  yearly: number;
+  monthly_override: number;
+  yearly_override: number;
+};
+
 type AdminPayment = {
   id: string;
   business_name: string;
@@ -128,6 +144,8 @@ type Tab =
   | "summary"
   | "businesses"
   | "payments"
+  | "reviews"
+  | "system"
   | "broadcast"
   | "settings"
   | "backup"
@@ -137,11 +155,81 @@ const TABS: { k: Tab; label: string; icon: typeof Shield }[] = [
   { k: "summary", label: "Statistika", icon: BarChart3 },
   { k: "businesses", label: "Bizneslar", icon: Building2 },
   { k: "payments", label: "To‘lovlar", icon: Wallet },
+  { k: "reviews", label: "Sharhlar", icon: Star },
+  { k: "system", label: "Tizim", icon: Gauge },
   { k: "settings", label: "Karta", icon: CreditCard },
   { k: "broadcast", label: "Xabar", icon: Megaphone },
   { k: "backup", label: "Backup", icon: Database },
   { k: "audit", label: "Tarix", icon: ClipboardList },
 ];
+
+type Metrics = {
+  days: number;
+  growth: { day: string; value: number }[];
+  revenue: { day: string; value: number }[];
+  arpu_uzs: number;
+  paying_businesses: number;
+  conversion_pct: number;
+  churned_subscriptions: number;
+  expiring_7d: number;
+};
+
+type Expiring = {
+  business_id: string;
+  business_name: string;
+  plan: string;
+  expires_at: string;
+  days_left: number;
+  owner: { telegram_id: number | null; name: string };
+};
+
+type ReviewItem = {
+  id: string;
+  business_id: string;
+  business_name: string;
+  rating: number;
+  comment: string;
+  owner_reply: string;
+  client_name: string;
+  created_at: string;
+};
+
+type Activity = {
+  business_id: string;
+  bookings_total: number;
+  bookings_30d: number;
+  bookings_by_status: Record<string, number>;
+  clients_total: number;
+  revenue_total_uzs: number;
+  reviews_count: number;
+  reviews_avg: number | null;
+};
+
+type ActivityModalState = { businessName: string; data: Activity | null };
+
+type PlatformStats = {
+  referrals_total: number;
+  referrals_completed: number;
+  referral_conversion_pct: number;
+  waitlist_total: number;
+  waitlist_waiting: number;
+  promo_total: number;
+  promo_active: number;
+  promo_uses: number;
+  bookings_total: number;
+  clients_total: number;
+  reviews_total: number;
+  reviews_avg: number | null;
+  last_backup: { name: string; size_kb: number; modified_at: string } | null;
+};
+
+type AdminItem = {
+  telegram_id: number;
+  name: string;
+  source: "env" | "db";
+  removable: boolean;
+  created_at: string | null;
+};
 
 type AuditEntry = {
   id: string;
@@ -163,6 +251,8 @@ type BroadcastHistory = {
   sent_count: number;
   failed_count: number;
   failed_recipients: number[];
+  status: string;
+  scheduled_at: string | null;
   created_at: string;
 };
 
@@ -190,6 +280,8 @@ export default function AdminPage() {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [card, setCard] = useState<CardInfo>({ card_number: "", card_holder: "", payment_comment: "" });
   const [broadcastText, setBroadcastText] = useState("");
+  const [broadcastSchedule, setBroadcastSchedule] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [backupBusy, setBackupBusy] = useState(false);
   const [savingCard, setSavingCard] = useState(false);
@@ -206,6 +298,26 @@ export default function AdminPage() {
   );
   const [broadcastHistory, setBroadcastHistory] = useState<BroadcastHistory[]>([]);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [expiring, setExpiring] = useState<Expiring[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [reviewsMaxRating, setReviewsMaxRating] = useState<string>("");
+  const [bizQuery, setBizQuery] = useState("");
+  const [bizSearch, setBizSearch] = useState("");
+  const [bizCategory, setBizCategory] = useState("");
+  const [bizSub, setBizSub] = useState("");
+  const [exportingPayments, setExportingPayments] = useState(false);
+  const [activity, setActivity] = useState<ActivityModalState | null>(null);
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+  const [prices, setPrices] = useState<{ monthly: string; yearly: string }>({
+    monthly: "",
+    yearly: "",
+  });
+  const [savingPrices, setSavingPrices] = useState(false);
+  const [admins, setAdmins] = useState<AdminItem[]>([]);
+  const [newAdminId, setNewAdminId] = useState("");
+  const [newAdminName, setNewAdminName] = useState("");
+  const [addingAdmin, setAddingAdmin] = useState(false);
 
   useEffect(() => {
     apiFetch<{ is_admin?: boolean }>("/api/auth/me")
@@ -222,13 +334,18 @@ export default function AdminPage() {
   }, [toast]);
 
   const loadBusinesses = useCallback(async () => {
-    const qs = showDeleted ? "?include_deleted=true" : "";
+    const params = new URLSearchParams();
+    if (showDeleted) params.set("include_deleted", "true");
+    if (bizSearch.trim()) params.set("q", bizSearch.trim());
+    if (bizCategory) params.set("category", bizCategory);
+    if (bizSub) params.set("sub", bizSub);
+    const qs = params.toString() ? `?${params.toString()}` : "";
     try {
       setBiz(await apiFetch<Biz[]>(`/api/admin/businesses${qs}`));
     } catch (e) {
       toast(`Bizneslar yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
     }
-  }, [toast, showDeleted]);
+  }, [toast, showDeleted, bizSearch, bizCategory, bizSub]);
 
   const loadPending = useCallback(async () => {
     let list: Pending[] = [];
@@ -268,6 +385,18 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadPrices = useCallback(async () => {
+    try {
+      const p = await apiFetch<PlanPrices>("/api/admin/plan-prices");
+      setPrices({
+        monthly: p.monthly_override ? String(p.monthly_override) : "",
+        yearly: p.yearly_override ? String(p.yearly_override) : "",
+      });
+    } catch {
+      // prices fall back to code defaults if unreadable
+    }
+  }, []);
+
   const loadRecent = useCallback(async () => {
     try {
       setRecent(await apiFetch<AdminPayment[]>("/api/admin/payments?limit=50"));
@@ -284,6 +413,47 @@ export default function AdminPage() {
       toast(`Tarix yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
     }
   }, [toast, auditFilter]);
+
+  const loadMetrics = useCallback(async () => {
+    try {
+      setMetrics(await apiFetch<Metrics>("/api/admin/metrics?days=30"));
+    } catch {
+      // metrics are a nice-to-have; the summary cards still render without them
+    }
+  }, []);
+
+  const loadExpiring = useCallback(async () => {
+    try {
+      setExpiring(await apiFetch<Expiring[]>("/api/admin/subscriptions/expiring?days=7"));
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  const loadReviews = useCallback(async () => {
+    const qs = reviewsMaxRating ? `?max_rating=${reviewsMaxRating}` : "";
+    try {
+      setReviews(await apiFetch<ReviewItem[]>(`/api/admin/reviews${qs}`));
+    } catch (e) {
+      toast(`Sharhlar yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
+    }
+  }, [toast, reviewsMaxRating]);
+
+  const loadPlatformStats = useCallback(async () => {
+    try {
+      setPlatformStats(await apiFetch<PlatformStats>("/api/admin/platform-stats"));
+    } catch (e) {
+      toast(`Tizim yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
+    }
+  }, [toast]);
+
+  const loadAdmins = useCallback(async () => {
+    try {
+      setAdmins(await apiFetch<AdminItem[]>("/api/admin/admins"));
+    } catch {
+      // non-fatal
+    }
+  }, []);
 
   const loadBroadcastHistory = useCallback(async () => {
     try {
@@ -302,12 +472,36 @@ export default function AdminPage() {
     loadPending();
     loadRecent();
     loadCard();
-  }, [isAdmin, loadSummary, loadBusinesses, loadPending, loadRecent, loadCard]);
+    loadPrices();
+    loadMetrics();
+    loadExpiring();
+  }, [
+    isAdmin,
+    loadSummary,
+    loadBusinesses,
+    loadPending,
+    loadRecent,
+    loadCard,
+    loadPrices,
+    loadMetrics,
+    loadExpiring,
+  ]);
 
   useEffect(() => {
     if (!isAdmin || tab !== "audit") return;
     loadAudit();
   }, [isAdmin, tab, loadAudit]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "reviews") return;
+    loadReviews();
+  }, [isAdmin, tab, loadReviews]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "system") return;
+    loadPlatformStats();
+    loadAdmins();
+  }, [isAdmin, tab, loadPlatformStats, loadAdmins]);
 
   useEffect(() => {
     if (!isAdmin || tab !== "broadcast") return;
@@ -331,7 +525,7 @@ export default function AdminPage() {
         body: JSON.stringify({ business_id, days }),
       });
       toast(`+${days} kun qo‘shildi`);
-      await loadBusinesses();
+      await Promise.all([loadBusinesses(), loadExpiring()]);
     } catch (e) {
       toast((e as Error).message?.slice(0, 80) || "Uzaytirish xatolik");
     }
@@ -614,6 +808,27 @@ export default function AdminPage() {
     }
   }
 
+  async function savePrices() {
+    const monthly = Number(prices.monthly.replace(/\D/g, "")) || 0;
+    const yearly = Number(prices.yearly.replace(/\D/g, "")) || 0;
+    setSavingPrices(true);
+    try {
+      const r = await apiFetch<PlanPrices>("/api/admin/plan-prices", {
+        method: "PUT",
+        body: JSON.stringify({ monthly_price: monthly, yearly_price: yearly }),
+      });
+      setPrices({
+        monthly: r.monthly_override ? String(r.monthly_override) : "",
+        yearly: r.yearly_override ? String(r.yearly_override) : "",
+      });
+      toast("Narxlar saqlandi");
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Saqlashda xatolik");
+    } finally {
+      setSavingPrices(false);
+    }
+  }
+
   async function exportBackup() {
     setBackupBusy(true);
     try {
@@ -707,6 +922,75 @@ export default function AdminPage() {
     }
   }
 
+  function buildBroadcastFilters() {
+    const filters: Record<string, string> = {};
+    if (broadcastFilters.category) filters.category = broadcastFilters.category;
+    if (broadcastFilters.plan) filters.plan = broadcastFilters.plan;
+    if (broadcastFilters.subscription_status)
+      filters.subscription_status = broadcastFilters.subscription_status;
+    return filters;
+  }
+
+  async function scheduleBroadcast() {
+    if (broadcastText.trim().length < 3) {
+      toast("Kamida 3 ta belgi");
+      return;
+    }
+    if (!broadcastSchedule) {
+      toast("Vaqtni tanlang");
+      return;
+    }
+    const when = new Date(broadcastSchedule);
+    if (isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      toast("Kelajakdagi vaqtni tanlang");
+      return;
+    }
+    const filters = buildBroadcastFilters();
+    setScheduling(true);
+    try {
+      await apiFetch("/api/admin/broadcast/schedule", {
+        method: "POST",
+        body: JSON.stringify({
+          text: broadcastText,
+          only_active: true,
+          filters: Object.keys(filters).length ? filters : null,
+          scheduled_at: when.toISOString(),
+        }),
+      });
+      toast("Rejalashtirildi");
+      setBroadcastText("");
+      setBroadcastSchedule("");
+      setBroadcastFilters(EMPTY_BROADCAST_FILTERS);
+      await loadBroadcastHistory();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function cancelBroadcast(id: string) {
+    if (!window.confirm("Rejalashtirilgan xabarni bekor qilish?")) return;
+    try {
+      await apiFetch(`/api/admin/broadcasts/${id}/cancel`, { method: "POST" });
+      toast("Bekor qilindi");
+      await loadBroadcastHistory();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    }
+  }
+
+  function useAsTemplate(h: BroadcastHistory) {
+    setBroadcastText(h.text);
+    setBroadcastFilters({
+      category: String(h.filters.category || ""),
+      plan: String(h.filters.plan || ""),
+      subscription_status: String(h.filters.subscription_status || ""),
+    });
+    toast("Matn nusxalandi");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function retryBroadcast(id: string) {
     setRetryingId(id);
     try {
@@ -720,6 +1004,90 @@ export default function AdminPage() {
       toast((e as Error).message?.slice(0, 80) || "Xatolik");
     } finally {
       setRetryingId(null);
+    }
+  }
+
+  async function exportPayments() {
+    setExportingPayments(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${apiBase()}/api/admin/payments/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const disp = res.headers.get("Content-Disposition") || "";
+      const m = disp.match(/filename="?([^"]+)"?/i);
+      const filename = m?.[1] || `yozuv-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast("CSV tayyor");
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Eksport xatolik");
+    } finally {
+      setExportingPayments(false);
+    }
+  }
+
+  async function deleteReview(id: string) {
+    if (!window.confirm("Sharhni butunlay o‘chirish?")) return;
+    try {
+      await apiFetch(`/api/admin/reviews/${id}`, { method: "DELETE" });
+      toast("O‘chirildi");
+      await loadReviews();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "O‘chirishda xatolik");
+    }
+  }
+
+  async function addAdmin() {
+    const tg = Number(newAdminId.replace(/\D/g, ""));
+    if (!tg || tg <= 0) {
+      toast("Telegram ID kerak");
+      return;
+    }
+    setAddingAdmin(true);
+    try {
+      await apiFetch("/api/admin/admins", {
+        method: "POST",
+        body: JSON.stringify({ telegram_id: tg, name: newAdminName || null }),
+      });
+      toast("Admin qo‘shildi");
+      setNewAdminId("");
+      setNewAdminName("");
+      await loadAdmins();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    } finally {
+      setAddingAdmin(false);
+    }
+  }
+
+  async function removeAdmin(tg: number) {
+    if (!window.confirm(`Adminni o‘chirish: ${tg}?`)) return;
+    try {
+      await apiFetch(`/api/admin/admins/${tg}`, { method: "DELETE" });
+      toast("O‘chirildi");
+      await loadAdmins();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    }
+  }
+
+  async function openActivity(b: Biz) {
+    setActivity({ businessName: b.name, data: null });
+    try {
+      const data = await apiFetch<Activity>(`/api/admin/businesses/${b.id}/activity`);
+      setActivity({ businessName: b.name, data });
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Yuklanmadi");
+      setActivity(null);
     }
   }
 
@@ -815,8 +1183,153 @@ export default function AdminPage() {
           </div>
         )}
 
+        {tab === "summary" && metrics && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+              <StatCard
+                label="Konversiya"
+                value={`${metrics.conversion_pct}%`}
+                sub="trial → pulli"
+                tone="mint"
+                icon={TrendingUp}
+              />
+              <StatCard
+                label="ARPU"
+                value={fmtShort(metrics.arpu_uzs)}
+                sub="so‘m / biznes"
+                tone="indigo"
+                icon={Wallet}
+              />
+              <StatCard
+                label="Ottok (30 kun)"
+                value={metrics.churned_subscriptions}
+                sub="bekor / tugagan"
+                tone="coral"
+                icon={TrendingDown}
+              />
+              <StatCard
+                label="Tugaydi (7 kun)"
+                value={metrics.expiring_7d}
+                sub="obuna"
+                tone="lemon"
+                icon={Clock}
+              />
+            </div>
+
+            <MiniBarChart
+              title="Yangi bizneslar"
+              subtitle={`Oxirgi ${metrics.days} kun`}
+              series={metrics.growth}
+            />
+            <MiniBarChart
+              title="Daromad"
+              subtitle={`Oxirgi ${metrics.days} kun · so‘m`}
+              series={metrics.revenue}
+              money
+            />
+          </div>
+        )}
+
+        {tab === "summary" && expiring.length > 0 && (
+          <div>
+            <div className="eyebrow mb-2 px-1">Tez orada tugaydi</div>
+            <div className="card-soft divide-y divide-ink-100 overflow-hidden p-0">
+              {expiring.map((e) => (
+                <div
+                  key={e.business_id}
+                  className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-display text-sm font-extrabold text-ink-900">
+                      {e.business_name}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-500">
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-extrabold uppercase tracking-wide text-indigo-700">
+                        {e.plan}
+                      </span>
+                      <span className="font-mono">{e.expires_at.slice(0, 10)}</span>
+                      {e.owner.telegram_id != null && (
+                        <span className="font-mono text-ink-400">· {e.owner.telegram_id}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold",
+                      e.days_left <= 2
+                        ? "bg-[#FFE7E3] text-[#C93A2A]"
+                        : "bg-[#FFF3DA] text-[#A8751A]"
+                    )}
+                  >
+                    {e.days_left} kun
+                  </span>
+                  <button
+                    onClick={() => extend(e.business_id, 30)}
+                    className="shrink-0 rounded-2xl bg-indigo-50 px-3 py-2 text-[12px] font-bold text-indigo-700 tap hover:bg-indigo-100"
+                  >
+                    +30 kun
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === "businesses" && (
           <div className="space-y-3">
+            <div className="card-soft flex flex-wrap items-center gap-2 p-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setBizSearch(bizQuery);
+                }}
+                className="relative min-w-[180px] flex-1"
+              >
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                <input
+                  value={bizQuery}
+                  onChange={(e) => setBizQuery(e.target.value)}
+                  placeholder="Nom, slug yoki Telegram ID"
+                  className="yz-input py-2 pl-9 text-sm"
+                />
+              </form>
+              <select
+                value={bizCategory}
+                onChange={(e) => setBizCategory(e.target.value)}
+                className="yz-input w-auto py-2 text-sm"
+              >
+                <option value="">Barcha kategoriya</option>
+                {BIZ_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={bizSub}
+                onChange={(e) => setBizSub(e.target.value)}
+                className="yz-input w-auto py-2 text-sm"
+              >
+                <option value="">Barcha obuna</option>
+                <option value="active">Faol obuna</option>
+                <option value="trial">Trial</option>
+                <option value="paid">Pulli</option>
+                <option value="none">Obunasiz</option>
+              </select>
+              {(bizSearch || bizCategory || bizSub) && (
+                <button
+                  onClick={() => {
+                    setBizQuery("");
+                    setBizSearch("");
+                    setBizCategory("");
+                    setBizSub("");
+                  }}
+                  className="rounded-2xl bg-ink-100 px-3 py-2 text-[13px] font-bold text-ink-600 tap hover:bg-ink-200"
+                >
+                  Tozalash
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="inline-flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-ink-600">
                 <input
@@ -924,6 +1437,13 @@ export default function AdminPage() {
                         Reja
                       </button>
                       <button
+                        onClick={() => openActivity(b)}
+                        className="inline-flex items-center gap-1 rounded-2xl bg-ink-100 px-3 py-2 text-[13px] font-bold text-ink-700 tap hover:bg-ink-200"
+                        title="Faollik"
+                      >
+                        <ActivityIcon className="h-3.5 w-3.5" strokeWidth={2.6} />
+                      </button>
+                      <button
                         onClick={() => openEditBiz(b)}
                         className="inline-flex items-center gap-1 rounded-2xl bg-ink-100 px-3 py-2 text-[13px] font-bold text-ink-700 tap hover:bg-ink-200"
                         title="Tahrirlash"
@@ -965,6 +1485,16 @@ export default function AdminPage() {
 
         {tab === "payments" && (
           <div className="space-y-5">
+            <div className="flex justify-end">
+              <button
+                onClick={exportPayments}
+                disabled={exportingPayments}
+                className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-4 py-2 text-sm font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" strokeWidth={2.6} />
+                {exportingPayments ? "..." : "CSV eksport"}
+              </button>
+            </div>
             <div>
               <div className="eyebrow mb-2 px-1">Tasdiqlash kutmoqda</div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -1127,6 +1657,285 @@ export default function AdminPage() {
           </div>
         )}
 
+        {tab === "reviews" && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={reviewsMaxRating}
+                onChange={(e) => setReviewsMaxRating(e.target.value)}
+                className="yz-input w-auto py-2 text-sm"
+              >
+                <option value="">Barcha bahollar</option>
+                <option value="1">Faqat 1★</option>
+                <option value="2">2★ va past</option>
+                <option value="3">3★ va past</option>
+              </select>
+              <button
+                onClick={loadReviews}
+                className="rounded-2xl bg-ink-100 px-3 py-2 text-sm font-bold text-ink-700 tap hover:bg-ink-200"
+              >
+                Yangilash
+              </button>
+              <span className="ml-auto text-[11px] font-semibold text-ink-400">
+                <span className="tnum">{reviews.length}</span> sharh
+              </span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {reviews.length === 0 && (
+                <div className="card-soft flex flex-col items-center gap-3 p-8 text-center md:col-span-2">
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#FFF3DA] text-[#A8751A]">
+                    <Star className="h-6 w-6" strokeWidth={2.2} />
+                  </div>
+                  <span className="text-sm font-medium text-ink-400">Sharhlar yo‘q</span>
+                </div>
+              )}
+              {reviews.map((r) => (
+                <div key={r.id} className="card-soft p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-display text-sm font-extrabold text-ink-900">
+                        {r.business_name}
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="font-display text-sm font-extrabold text-[#A8751A]">
+                          {"★".repeat(r.rating)}
+                          <span className="text-ink-300">
+                            {"★".repeat(Math.max(0, 5 - r.rating))}
+                          </span>
+                        </span>
+                        <span className="font-mono text-[11px] text-ink-400">
+                          {r.created_at.replace("T", " ").slice(0, 16)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteReview(r.id)}
+                      className="shrink-0 grid h-8 w-8 place-items-center rounded-2xl bg-[#FFE7E3] text-[#C93A2A] tap hover:bg-[#FCD7CE]"
+                      title="O‘chirish"
+                      aria-label="O‘chirish"
+                    >
+                      <Trash2 className="h-4 w-4" strokeWidth={2.6} />
+                    </button>
+                  </div>
+                  {r.comment && (
+                    <div className="mt-3 rounded-2xl bg-ink-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-700">
+                      {r.comment}
+                    </div>
+                  )}
+                  {r.owner_reply && (
+                    <div className="mt-2 rounded-2xl bg-indigo-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-indigo-700">
+                      ↪ {r.owner_reply}
+                    </div>
+                  )}
+                  {r.client_name && (
+                    <div className="mt-2 text-[11px] text-ink-400">👤 {r.client_name}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === "system" && (
+          <div className="space-y-4">
+            {!platformStats ? (
+              <YzLoader />
+            ) : (
+              <>
+                <div>
+                  <div className="eyebrow mb-2 px-1">Tavsiya (referral)</div>
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    <StatCard
+                      label="Takliflar"
+                      value={platformStats.referrals_total}
+                      tone="indigo"
+                      icon={Gift}
+                    />
+                    <StatCard
+                      label="Yakunlangan"
+                      value={platformStats.referrals_completed}
+                      tone="mint"
+                      icon={Check}
+                    />
+                    <StatCard
+                      label="Konversiya"
+                      value={`${platformStats.referral_conversion_pct}%`}
+                      tone="lemon"
+                      icon={TrendingUp}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="eyebrow mb-2 px-1">Promo-kodlar</div>
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    <StatCard
+                      label="Jami"
+                      value={platformStats.promo_total}
+                      sub={`Faol: ${platformStats.promo_active}`}
+                      tone="indigo"
+                      icon={Sparkles}
+                    />
+                    <StatCard
+                      label="Ishlatilgan"
+                      value={platformStats.promo_uses}
+                      tone="mint"
+                      icon={Check}
+                    />
+                    <StatCard
+                      label="Navbat (waitlist)"
+                      value={platformStats.waitlist_waiting}
+                      sub={`Jami: ${platformStats.waitlist_total}`}
+                      tone="coral"
+                      icon={Clock}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="eyebrow mb-2 px-1">Umumiy</div>
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    <StatCard
+                      label="Bronlar"
+                      value={platformStats.bookings_total}
+                      tone="indigo"
+                      icon={ActivityIcon}
+                    />
+                    <StatCard
+                      label="Mijozlar"
+                      value={platformStats.clients_total}
+                      tone="mint"
+                      icon={Users}
+                    />
+                    <StatCard
+                      label="Sharhlar"
+                      value={platformStats.reviews_total}
+                      sub={
+                        platformStats.reviews_avg != null
+                          ? `O‘rtacha: ${platformStats.reviews_avg}★`
+                          : undefined
+                      }
+                      tone="lemon"
+                      icon={Star}
+                    />
+                  </div>
+                </div>
+
+                <div className="card-soft p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#E6FAF3] text-[#0E9577]">
+                      <Database className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-display text-base font-extrabold text-ink-900">
+                        Oxirgi avto-nusxa
+                      </h3>
+                      {platformStats.last_backup ? (
+                        <div className="mt-1 text-xs text-ink-500">
+                          <span className="font-mono">{platformStats.last_backup.name}</span>
+                          <span className="mx-1 text-ink-300">·</span>
+                          {platformStats.last_backup.size_kb} KB
+                          <span className="mx-1 text-ink-300">·</span>
+                          {platformStats.last_backup.modified_at
+                            .replace("T", " ")
+                            .slice(0, 16)}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-ink-400">
+                          Avto-nusxa yo‘q (import qilinmagan)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="card-soft p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-700">
+                      <Shield className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-display text-base font-extrabold text-ink-900">
+                        Adminlar
+                      </h3>
+                      <p className="mt-1 text-xs text-ink-500">
+                        ENV adminlarni o‘chirib bo‘lmaydi. Yangilarini bu yerda qo‘shing.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 divide-y divide-ink-100">
+                    {admins.map((a) => (
+                      <div
+                        key={a.telegram_id}
+                        className="flex items-center gap-3 py-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-bold text-ink-900">
+                            {a.name || (
+                              <span className="font-mono">{a.telegram_id}</span>
+                            )}
+                          </div>
+                          {a.name && (
+                            <div className="font-mono text-[11px] text-ink-400">
+                              {a.telegram_id}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                            a.source === "env"
+                              ? "bg-[#FFF3DA] text-[#A8751A]"
+                              : "bg-indigo-50 text-indigo-700"
+                          )}
+                        >
+                          {a.source === "env" ? "Superadmin" : "Admin"}
+                        </span>
+                        {a.removable ? (
+                          <button
+                            onClick={() => removeAdmin(a.telegram_id)}
+                            className="grid h-8 w-8 place-items-center rounded-2xl bg-[#FFE7E3] text-[#C93A2A] tap hover:bg-[#FCD7CE]"
+                            aria-label="O‘chirish"
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={2.6} />
+                          </button>
+                        ) : (
+                          <span className="grid h-8 w-8 place-items-center text-ink-300">
+                            <Shield className="h-4 w-4" />
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <input
+                      value={newAdminId}
+                      onChange={(e) =>
+                        setNewAdminId(e.target.value.replace(/\D/g, ""))
+                      }
+                      placeholder="Telegram ID"
+                      className="yz-input w-36 py-2 font-mono text-sm"
+                    />
+                    <input
+                      value={newAdminName}
+                      onChange={(e) => setNewAdminName(e.target.value)}
+                      placeholder="Ism (ixtiyoriy)"
+                      className="yz-input min-w-[120px] flex-1 py-2 text-sm"
+                    />
+                    <button
+                      onClick={addAdmin}
+                      disabled={addingAdmin}
+                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.6} />
+                      Qo‘shish
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {tab === "broadcast" && (
           <div className="mx-auto max-w-2xl space-y-4">
             <div className="card-soft p-5 md:p-6">
@@ -1228,8 +2037,29 @@ export default function AdminPage() {
                 className="btn-primary mt-3 w-full justify-center"
               >
                 <Megaphone className="mr-2 h-4 w-4" />
-                Yuborish
+                Hozir yuborish
               </button>
+              <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink-100 pt-3">
+                <div className="min-w-[180px] flex-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+                    Yoki rejalashtirish
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={broadcastSchedule}
+                    onChange={(e) => setBroadcastSchedule(e.target.value)}
+                    className="yz-input mt-1 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  onClick={scheduleBroadcast}
+                  disabled={scheduling || !broadcastSchedule}
+                  className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-4 py-2.5 text-sm font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                >
+                  <Clock className="h-4 w-4" strokeWidth={2.6} />
+                  {scheduling ? "..." : "Rejalashtirish"}
+                </button>
+              </div>
             </div>
 
             <div>
@@ -1246,13 +2076,26 @@ export default function AdminPage() {
                       <span className="font-mono text-[11px] text-ink-400">
                         {h.created_at.replace("T", " ").slice(0, 16)}
                       </span>
-                      <span className="rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-extrabold text-[#0E9577]">
-                        ✓ {h.sent_count}
-                      </span>
-                      {h.failed_count > 0 && (
-                        <span className="rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold text-[#C93A2A]">
-                          ✕ {h.failed_count}
+                      {h.status === "scheduled" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3DA] px-2 py-0.5 text-[10px] font-extrabold text-[#A8751A]">
+                          <Clock className="h-3 w-3" strokeWidth={2.8} />
+                          {h.scheduled_at?.replace("T", " ").slice(0, 16) || "rejada"}
                         </span>
+                      ) : h.status === "cancelled" ? (
+                        <span className="rounded-full bg-ink-200 px-2 py-0.5 text-[10px] font-extrabold text-ink-600">
+                          BEKOR
+                        </span>
+                      ) : (
+                        <>
+                          <span className="rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-extrabold text-[#0E9577]">
+                            ✓ {h.sent_count}
+                          </span>
+                          {h.failed_count > 0 && (
+                            <span className="rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold text-[#C93A2A]">
+                              ✕ {h.failed_count}
+                            </span>
+                          )}
+                        </>
                       )}
                       <span className="ml-auto text-[11px] text-ink-500">
                         {h.sent_by_name || h.sent_by_telegram_id}
@@ -1275,18 +2118,36 @@ export default function AdminPage() {
                           ))}
                       </div>
                     )}
-                    {h.failed_count > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
                       <button
-                        onClick={() => retryBroadcast(h.id)}
-                        disabled={retryingId === h.id}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                        onClick={() => useAsTemplate(h)}
+                        className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200"
                       >
-                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
-                        {retryingId === h.id
-                          ? "..."
-                          : `Tushib qolganlarga (${h.failed_count})`}
+                        <ClipboardList className="h-3.5 w-3.5" strokeWidth={2.6} />
+                        Shablon
                       </button>
-                    )}
+                      {h.status === "scheduled" && (
+                        <button
+                          onClick={() => cancelBroadcast(h.id)}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-[#FFE7E3] px-3 py-1.5 text-[12px] font-bold text-[#C93A2A] tap hover:bg-[#FCD7CE]"
+                        >
+                          <X className="h-3.5 w-3.5" strokeWidth={2.6} />
+                          Bekor qilish
+                        </button>
+                      )}
+                      {h.status !== "scheduled" && h.failed_count > 0 && (
+                        <button
+                          onClick={() => retryBroadcast(h.id)}
+                          disabled={retryingId === h.id}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
+                          {retryingId === h.id
+                            ? "..."
+                            : `Tushib qolganlarga (${h.failed_count})`}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1380,6 +2241,59 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+
+            <div className="card-soft space-y-3 p-5 md:col-span-2 md:p-6">
+              <div className="flex items-start gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#FFF3DA] text-[#A8751A]">
+                  <Wallet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-extrabold text-ink-900">
+                    Obuna narxlari
+                  </h3>
+                  <p className="mt-1 text-xs text-ink-500">
+                    Bo‘sh qoldirilsa — standart narx ishlatiladi.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Oylik (so‘m)
+                  </label>
+                  <input
+                    inputMode="numeric"
+                    value={prices.monthly}
+                    onChange={(e) =>
+                      setPrices({ ...prices, monthly: e.target.value.replace(/\D/g, "") })
+                    }
+                    placeholder="187500"
+                    className="yz-input mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Yillik (so‘m)
+                  </label>
+                  <input
+                    inputMode="numeric"
+                    value={prices.yearly}
+                    onChange={(e) =>
+                      setPrices({ ...prices, yearly: e.target.value.replace(/\D/g, "") })
+                    }
+                    placeholder="1875000"
+                    className="yz-input mt-1 font-mono"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={savePrices}
+                disabled={savingPrices}
+                className="btn-primary w-full justify-center"
+              >
+                {savingPrices ? "Saqlanmoqda…" : "Narxlarni saqlash"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1467,7 +2381,13 @@ export default function AdminPage() {
                 <option value="payment.approve">payment.approve</option>
                 <option value="payment.reject">payment.reject</option>
                 <option value="payment.refund">payment.refund</option>
+                <option value="review.delete">review.delete</option>
+                <option value="settings.prices">settings.prices</option>
+                <option value="admin.add">admin.add</option>
+                <option value="admin.remove">admin.remove</option>
                 <option value="broadcast.send">broadcast.send</option>
+                <option value="broadcast.schedule">broadcast.schedule</option>
+                <option value="broadcast.cancel">broadcast.cancel</option>
                 <option value="backup.import">backup.import</option>
               </select>
               <button
@@ -1542,6 +2462,100 @@ export default function AdminPage() {
           saving={subSaving}
         />
       )}
+      {activity && (
+        <ActivityModal state={activity} onClose={() => setActivity(null)} />
+      )}
+    </div>
+  );
+}
+
+function ActivityModal({
+  state,
+  onClose,
+}: {
+  state: ActivityModalState;
+  onClose: () => void;
+}) {
+  const d = state.data;
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="card-lg w-full max-w-md overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+          <div>
+            <div className="font-display text-lg font-extrabold text-ink-900">
+              Faollik
+            </div>
+            <div className="mt-0.5 truncate text-xs text-ink-500">
+              {state.businessName}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-2xl text-ink-500 hover:bg-ink-100"
+            aria-label="Yopish"
+          >
+            <X className="h-4 w-4" strokeWidth={2.6} />
+          </button>
+        </div>
+        {!d ? (
+          <div className="p-10">
+            <YzLoader />
+          </div>
+        ) : (
+          <div className="space-y-4 px-5 py-4">
+            <div className="grid grid-cols-2 gap-2.5">
+              <StatCard
+                label="Bronlar"
+                value={d.bookings_total}
+                sub={`30 kun: ${d.bookings_30d}`}
+                tone="indigo"
+                icon={ActivityIcon}
+              />
+              <StatCard
+                label="Mijozlar"
+                value={d.clients_total}
+                tone="mint"
+                icon={Users}
+              />
+              <StatCard
+                label="Daromad"
+                value={fmtShort(d.revenue_total_uzs)}
+                sub="so‘m"
+                tone="lemon"
+                icon={Wallet}
+              />
+              <StatCard
+                label="Reyting"
+                value={d.reviews_avg != null ? `${d.reviews_avg}★` : "—"}
+                sub={`${d.reviews_count} sharh`}
+                tone="coral"
+                icon={Star}
+              />
+            </div>
+            {Object.keys(d.bookings_by_status).length > 0 && (
+              <div>
+                <div className="eyebrow mb-2">Bronlar holati</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(d.bookings_by_status).map(([k, v]) => (
+                    <span
+                      key={k}
+                      className="rounded-full bg-ink-100 px-2.5 py-1 text-[11px] font-bold text-ink-700"
+                    >
+                      {k}: <span className="tnum">{v}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1803,6 +2817,42 @@ function BusinessFormModal({
             {saving ? "Saqlanmoqda…" : isEdit ? "Saqlash" : "Yaratish"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniBarChart({
+  title,
+  subtitle,
+  series,
+  money,
+}: {
+  title: string;
+  subtitle: string;
+  series: { day: string; value: number }[];
+  money?: boolean;
+}) {
+  const bars = series.map((s) => ({ day: s.day.slice(5), value: s.value }));
+  const maxBar = Math.max(1, ...series.map((s) => s.value));
+  const total = series.reduce((a, s) => a + s.value, 0);
+  return (
+    <div
+      className="relative overflow-hidden rounded-3xl p-5 text-white shadow-soft-lg"
+      style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
+    >
+      <div className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-indigo-500/30 blur-2xl" />
+      <div className="relative flex items-baseline justify-between">
+        <div>
+          <div className="font-display text-base font-extrabold">{title}</div>
+          <div className="text-[11px] font-semibold text-white/60">{subtitle}</div>
+        </div>
+        <div className="tnum font-display text-lg font-extrabold tracking-tight">
+          {money ? fmtSum(total) : total}
+        </div>
+      </div>
+      <div className="relative mt-3 h-40">
+        <RevenueChart bars={bars} maxBar={maxBar} highlightIdx={bars.length - 1} />
       </div>
     </div>
   );
