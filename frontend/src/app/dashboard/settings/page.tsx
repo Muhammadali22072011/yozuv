@@ -38,6 +38,13 @@ type TxStatus = {
 
 type Plan = "MONTHLY" | "YEARLY";
 
+type LoginMethod = {
+  provider: string;
+  label: string;
+  connected: boolean;
+  detail: string | null;
+};
+
 export default function SettingsPage() {
   const toast = useToast();
   const router = useRouter();
@@ -176,6 +183,47 @@ export default function SettingsPage() {
     }
   }
 
+  const [methods, setMethods] = useState<LoginMethod[]>([]);
+  async function loadIdentities() {
+    try {
+      const r = await apiFetch<{ methods: LoginMethod[] }>("/api/auth/identities");
+      setMethods(r.methods);
+    } catch {
+      // non-fatal — the section just stays empty
+    }
+  }
+  useEffect(() => {
+    loadIdentities();
+    // Surface the result of a Google-link round-trip (?linked / ?link_error),
+    // then clean the query so a refresh doesn't re-toast.
+    if (typeof window !== "undefined") {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get("linked") === "google") toast("Google hisobi ulandi");
+      else if (q.get("link_error") === "google_taken")
+        toast("Bu Google boshqa hisobga ulangan");
+      if (q.get("linked") || q.get("link_error")) {
+        window.history.replaceState({}, "", "/dashboard/settings");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function connectGoogle() {
+    const token = getToken();
+    if (!token) return;
+    // Top-level nav (OAuth can't ride a Bearer header) — token is short-lived.
+    window.location.href = `${apiBase()}/api/auth/google/start?link=1&token=${encodeURIComponent(token)}`;
+  }
+  async function disconnectGoogle() {
+    try {
+      await apiFetch("/api/auth/identities/google", { method: "DELETE" });
+      toast("Google uzildi");
+      loadIdentities();
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    }
+  }
+
   const ownerName =
     `${me?.first_name || ""} ${me?.last_name || ""}`.trim() || biz?.name || "—";
 
@@ -220,6 +268,53 @@ export default function SettingsPage() {
             <Pencil className="h-4 w-4" />
           </Link>
         </div>
+
+        {methods.length > 0 && (
+          <Section title="Kirish usullari">
+            {methods.map((m) => (
+              <div key={m.provider} className="flex items-center gap-3 px-4 py-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-display text-[14px] font-bold text-ink-900">
+                    {m.label}
+                  </div>
+                  <div className="truncate text-[12px] text-ink-500">
+                    {m.connected ? m.detail || "Ulangan" : "Ulanmagan"}
+                  </div>
+                </div>
+                {m.provider === "google" ? (
+                  m.connected ? (
+                    <button
+                      onClick={disconnectGoogle}
+                      className="rounded-xl bg-ink-100 px-3 py-1.5 text-xs font-bold text-ink-600 tap"
+                    >
+                      Uzish
+                    </button>
+                  ) : (
+                    <button
+                      onClick={connectGoogle}
+                      className="rounded-xl bg-ink-900 px-3 py-1.5 text-xs font-bold text-white tap"
+                    >
+                      Ulash
+                    </button>
+                  )
+                ) : (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                      m.connected
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-ink-100 text-ink-400"
+                    }`}
+                  >
+                    {m.connected ? "Ulangan" : "—"}
+                  </span>
+                )}
+              </div>
+            ))}
+          </Section>
+        )}
 
         <Section title="Biznes">
           <Row
