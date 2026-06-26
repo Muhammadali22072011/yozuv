@@ -28,11 +28,13 @@ class TestRefundTransaction:
             from app.models import PaymentTransaction as PT
 
             if model is PT:
-                m.filter.return_value.first.return_value = tx
+                # refund_transaction locks the row: .filter(...).with_for_update().first()
+                m.filter.return_value.with_for_update.return_value.first.return_value = tx
             elif model is Subscription:
                 sub = MagicMock()
                 sub.status = SubscriptionStatus.ACTIVE
-                m.filter.return_value.order_by.return_value.first.return_value = sub
+                # .filter(...).order_by(...).with_for_update().first()
+                m.filter.return_value.order_by.return_value.with_for_update.return_value.first.return_value = sub
             elif model is Business:
                 biz = MagicMock()
                 biz.owner_id = uuid.uuid4()
@@ -74,7 +76,7 @@ class TestRefundTransaction:
 
     def test_refund_nonexistent_tx_raises(self):
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
         with pytest.raises(ValueError, match="not found"):
             refund_transaction(db, uuid.uuid4(), uuid.uuid4())
