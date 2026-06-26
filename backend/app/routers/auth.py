@@ -199,6 +199,19 @@ def _google_fail(msg: str = "google") -> RedirectResponse:
     return resp
 
 
+def _is_mergeable_orphan(user: User) -> bool:
+    """True if this account is safe to absorb when its Google identity is
+    re-linked elsewhere: it was created only by a stray Sign-in-with-Google
+    (no Telegram, no password, no business of its own). Nothing of value is
+    lost and no real account is hijacked — Telegram/password/business
+    accounts stay protected by the takeover guard and keep refusing."""
+    return (
+        user.telegram_id is None
+        and not user.password_hash
+        and user.business is None
+    )
+
+
 @router.get("/google/callback")
 def google_callback(
     request: Request,
@@ -261,8 +274,39 @@ def google_callback(
     if link_user_id:
         app_url = settings.public_app_url.rstrip("/")
         if identity and str(identity.user_id) != link_user_id:
-            # This Google account is already linked to a DIFFERENT yozuv
-            # account — never silently move it (account-takeover guard).
+            # The Google sub already belongs to a DIFFERENT account. If that
+            # account is an empty orphan — auto-created by a past stray Google
+            # login — absorb it: move the identity to the signed-in account and
+            # delete the orphan. Accounts with a real login method or business
+            # keep the takeover guard and still refuse.
+            other = db.query(User).filter(User.id == identity.user_id).first()
+            target = db.query(User).filter(User.id == UUID(link_user_id)).first()
+            target_has_google = target is not None and any(
+                i.provider == AuthProvider.GOOGLE.value for i in target.identities
+            )
+            if (
+                other is not None
+                and target is not None
+                and not target_has_google
+                and _is_mergeable_orphan(other)
+            ):
+                # Reassign via the relationship so both collections stay
+                # consistent (identity leaves other.identities, joins target's)
+                # — prevents the orphan delete from cascading it away.
+                identity.user = target
+                identity.last_login_at = now
+                identity.email = email
+                identity.email_verified = True
+                db.flush()
+                db.delete(other)
+                db.commit()
+                resp = RedirectResponse(
+                    f"{app_url}/dashboard/settings?linked=google",
+                    status_code=302,
+                )
+                resp.delete_cookie(_GOOGLE_COOKIE, path="/api/auth/google")
+                return resp
+            # Real account on the other side — never silently move it.
             resp = RedirectResponse(
                 f"{app_url}/dashboard/settings?link_error=google_taken",
                 status_code=302,
