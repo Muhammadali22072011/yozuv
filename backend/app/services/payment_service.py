@@ -150,6 +150,103 @@ def create_card_payment(
     return tx
 
 
+# Share of the service price taken as a deposit to hold the slot.
+DEPOSIT_PERCENT = 30
+
+
+def compute_deposit(price: int) -> int:
+    """30% of the price, floored at 1000 so'm and rounded to the nearest 100."""
+    raw = max(1000, round(int(price or 0) * DEPOSIT_PERCENT / 100))
+    return int(round(raw / 100) * 100)
+
+
+def create_booking_deposit(
+    db: Session, booking, provider: PaymentProvider
+) -> tuple[PaymentTransaction, str]:
+    """Mint a deposit PaymentTransaction for a booking + a paytechuz pay link.
+    The webhook flips the booking to CONFIRMED once the deposit is paid."""
+    amount = compute_deposit(int(getattr(booking, "payment_amount", 0) or 0))
+    tx = PaymentTransaction(
+        business_id=booking.business_id,
+        provider=provider,
+        amount=amount,
+        status=PaymentRecordStatus.PENDING,
+        kind="deposit",
+        booking_id=booking.id,
+    )
+    db.add(tx)
+    db.flush()
+
+    return_url = settings.public_app_url + "/dashboard/bookings"
+    try:
+        if provider == PaymentProvider.PAYME:
+            if not settings.payme_merchant_id or not settings.payme_secret_key:
+                return tx, ""
+            from paytechuz.gateways.payme import PaymeGateway
+
+            payme = PaymeGateway(
+                payme_id=settings.payme_merchant_id,
+                payme_key=settings.payme_secret_key,
+                is_test_mode=(settings.app_env != "production"),
+            )
+            link = payme.create_payment(
+                id=str(tx.id),
+                amount=amount,
+                return_url=return_url,
+                account_field_name="id",
+            )
+            return tx, link
+        if provider == PaymentProvider.CLICK:
+            if not all(
+                [
+                    settings.click_service_id,
+                    settings.click_merchant_id,
+                    settings.click_merchant_user_id,
+                    settings.click_secret_key,
+                ]
+            ):
+                return tx, ""
+            from paytechuz.gateways.click import ClickGateway
+
+            click = ClickGateway(
+                service_id=settings.click_service_id,
+                merchant_id=settings.click_merchant_id,
+                merchant_user_id=settings.click_merchant_user_id,
+                secret_key=settings.click_secret_key,
+                is_test_mode=(settings.app_env != "production"),
+            )
+            link = click.create_payment(
+                id=str(tx.id),
+                amount=amount,
+                description="Yozuv deposit",
+                return_url=return_url,
+            )
+            return tx, link
+    except Exception:
+        return tx, ""
+    return tx, ""
+
+
+def complete_booking_deposit(db: Session, tx: PaymentTransaction) -> None:
+    """Mark a deposit tx COMPLETED and CONFIRM its booking. Idempotent — a
+    webhook retry on an already-completed tx is a no-op."""
+    from app.models import Booking, BookingStatus, PaymentStatus
+
+    if tx.status == PaymentRecordStatus.COMPLETED:
+        return
+    tx.status = PaymentRecordStatus.COMPLETED
+    if tx.booking_id:
+        booking = (
+            db.query(Booking)
+            .filter(Booking.id == tx.booking_id)
+            .with_for_update()
+            .first()
+        )
+        if booking and booking.status != BookingStatus.CANCELLED:
+            booking.status = BookingStatus.CONFIRMED
+            booking.payment_status = PaymentStatus.PAID
+
+
 def approve_card_payment(
     db: Session, tx_id: UUID, admin_telegram_id: str
 ) -> PaymentTransaction:

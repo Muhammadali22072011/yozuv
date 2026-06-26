@@ -30,6 +30,7 @@ from app.services.notification_service import send_telegram_photo
 from app.utils.htmlsafe import h
 from app.services.payment_service import (
     approve_card_payment,
+    complete_booking_deposit,
     complete_transaction_and_notify,
     create_card_payment,
     create_click_payment,
@@ -445,7 +446,11 @@ async def payme_webhook(request: Request, db: Session = Depends(get_db)):
     if method != "PerformTransaction":
         return {"ok": True}
 
-    complete_transaction_and_notify(db, tx)
+    # Booking deposits confirm the booking; subscription txs activate billing.
+    if getattr(tx, "kind", "subscription") == "deposit":
+        complete_booking_deposit(db, tx)
+    else:
+        complete_transaction_and_notify(db, tx)
     db.commit()
     return {"ok": True}
 
@@ -475,7 +480,11 @@ async def click_webhook(request: Request, db: Session = Depends(get_db)):
     if not tx or tx.status == PaymentRecordStatus.COMPLETED:
         return {"ok": True}
 
-    complete_transaction_and_notify(db, tx)
+    # Booking deposits confirm the booking; subscription txs activate billing.
+    if getattr(tx, "kind", "subscription") == "deposit":
+        complete_booking_deposit(db, tx)
+    else:
+        complete_transaction_and_notify(db, tx)
     db.commit()
     return {"ok": True}
 

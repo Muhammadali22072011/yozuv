@@ -13,6 +13,7 @@ from app.models import (
     BookingStatus,
     Business,
     Client,
+    PaymentProvider,
     PaymentStatus,
     Service,
     User,
@@ -28,6 +29,7 @@ from app.schemas.booking import (
 from app.config import get_settings
 from app.services import booking_service, waitlist_service
 from app.services.booking_service import acquire_slot_lock
+from app.services.payment_service import create_booking_deposit
 from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
 from app.utils.clock import local_today
@@ -114,6 +116,46 @@ def create_public_booking(
     publish_event(business.id, "booking_new")
 
     return booking
+
+
+class DepositStartBody(BaseModel):
+    provider: str = "payme"  # 'payme' | 'click'
+    init_data: str = Field(..., min_length=1)
+
+
+@router.post("/bookings/{booking_id}/deposit")
+def start_booking_deposit(
+    booking_id: UUID,
+    body: DepositStartBody,
+    db: Session = Depends(get_db),
+):
+    """Client mints a deposit pay-link for their own booking (PREPAYMENT mode).
+    The paytechuz webhook flips the booking to CONFIRMED once paid."""
+    settings = get_settings()
+    if not settings.bot_token:
+        raise HTTPException(500, "BOT_TOKEN not configured")
+    try:
+        parsed = validate_telegram_init_data(body.init_data, settings.bot_token)
+        tg_user = parse_user_from_init(parsed)
+        tg_id = int(tg_user["id"])
+    except Exception as exc:
+        raise HTTPException(401, f"Invalid initData: {exc}") from exc
+
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    client = db.query(Client).filter(Client.id == booking.client_id).first()
+    if not client or int(client.telegram_id or 0) != tg_id:
+        raise HTTPException(403, "Not your booking")
+    if booking.status == BookingStatus.CANCELLED:
+        raise HTTPException(400, "Booking is cancelled")
+
+    provider = (
+        PaymentProvider.CLICK if body.provider == "click" else PaymentProvider.PAYME
+    )
+    tx, link = create_booking_deposit(db, booking, provider)
+    db.commit()
+    return {"amount": tx.amount, "link": link, "transaction_id": str(tx.id)}
 
 
 @me_router.post("/bookings", response_model=BookingRead)

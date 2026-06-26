@@ -29,6 +29,12 @@ class PaymentTransaction(Base):
         String(32), default=PaymentRecordStatus.PENDING, nullable=False
     )
     plan: Mapped[str] = mapped_column(String(32), default="MONTHLY")
+    # 'subscription' (default, billing) or 'deposit' (booking prepayment). A
+    # deposit tx also carries booking_id; the webhook routes on this.
+    kind: Mapped[str] = mapped_column(String(16), default="subscription", nullable=False)
+    booking_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     raw_payload: Mapped[str] = mapped_column(Text, default="")
     screenshot_url: Mapped[str] = mapped_column(String(512), default="")
     user_comment: Mapped[str] = mapped_column(Text, default="")
