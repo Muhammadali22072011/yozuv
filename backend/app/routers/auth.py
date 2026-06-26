@@ -24,6 +24,7 @@ from app.utils.auth import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    get_user_from_token,
     hash_password,
     verify_password,
 )
@@ -97,23 +98,36 @@ def _secure_cookies() -> bool:
 
 
 @router.get("/google/start")
-def google_start():
+def google_start(
+    link: int = 0,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+):
     """Begin Sign-in-with-Google. Stashes PKCE verifier + CSRF state in a
-    short-lived signed cookie, then 302s to Google's consent screen."""
+    short-lived signed cookie, then 302s to Google's consent screen.
+
+    Link mode (?link=1&token=<access>): attach Google to the CURRENT account
+    instead of creating a new one. The token rides the query because a
+    top-level navigation can't send a Bearer header; it only mints a 10-min
+    state cookie and is never persisted."""
     if not google_enabled():
         raise HTTPException(status_code=404, detail="Google login disabled")
+    link_user_id = None
+    if link and token:
+        u = get_user_from_token(db, token)
+        if u:
+            link_user_id = str(u.id)
     state = random_state()
     verifier, challenge = make_pkce()
-    stash = jwt.encode(
-        {
-            "state": state,
-            "cv": verifier,
-            "type": "goauth",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
-        },
-        settings.secret_key,
-        algorithm=ALGORITHM,
-    )
+    payload = {
+        "state": state,
+        "cv": verifier,
+        "type": "goauth",
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
+    }
+    if link_user_id:
+        payload["link_user_id"] = link_user_id
+    stash = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
     resp = RedirectResponse(build_auth_url(state, challenge), status_code=302)
     resp.set_cookie(
         _GOOGLE_COOKIE,
@@ -158,6 +172,7 @@ def google_callback(
         if data.get("type") != "goauth" or data.get("state") != state:
             return _google_fail()
         code_verifier = data["cv"]
+        link_user_id = data.get("link_user_id")
     except Exception:
         return _google_fail()
 
@@ -184,6 +199,43 @@ def google_callback(
         )
         .first()
     )
+
+    # Link mode: attach this Google identity to the signed-in account instead
+    # of logging in / creating a new one.
+    if link_user_id:
+        app_url = settings.public_app_url.rstrip("/")
+        if identity and str(identity.user_id) != link_user_id:
+            # This Google account is already linked to a DIFFERENT yozuv
+            # account — never silently move it (account-takeover guard).
+            resp = RedirectResponse(
+                f"{app_url}/dashboard/settings?link_error=google_taken",
+                status_code=302,
+            )
+            resp.delete_cookie(_GOOGLE_COOKIE, path="/api/auth/google")
+            return resp
+        if identity:
+            identity.last_login_at = now
+            identity.email = email
+            identity.email_verified = True
+        else:
+            db.add(
+                AuthIdentity(
+                    user_id=UUID(link_user_id),
+                    provider=AuthProvider.GOOGLE.value,
+                    subject=sub,
+                    email=email,
+                    email_verified=True,
+                    display_name=name,
+                    last_login_at=now,
+                )
+            )
+        db.commit()
+        resp = RedirectResponse(
+            f"{app_url}/dashboard/settings?linked=google", status_code=302
+        )
+        resp.delete_cookie(_GOOGLE_COOKIE, path="/api/auth/google")
+        return resp
+
     if identity:
         user = identity.user
         identity.last_login_at = now
@@ -292,6 +344,75 @@ def set_password(
     user.password_hash = hash_password(body.password)
     db.commit()
     return {"ok": True, "login": user.username or user.phone}
+
+
+@router.get("/identities")
+def list_identities(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Login methods linked to the signed-in account, for the Settings
+    'Linked accounts' panel. Telegram/password come from the legacy User
+    columns (still the login source of truth); Google from auth_identities."""
+    g = (
+        db.query(AuthIdentity)
+        .filter(
+            AuthIdentity.user_id == user.id,
+            AuthIdentity.provider == AuthProvider.GOOGLE.value,
+        )
+        .first()
+    )
+    return {
+        "methods": [
+            {
+                "provider": "telegram",
+                "label": "Telegram",
+                "connected": user.telegram_id is not None,
+                "detail": None,
+            },
+            {
+                "provider": "password",
+                "label": "Login va parol",
+                "connected": bool(user.password_hash),
+                "detail": user.username or user.phone or None,
+            },
+            {
+                "provider": "google",
+                "label": "Google",
+                "connected": g is not None,
+                "detail": g.email if g else None,
+            },
+        ]
+    }
+
+
+@router.delete("/identities/google")
+def disconnect_google(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Unlink Google. Refused if it would leave the account with no way in."""
+    g = (
+        db.query(AuthIdentity)
+        .filter(
+            AuthIdentity.user_id == user.id,
+            AuthIdentity.provider == AuthProvider.GOOGLE.value,
+        )
+        .first()
+    )
+    if not g:
+        raise HTTPException(status_code=404, detail="Google ulanmagan")
+    other_methods = (1 if user.telegram_id is not None else 0) + (
+        1 if user.password_hash else 0
+    )
+    if other_methods < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kamida bitta kirish usuli qolishi kerak",
+        )
+    db.delete(g)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/refresh", response_model=TokenPair)
