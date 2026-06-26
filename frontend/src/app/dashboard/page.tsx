@@ -292,7 +292,7 @@ export default function DashboardHome() {
             <button
               data-tour="help"
               onClick={() => setHelpOpen(true)}
-              className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
+              className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap-icon"
               aria-label="Yordam"
             >
               <HelpCircle className="h-5 w-5" strokeWidth={2} />
@@ -300,7 +300,7 @@ export default function DashboardHome() {
             <button
               data-tour="bell"
               onClick={openNotifications}
-              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
+              className="relative grid h-11 w-11 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap-icon"
               aria-label="Bildirishnomalar"
             >
               <Bell className="h-5 w-5" strokeWidth={2} />
@@ -415,7 +415,7 @@ export default function DashboardHome() {
                 e.stopPropagation();
                 callPhone(clients.find((c) => c.id === next.client_id)?.phone);
               }}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50"
+              className="tap-icon grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50"
             >
               <Phone className="h-4.5 w-4.5 text-indigo-600" />
             </span>
