@@ -20,6 +20,7 @@ def business_menu_kb(
     owner_view: bool = False,
     app_url: str = "",
     can_review: bool = False,
+    referral_on: bool = False,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
@@ -28,6 +29,10 @@ def business_menu_kb(
         ],
         [InlineKeyboardButton(text="📞 Kontaktlar", callback_data=f"contacts:{slug}")],
     ]
+    if referral_on:
+        rows.append(
+            [InlineKeyboardButton(text="🎁 Do'stni taklif qilish", callback_data=f"ref:{slug}")]
+        )
     if can_review:
         rows.append(
             [InlineKeyboardButton(text="⭐ Baho berish", callback_data=f"qrev:{slug}")]

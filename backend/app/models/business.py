@@ -44,6 +44,13 @@ class Business(Base):
     # How close to start_time a client may still cancel without it being
     # flagged as a "late" cancel. 0 = no policy / always on time.
     cancel_window_hours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Client referral program ("invite a friend"). When enabled, a friend
+    # who books via a client's referral link gets referral_friend_percent
+    # off their first booking, and the referrer earns a one-time promo
+    # code worth referral_reward_percent. Both 0-100.
+    referral_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    referral_friend_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    referral_reward_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

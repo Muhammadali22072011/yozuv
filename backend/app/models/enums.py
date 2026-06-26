@@ -41,6 +41,14 @@ class PaymentStatus(str, enum.Enum):
     REFUNDED = "REFUNDED"
 
 
+class ReferralStatus(str, enum.Enum):
+    """A client-to-client referral. PENDING once the friend opens the
+    referral link; COMPLETED when that friend makes their first booking."""
+
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+
+
 class SubscriptionPlan(str, enum.Enum):
     TRIAL = "TRIAL"
     MONTHLY = "MONTHLY"

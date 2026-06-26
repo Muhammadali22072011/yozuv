@@ -19,6 +19,7 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Review, Service, User
 from app.models.enums import BusinessCategory
+from app.services import referral_service
 from app.utils.clock import local_today
 from app.utils.htmlsafe import h
 from app.utils.uz_geo import list_tumans, list_viloyats
@@ -45,6 +46,21 @@ def _logo_local_path(logo_url: str) -> Path | None:
 
 router = Router()
 settings = get_settings()
+
+
+def _referral_on(b: Business) -> bool:
+    """Show the 'invite a friend' button only when the program is live."""
+    return bool(getattr(b, "referral_enabled", False) and int(getattr(b, "referral_friend_percent", 0) or 0) > 0)
+
+
+def _get_or_create_client(db: Session, tg_id: int, first_name: str, last_name: str) -> Client:
+    c = db.query(Client).filter(Client.telegram_id == tg_id).first()
+    if c:
+        return c
+    c = Client(telegram_id=tg_id, first_name=first_name or "", last_name=last_name or "")
+    db.add(c)
+    db.flush()
+    return c
 
 
 def _user_can_review(db: Session, business_id, telegram_id: int | None) -> bool:
@@ -85,6 +101,9 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
     db = SessionLocal()
     try:
         arg = (command.args or "").strip() if command else ""
+        if arg.startswith("ref_"):
+            await _open_via_referral(message, db, arg[len("ref_"):])
+            return
         if arg:
             b = db.query(Business).filter(Business.slug == arg, Business.is_active.is_(True)).first()
             if not b:
@@ -115,6 +134,7 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
                     owner_view=is_owner,
                     app_url=settings.public_app_url,
                     can_review=True,
+                    referral_on=_referral_on(b),
                 ),
             )
             return
@@ -424,8 +444,109 @@ async def back_to_menu(cb: CallbackQuery):
                 owner_view=is_owner,
                 app_url=settings.public_app_url,
                 can_review=True,
+                referral_on=_referral_on(b),
             ),
         )
+    finally:
+        db.close()
+    await cb.answer()
+
+
+async def _open_via_referral(message: Message, db: Session, code: str) -> None:
+    """A friend tapped a t.me/<bot>?start=ref_<CODE> link. Register the
+    pending referral (so their first booking is discounted) and drop them on
+    the business menu with a banner about the welcome discount."""
+    rc = referral_service.resolve_referral_code(db, code)
+    if not rc:
+        await message.answer("Havola eskirgan yoki noto'g'ri.")
+        return
+    b = db.query(Business).filter(Business.id == rc.business_id, Business.is_active.is_(True)).first()
+    if not b:
+        await message.answer("Biznes topilmadi.")
+        return
+
+    banner = ""
+    tg_id = message.from_user.id if message.from_user else None
+    if tg_id and b.referral_enabled:
+        friend = _get_or_create_client(
+            db,
+            tg_id,
+            message.from_user.first_name if message.from_user else "",
+            message.from_user.last_name if message.from_user else "",
+        )
+        ref = referral_service.register_pending_referral(db, rc, friend)
+        db.commit()
+        fp = int(b.referral_friend_percent or 0)
+        if ref is not None and ref.status.value == "PENDING" and fp > 0:
+            banner = (
+                f"🎁 <b>Do'st taklifi!</b> Birinchi yozilishingizga "
+                f"<b>-{fp}%</b> chegirma.\n\n"
+            )
+
+    welcome = h(b.welcome_text).strip() if b.welcome_text else ""
+    text = banner + (welcome or f"Xush kelibsiz! <b>{h(b.name)}</b>\n\nQuyidagilardan tanlang:")
+    logo_path = _logo_local_path(b.logo_url)
+    if logo_path is not None:
+        try:
+            await message.answer_photo(FSInputFile(str(logo_path)))
+        except Exception:
+            logger.exception("send logo failed for biz=%s", b.slug)
+    await message.answer(
+        text,
+        reply_markup=business_menu_kb(
+            b.slug,
+            owner_view=False,
+            app_url=settings.public_app_url,
+            can_review=True,
+            referral_on=_referral_on(b),
+        ),
+    )
+
+
+@router.callback_query(F.data.startswith("ref:"))
+async def show_referral(cb: CallbackQuery):
+    """Client tapped 'invite a friend' — show their personal link, stats and
+    any reward codes they've earned."""
+    slug = cb.data.split(":", 1)[1]
+    db = SessionLocal()
+    try:
+        b = db.query(Business).filter(Business.slug == slug, Business.is_active.is_(True)).first()
+        if not b or not _referral_on(b):
+            await cb.answer("Bu xizmat hozircha faol emas.", show_alert=True)
+            return
+        tg_id = cb.from_user.id if cb.from_user else None
+        if not tg_id:
+            await cb.answer()
+            return
+        client = _get_or_create_client(
+            db, tg_id, cb.from_user.first_name or "", cb.from_user.last_name or ""
+        )
+        summary = referral_service.referral_summary_for_client(db, b.id, client.id)
+        db.commit()
+
+        bot_username = (await cb.bot.me()).username
+        link = f"https://t.me/{bot_username}?start=ref_{summary['code']}"
+        fp = int(b.referral_friend_percent or 0)
+        rp = int(b.referral_reward_percent or 0)
+
+        lines = [
+            "🎁 <b>Do'stni taklif qiling!</b>\n",
+            f"Do'stingiz birinchi yozilishga <b>-{fp}%</b> oladi.",
+        ]
+        if rp > 0:
+            lines.append(f"U kelganda — siz keyingi tashrifga <b>-{rp}%</b> sovg'a olasiz.")
+        lines.append(f"\n🔗 Havolangiz:\n{link}\n")
+        lines.append(
+            f"👥 Takliflar: <b>{summary['invited']}</b> · "
+            f"✅ Kelganlar: <b>{summary['completed']}</b>"
+        )
+        if summary["rewards"]:
+            codes = ", ".join(
+                f"<code>{r['code']}</code> (-{r['discount_percent']}%)" for r in summary["rewards"]
+            )
+            lines.append(f"\n🏆 Sovg'a kodlaringiz: {codes}\n(yozilishda kiriting)")
+
+        await safe_edit_text(cb, "\n".join(lines), reply_markup=back_to_menu_kb(slug))
     finally:
         db.close()
     await cb.answer()

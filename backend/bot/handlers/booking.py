@@ -17,7 +17,8 @@ from aiogram.types import (
 )
 
 from app.database import SessionLocal
-from app.models import Business, Client, Service, Staff, User
+from app.models import Business, Client, PromoCode, Service, Staff, User
+from app.models.referral import Referral
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service, waitlist_service
 from app.services.notification_service import send_telegram_message
@@ -710,6 +711,32 @@ def _create_booking_sync(
             except (TypeError, ValueError):
                 owner_tg = None
 
+        # If this booking converted a referral, surface the referrer's reward
+        # so the caller can congratulate them (the booking row may have just
+        # minted a one-time reward promo code for the referrer).
+        referral_reward = None
+        try:
+            ref = (
+                db.query(Referral)
+                .filter(Referral.referred_booking_id == booking.id)
+                .first()
+            )
+            if ref is not None and ref.reward_promo_id is not None:
+                referrer = (
+                    db.query(Client).filter(Client.id == ref.referrer_client_id).first()
+                )
+                reward = (
+                    db.query(PromoCode).filter(PromoCode.id == ref.reward_promo_id).first()
+                )
+                if referrer and referrer.telegram_id and reward:
+                    referral_reward = {
+                        "referrer_telegram_id": int(referrer.telegram_id),
+                        "reward_code": reward.code,
+                        "reward_percent": int(reward.discount_percent or 0),
+                    }
+        except Exception:
+            logger.exception("referral reward lookup failed")
+
         return (
             {
                 "booking_id": str(booking.id),
@@ -721,6 +748,7 @@ def _create_booking_sync(
                 "business_slug": b.slug,
                 "status": str(booking.status),
                 "owner_telegram_id": owner_tg,
+                "referral_reward": referral_reward,
             },
             None,
         )
@@ -784,6 +812,29 @@ async def _notify_owner_of_booking(info: dict, d: date, t_str: str, from_user) -
         )
     except Exception:
         logger.exception("owner notify failed")
+
+
+async def _notify_referrer(info: dict) -> None:
+    """Congratulate the referrer when their invited friend booked, and hand
+    them the reward code to use next time."""
+    rr = info.get("referral_reward")
+    if not rr:
+        return
+    try:
+        await asyncio.to_thread(
+            send_telegram_message,
+            rr["referrer_telegram_id"],
+            (
+                f"🎉 <b>Do'stingiz keldi!</b>\n\n"
+                f"Taklifingiz bo'yicha do'stingiz <b>{info['business_name']}</b> ga yozildi.\n"
+                f"Sizga sovg'a: keyingi tashrifingizga <b>-{rr['reward_percent']}%</b> chegirma.\n\n"
+                f"🎟 Kod: <code>{rr['reward_code']}</code>\n"
+                f"(yozilishda promokod sifatida kiriting)"
+            ),
+            None,
+        )
+    except Exception:
+        logger.exception("referrer notify failed")
 
 
 def _success_text(info: dict, d: date, t_str: str) -> str:
@@ -861,6 +912,7 @@ async def confirm_booking(cb: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     await _notify_owner_of_booking(info, d, t_str, cb.from_user)
+    await _notify_referrer(info)
 
 
 @router.message(F.contact, BookingPhoneStates.waiting_for_phone)
@@ -930,3 +982,4 @@ async def receive_phone_for_booking(message: Message, state: FSMContext):
         reply_markup=back_to_menu_kb(info["business_slug"]),
     )
     await _notify_owner_of_booking(info, d, t_str, message.from_user)
+    await _notify_referrer(info)
