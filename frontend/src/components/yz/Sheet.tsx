@@ -4,7 +4,38 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const SheetRoot = DialogPrimitive.Root;
+// Radix Dialog (react-remove-scroll) toggles `pointer-events: none` on
+// <body> while a modal is open and clears it on close. But when a sheet
+// closes and another opens in the same tick (ClientSheet → NewBookingSheet),
+// or the Root unmounts mid-animation (sheets that `return null` once their
+// data is gone), that cleanup races and leaves <body> stuck unclickable —
+// so EVERY sheet on EVERY page stops responding (incl. its own X button)
+// until a full reload. This wrapper clears the stale style after close,
+// but only once no dialog remains open (so it never breaks a chained open).
+export function SheetRoot({
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return (
+    <DialogPrimitive.Root
+      {...props}
+      onOpenChange={(open) => {
+        onOpenChange?.(open);
+        if (!open && typeof document !== "undefined") {
+          setTimeout(() => {
+            const stillOpen = document.querySelector(
+              '[role="dialog"][data-state="open"]'
+            );
+            if (!stillOpen && document.body.style.pointerEvents === "none") {
+              document.body.style.pointerEvents = "";
+            }
+          }, 0);
+        }
+      }}
+    />
+  );
+}
+
 export const SheetTrigger = DialogPrimitive.Trigger;
 export const SheetPortal = DialogPrimitive.Portal;
 export const SheetClose = DialogPrimitive.Close;
