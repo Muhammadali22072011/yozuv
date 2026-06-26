@@ -164,6 +164,23 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function openGoogle() {
+    const base = apiBase();
+    if (nativeApp) {
+      // APK: open OAuth in a Custom Tab; the backend deep-links back via
+      // yozuv:// (?ret=app), caught by CapacitorDeepLink.
+      const url = `${base}/api/auth/google/start?ret=app`;
+      try {
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url });
+      } catch {
+        window.open(url, "_blank");
+      }
+    } else {
+      window.location.href = `${base}/api/auth/google/start`;
+    }
+  }
+
   return (
     <main
       className="min-h-screen bg-ink-50"
@@ -325,12 +342,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Google — browser only. The APK (Capacitor WebView) needs the
-              Browser plugin to open OAuth in a Custom Tab (Google blocks
-              embedded-WebView OAuth); that's a follow-up. */}
-          {!inTelegram && !nativeApp && (
-            <a
-              href={`${apiBase()}/api/auth/google/start`}
+          {/* Google — browser opens OAuth in-page; the APK (Capacitor) opens
+              it in a Custom Tab (Google blocks embedded-WebView OAuth) and
+              returns via the yozuv:// deep link. Hidden inside Telegram. */}
+          {!inTelegram && (
+            <button
+              type="button"
+              onClick={openGoogle}
               className="btn-soft mt-3 w-full justify-center border border-ink-200 bg-white text-ink-800"
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
@@ -340,7 +358,7 @@ export default function LoginPage() {
                 <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C39.9 36.1 44 30.6 44 23c0-1.3-.1-2.3-.4-2.5z" />
               </svg>
               Google bilan kirish
-            </a>
+            </button>
           )}
 
           {err && (
