@@ -798,10 +798,110 @@ def list_broadcasts(
             "sent_count": int(r.sent_count),
             "failed_count": int(r.failed_count),
             "failed_recipients": r.failed_recipients or [],
+            "status": getattr(r, "status", "sent") or "sent",
+            "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
             "created_at": r.created_at.isoformat() if r.created_at else "",
         }
         for r in rows
     ]
+
+
+def recipients_from_filter_dict(
+    db: Session, filters: dict
+) -> list[tuple[Business, User]]:
+    """Rebuild a broadcast recipient list from a stored filters dict.
+
+    Used by the scheduled-broadcast Celery task, which only has the
+    persisted filters (not the original request body).
+    """
+    only_active = bool(filters.get("only_active", True))
+    bf = BroadcastFilters(
+        category=filters.get("category"),
+        plan=filters.get("plan"),
+        subscription_status=filters.get("subscription_status"),
+        is_active=filters.get("is_active"),
+    )
+    return _select_broadcast_recipients(db, only_active, bf)
+
+
+class BroadcastScheduleBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+    only_active: bool = True
+    filters: BroadcastFilters | None = None
+    scheduled_at: datetime
+
+
+@router.post("/broadcast/schedule", status_code=201)
+def schedule_broadcast(
+    body: BroadcastScheduleBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    """Queue a broadcast for a future time (sent by the beat task)."""
+    when = body.scheduled_at
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    if when <= datetime.now(timezone.utc):
+        raise HTTPException(400, "scheduled_at must be in the future")
+    # Validate filters now so the admin gets immediate feedback rather
+    # than a silent failure when the task runs.
+    recipients_from_filter_dict(
+        db,
+        {
+            "only_active": body.only_active,
+            **(body.filters.model_dump(exclude_none=True) if body.filters else {}),
+        },
+    )
+    msg = BroadcastMessage(
+        sent_by_telegram_id=int(admin.telegram_id),
+        sent_by_name=f"{admin.first_name or ''} {admin.last_name or ''}".strip()
+        or (admin.username or ""),
+        text=body.text,
+        filters={
+            "only_active": body.only_active,
+            **(body.filters.model_dump(exclude_none=True) if body.filters else {}),
+        },
+        sent_count=0,
+        failed_count=0,
+        failed_recipients=[],
+        status="scheduled",
+        scheduled_at=when,
+    )
+    db.add(msg)
+    log_admin_action(
+        db,
+        admin,
+        "broadcast.schedule",
+        "BroadcastMessage",
+        msg.id,
+        {"scheduled_at": when.isoformat(), "preview": body.text[:120]},
+    )
+    db.commit()
+    db.refresh(msg)
+    return {
+        "id": str(msg.id),
+        "status": msg.status,
+        "scheduled_at": msg.scheduled_at.isoformat() if msg.scheduled_at else None,
+    }
+
+
+@router.post("/broadcasts/{broadcast_id}/cancel")
+def cancel_scheduled_broadcast(
+    broadcast_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    msg = db.query(BroadcastMessage).filter(BroadcastMessage.id == broadcast_id).first()
+    if not msg:
+        raise HTTPException(404, "Broadcast not found")
+    if getattr(msg, "status", "sent") != "scheduled":
+        raise HTTPException(409, "Only scheduled broadcasts can be cancelled")
+    msg.status = "cancelled"
+    log_admin_action(
+        db, admin, "broadcast.cancel", "BroadcastMessage", msg.id, {}
+    )
+    db.commit()
+    return {"id": str(msg.id), "status": msg.status}
 
 
 @router.post("/broadcasts/{broadcast_id}/retry")

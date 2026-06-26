@@ -251,6 +251,8 @@ type BroadcastHistory = {
   sent_count: number;
   failed_count: number;
   failed_recipients: number[];
+  status: string;
+  scheduled_at: string | null;
   created_at: string;
 };
 
@@ -278,6 +280,8 @@ export default function AdminPage() {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [card, setCard] = useState<CardInfo>({ card_number: "", card_holder: "", payment_comment: "" });
   const [broadcastText, setBroadcastText] = useState("");
+  const [broadcastSchedule, setBroadcastSchedule] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [backupBusy, setBackupBusy] = useState(false);
   const [savingCard, setSavingCard] = useState(false);
@@ -916,6 +920,75 @@ export default function AdminPage() {
     } catch (e) {
       toast((e as Error).message || "Xatolik");
     }
+  }
+
+  function buildBroadcastFilters() {
+    const filters: Record<string, string> = {};
+    if (broadcastFilters.category) filters.category = broadcastFilters.category;
+    if (broadcastFilters.plan) filters.plan = broadcastFilters.plan;
+    if (broadcastFilters.subscription_status)
+      filters.subscription_status = broadcastFilters.subscription_status;
+    return filters;
+  }
+
+  async function scheduleBroadcast() {
+    if (broadcastText.trim().length < 3) {
+      toast("Kamida 3 ta belgi");
+      return;
+    }
+    if (!broadcastSchedule) {
+      toast("Vaqtni tanlang");
+      return;
+    }
+    const when = new Date(broadcastSchedule);
+    if (isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      toast("Kelajakdagi vaqtni tanlang");
+      return;
+    }
+    const filters = buildBroadcastFilters();
+    setScheduling(true);
+    try {
+      await apiFetch("/api/admin/broadcast/schedule", {
+        method: "POST",
+        body: JSON.stringify({
+          text: broadcastText,
+          only_active: true,
+          filters: Object.keys(filters).length ? filters : null,
+          scheduled_at: when.toISOString(),
+        }),
+      });
+      toast("Rejalashtirildi");
+      setBroadcastText("");
+      setBroadcastSchedule("");
+      setBroadcastFilters(EMPTY_BROADCAST_FILTERS);
+      await loadBroadcastHistory();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function cancelBroadcast(id: string) {
+    if (!window.confirm("Rejalashtirilgan xabarni bekor qilish?")) return;
+    try {
+      await apiFetch(`/api/admin/broadcasts/${id}/cancel`, { method: "POST" });
+      toast("Bekor qilindi");
+      await loadBroadcastHistory();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    }
+  }
+
+  function useAsTemplate(h: BroadcastHistory) {
+    setBroadcastText(h.text);
+    setBroadcastFilters({
+      category: String(h.filters.category || ""),
+      plan: String(h.filters.plan || ""),
+      subscription_status: String(h.filters.subscription_status || ""),
+    });
+    toast("Matn nusxalandi");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function retryBroadcast(id: string) {
@@ -1964,8 +2037,29 @@ export default function AdminPage() {
                 className="btn-primary mt-3 w-full justify-center"
               >
                 <Megaphone className="mr-2 h-4 w-4" />
-                Yuborish
+                Hozir yuborish
               </button>
+              <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink-100 pt-3">
+                <div className="min-w-[180px] flex-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+                    Yoki rejalashtirish
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={broadcastSchedule}
+                    onChange={(e) => setBroadcastSchedule(e.target.value)}
+                    className="yz-input mt-1 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  onClick={scheduleBroadcast}
+                  disabled={scheduling || !broadcastSchedule}
+                  className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-4 py-2.5 text-sm font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                >
+                  <Clock className="h-4 w-4" strokeWidth={2.6} />
+                  {scheduling ? "..." : "Rejalashtirish"}
+                </button>
+              </div>
             </div>
 
             <div>
@@ -1982,13 +2076,26 @@ export default function AdminPage() {
                       <span className="font-mono text-[11px] text-ink-400">
                         {h.created_at.replace("T", " ").slice(0, 16)}
                       </span>
-                      <span className="rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-extrabold text-[#0E9577]">
-                        ✓ {h.sent_count}
-                      </span>
-                      {h.failed_count > 0 && (
-                        <span className="rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold text-[#C93A2A]">
-                          ✕ {h.failed_count}
+                      {h.status === "scheduled" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3DA] px-2 py-0.5 text-[10px] font-extrabold text-[#A8751A]">
+                          <Clock className="h-3 w-3" strokeWidth={2.8} />
+                          {h.scheduled_at?.replace("T", " ").slice(0, 16) || "rejada"}
                         </span>
+                      ) : h.status === "cancelled" ? (
+                        <span className="rounded-full bg-ink-200 px-2 py-0.5 text-[10px] font-extrabold text-ink-600">
+                          BEKOR
+                        </span>
+                      ) : (
+                        <>
+                          <span className="rounded-full bg-[#E6FAF3] px-2 py-0.5 text-[10px] font-extrabold text-[#0E9577]">
+                            ✓ {h.sent_count}
+                          </span>
+                          {h.failed_count > 0 && (
+                            <span className="rounded-full bg-[#FFE7E3] px-2 py-0.5 text-[10px] font-extrabold text-[#C93A2A]">
+                              ✕ {h.failed_count}
+                            </span>
+                          )}
+                        </>
                       )}
                       <span className="ml-auto text-[11px] text-ink-500">
                         {h.sent_by_name || h.sent_by_telegram_id}
@@ -2011,18 +2118,36 @@ export default function AdminPage() {
                           ))}
                       </div>
                     )}
-                    {h.failed_count > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
                       <button
-                        onClick={() => retryBroadcast(h.id)}
-                        disabled={retryingId === h.id}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                        onClick={() => useAsTemplate(h)}
+                        className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200"
                       >
-                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
-                        {retryingId === h.id
-                          ? "..."
-                          : `Tushib qolganlarga (${h.failed_count})`}
+                        <ClipboardList className="h-3.5 w-3.5" strokeWidth={2.6} />
+                        Shablon
                       </button>
-                    )}
+                      {h.status === "scheduled" && (
+                        <button
+                          onClick={() => cancelBroadcast(h.id)}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-[#FFE7E3] px-3 py-1.5 text-[12px] font-bold text-[#C93A2A] tap hover:bg-[#FCD7CE]"
+                        >
+                          <X className="h-3.5 w-3.5" strokeWidth={2.6} />
+                          Bekor qilish
+                        </button>
+                      )}
+                      {h.status !== "scheduled" && h.failed_count > 0 && (
+                        <button
+                          onClick={() => retryBroadcast(h.id)}
+                          disabled={retryingId === h.id}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200 disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.6} />
+                          {retryingId === h.id
+                            ? "..."
+                            : `Tushib qolganlarga (${h.failed_count})`}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2261,6 +2386,8 @@ export default function AdminPage() {
                 <option value="admin.add">admin.add</option>
                 <option value="admin.remove">admin.remove</option>
                 <option value="broadcast.send">broadcast.send</option>
+                <option value="broadcast.schedule">broadcast.schedule</option>
+                <option value="broadcast.cancel">broadcast.cancel</option>
                 <option value="backup.import">backup.import</option>
               </select>
               <button
