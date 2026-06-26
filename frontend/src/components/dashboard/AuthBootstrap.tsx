@@ -65,29 +65,103 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       return true;
     }
 
-    async function tokenIsValid(token: string): Promise<boolean> {
-      const res = await fetch(`${apiBase()}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "ngrok-skip-browser-warning": "1",
-        },
-        credentials: "omit",
-      });
-      return res.ok;
+    type Me = { has_password?: boolean };
+    // ok → got /me. auth=true → token rejected (401/403). auth=false →
+    // couldn't reach the server (network / 5xx), i.e. transient.
+    type MeResult = { ok: true; me: Me } | { ok: false; auth: boolean };
+
+    async function fetchMe(token: string): Promise<MeResult> {
+      try {
+        const res = await fetch(`${apiBase()}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "ngrok-skip-browser-warning": "1",
+          },
+          credentials: "omit",
+        });
+        if (res.ok) return { ok: true, me: (await res.json()) as Me };
+        return { ok: false, auth: res.status === 401 || res.status === 403 };
+      } catch {
+        return { ok: false, auth: false };
+      }
+    }
+
+    // Mint a fresh access token from the stored refresh token. "ok" stores the
+    // new pair; "invalid" means the refresh token itself is rejected (real
+    // logout); "error" means the server was unreachable (keep the session).
+    async function refreshTokens(): Promise<"ok" | "invalid" | "error"> {
+      const refresh =
+        typeof window !== "undefined" ? localStorage.getItem("yozuv_refresh") : null;
+      if (!refresh) return "invalid";
+      try {
+        const res = await fetch(`${apiBase()}/api/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "1",
+          },
+          body: JSON.stringify({ refresh_token: refresh }),
+          credentials: "omit",
+        });
+        if (res.ok) {
+          const t = (await res.json()) as { access_token: string; refresh_token: string };
+          localStorage.setItem("yozuv_access", t.access_token);
+          localStorage.setItem("yozuv_refresh", t.refresh_token);
+          return "ok";
+        }
+        return res.status === 401 || res.status === 403 ? "invalid" : "error";
+      } catch {
+        return "error";
+      }
+    }
+
+    // Forced login+password setup: an account that has authenticated but has
+    // no password yet can't enter the dashboard. Returns true when it sent
+    // the browser to /auth/setup, so the caller stops. `has_password` is only
+    // gated on an explicit `false`, so an older backend (field absent) is a
+    // no-op rather than a redirect loop.
+    function gateOnPasswordSetup(me: Me): boolean {
+      if (me.has_password === false) {
+        window.location.replace("/auth/setup");
+        return true;
+      }
+      return false;
     }
 
     async function bootstrap() {
       const existing =
         typeof window !== "undefined" ? localStorage.getItem("yozuv_access") : null;
       if (existing) {
-        try {
-          if (await tokenIsValid(existing)) {
-            if (!cancelled) setState("ready");
-            return;
+        let result = await fetchMe(existing);
+
+        // Access token rejected → mint a new one from the refresh token before
+        // discarding the session. Browser/native users come back after the
+        // ~60-min access token expired while the refresh token is still valid;
+        // without this they'd be bounced to /auth/login on every dashboard load.
+        if (!result.ok && result.auth) {
+          const rt = await refreshTokens();
+          if (rt === "ok") {
+            result = await fetchMe(localStorage.getItem("yozuv_access") || "");
           }
-        } catch {
-          // fallthrough to re-auth
         }
+
+        if (result.ok) {
+          if (gateOnPasswordSetup(result.me)) return;
+          if (!cancelled) setState("ready");
+          return;
+        }
+
+        // Couldn't reach the server — keep the (possibly valid) tokens and let
+        // the user retry instead of nuking a recoverable session.
+        if (!result.auth) {
+          if (!cancelled) {
+            setError("Server bilan bog'lanib bo'lmadi. Qayta urinib ko'ring.");
+            setState("failed");
+          }
+          return;
+        }
+
+        // Definitively unauthenticated — drop tokens and fall through to re-auth.
         localStorage.removeItem("yozuv_access");
         localStorage.removeItem("yozuv_refresh");
       }
@@ -122,6 +196,11 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
         } catch {
           // noop
         }
+        // Fresh Telegram sign-in: gate on the password-setup step before
+        // letting the dashboard render.
+        const fresh = localStorage.getItem("yozuv_access");
+        const meRes = fresh ? await fetchMe(fresh) : null;
+        if (meRes && meRes.ok && gateOnPasswordSetup(meRes.me)) return;
         if (!cancelled) setState("ready");
       } catch (e) {
         if (!cancelled) {

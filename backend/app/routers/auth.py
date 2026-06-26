@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from jose import jwt
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -21,11 +22,14 @@ from app.schemas.auth import (
 from app.deps import get_current_user
 from app.utils.auth import (
     ALGORITHM,
+    canon_phone,
+    canon_username,
     create_access_token,
     create_refresh_token,
     decode_token,
     get_user_from_token,
     hash_password,
+    looks_like_phone,
     verify_password,
 )
 from app.utils.google_oauth import (
@@ -47,6 +51,13 @@ _auth_rate = rate_limit("auth_tg", limit=30, window_seconds=60)
 # Password login is a brute-force target — keep the window tight.
 _login_rate = rate_limit("auth_login", limit=10, window_seconds=60)
 _refresh_rate = rate_limit("auth_refresh", limit=60, window_seconds=60)
+# set-password is authenticated but its 409/200 leaks whether a login is taken
+# (enumeration oracle) — cap probing.
+_setpw_rate = rate_limit("auth_setpw", limit=20, window_seconds=60)
+
+# E.164 allows at most 15 digits; cap a phone-shaped login here so it can't
+# overflow the String(32) phone column (which would 500 on Postgres).
+_MAX_PHONE_DIGITS = 15
 
 
 @router.post("/telegram", response_model=TokenPair)
@@ -289,11 +300,28 @@ def login(
     Used by the native app and the web app outside Telegram. Existing
     Telegram users enable this by setting a password via /set-password.
     """
-    ident = body.login.strip().lstrip("@").lower()
+    raw = body.login.strip()
+    ident = canon_username(raw)
+    # Match the typed login against username (case-insensitive) or phone.
+    # When it looks like a phone, also match the canonical form so spacing
+    # and a leading '+' don't matter ("+998 90 …" == "+998901234567").
+    conds = []
+    if ident:
+        # Guard on non-empty: a blank/"@" login must not match the empty-string
+        # username/phone that password-less accounts carry by default.
+        conds.append(func.lower(User.username) == ident)
+        conds.append(func.lower(User.phone) == ident)
+    if looks_like_phone(raw):
+        conds.append(User.phone == canon_phone(raw))
+    if not conds:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Login yoki parol noto'g'ri",
+        )
     user = (
         db.query(User)
         .filter(
-            or_(func.lower(User.username) == ident, func.lower(User.phone) == ident),
+            or_(*conds),
             User.password_hash.isnot(None),
         )
         .first()
@@ -317,16 +345,45 @@ def set_password(
     body: SetPasswordRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    _: None = Depends(_setpw_rate),
 ):
     """Set/replace the password for the signed-in account so it can log
-    in standalone (outside Telegram). Optionally assigns a username as
-    the login if the account doesn't already have one."""
-    if body.login:
-        ident = body.login.strip().lstrip("@").lower()
-        if ident and not user.username:
-            # Reject if another account already claims this login as its
-            # username or phone (case-insensitive) — otherwise password
-            # login would resolve ambiguously between the two accounts.
+    in standalone (outside Telegram).
+
+    The chosen `login` may be a username or a phone number — it lands in
+    the matching column (a phone never gets stored as a username). A login is
+    only *claimed* when the matching column is still empty: an existing
+    username/phone is never overwritten, so a handle can't be freed and
+    re-grabbed. This is the endpoint behind the forced /auth/setup screen.
+    """
+    raw = (body.login or "").strip()
+    if raw and looks_like_phone(raw):
+        value = canon_phone(raw)
+        if len(value) > _MAX_PHONE_DIGITS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Telefon raqami noto'g'ri",
+            )
+        # Only claim an unused phone; never clobber a login already on file.
+        if not user.phone:
+            clash = (
+                db.query(User.id)
+                .filter(
+                    User.id != user.id,
+                    or_(User.phone == value, func.lower(User.username) == value),
+                )
+                .first()
+            )
+            if clash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Bu raqam allaqachon band",
+                )
+            user.phone = value
+    elif raw and canon_username(raw):
+        ident = canon_username(raw)
+        # Only claim an unused username; never clobber an existing one.
+        if not user.username:
             clash = (
                 db.query(User.id)
                 .filter(
@@ -341,8 +398,25 @@ def set_password(
                     detail="Bu login allaqachon band",
                 )
             user.username = ident
+    elif not user.username and not user.phone:
+        # No usable login supplied (blank / only "@") and none on file — the
+        # account could never log in standalone. Force a real one.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Login kiriting",
+        )
     user.password_hash = hash_password(body.password)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request claimed the same username/phone between our
+        # clash check and commit — the DB unique indexes are the real guard.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu login allaqachon band",
+        ) from None
+    db.refresh(user)
     return {"ok": True, "login": user.username or user.phone}
 
 
@@ -451,4 +525,5 @@ def me(user: User = Depends(get_current_user)):
         last_name=user.last_name,
         phone=user.phone,
         is_admin=is_admin_user(user),
+        has_password=user.password_hash is not None,
     )

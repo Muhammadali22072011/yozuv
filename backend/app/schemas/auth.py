@@ -15,8 +15,9 @@ class LoginRequest(BaseModel):
 
 class SetPasswordRequest(BaseModel):
     password: str = Field(min_length=6, max_length=128)
-    # Optional username to use as the login. Only applied when the
-    # account has no username yet — never clobbers an existing one.
+    # Optional login — a username or a phone number — claimed as the standalone
+    # login. Only applied when the matching column (username/phone) is still
+    # empty; an existing login is never clobbered.
     login: str | None = Field(default=None, max_length=64)
 
 
@@ -39,6 +40,9 @@ class UserMe(BaseModel):
     last_name: str
     phone: str
     is_admin: bool = False
+    # True once a password is set — the forced login+password setup is done.
+    # The frontend gates the dashboard on this: False ⇒ send to /auth/setup.
+    has_password: bool = False
 
     class Config:
         from_attributes = True
