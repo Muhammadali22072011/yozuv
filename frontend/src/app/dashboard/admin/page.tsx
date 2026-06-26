@@ -12,6 +12,8 @@ import {
   CreditCard,
   Database,
   Download,
+  Gauge,
+  Gift,
   Megaphone,
   Pencil,
   Plus,
@@ -136,6 +138,7 @@ type Tab =
   | "businesses"
   | "payments"
   | "reviews"
+  | "system"
   | "broadcast"
   | "settings"
   | "backup"
@@ -146,6 +149,7 @@ const TABS: { k: Tab; label: string; icon: typeof Shield }[] = [
   { k: "businesses", label: "Bizneslar", icon: Building2 },
   { k: "payments", label: "To‘lovlar", icon: Wallet },
   { k: "reviews", label: "Sharhlar", icon: Star },
+  { k: "system", label: "Tizim", icon: Gauge },
   { k: "settings", label: "Karta", icon: CreditCard },
   { k: "broadcast", label: "Xabar", icon: Megaphone },
   { k: "backup", label: "Backup", icon: Database },
@@ -195,6 +199,22 @@ type Activity = {
 };
 
 type ActivityModalState = { businessName: string; data: Activity | null };
+
+type PlatformStats = {
+  referrals_total: number;
+  referrals_completed: number;
+  referral_conversion_pct: number;
+  waitlist_total: number;
+  waitlist_waiting: number;
+  promo_total: number;
+  promo_active: number;
+  promo_uses: number;
+  bookings_total: number;
+  clients_total: number;
+  reviews_total: number;
+  reviews_avg: number | null;
+  last_backup: { name: string; size_kb: number; modified_at: string } | null;
+};
 
 type AuditEntry = {
   id: string;
@@ -269,6 +289,7 @@ export default function AdminPage() {
   const [bizSub, setBizSub] = useState("");
   const [exportingPayments, setExportingPayments] = useState(false);
   const [activity, setActivity] = useState<ActivityModalState | null>(null);
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
 
   useEffect(() => {
     apiFetch<{ is_admin?: boolean }>("/api/auth/me")
@@ -378,6 +399,14 @@ export default function AdminPage() {
     }
   }, [toast, reviewsMaxRating]);
 
+  const loadPlatformStats = useCallback(async () => {
+    try {
+      setPlatformStats(await apiFetch<PlatformStats>("/api/admin/platform-stats"));
+    } catch (e) {
+      toast(`Tizim yuklanmadi: ${(e as Error).message?.slice(0, 80) || "xatolik"}`);
+    }
+  }, [toast]);
+
   const loadBroadcastHistory = useCallback(async () => {
     try {
       setBroadcastHistory(
@@ -417,6 +446,11 @@ export default function AdminPage() {
     if (!isAdmin || tab !== "reviews") return;
     loadReviews();
   }, [isAdmin, tab, loadReviews]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "system") return;
+    loadPlatformStats();
+  }, [isAdmin, tab, loadPlatformStats]);
 
   useEffect(() => {
     if (!isAdmin || tab !== "broadcast") return;
@@ -1524,6 +1558,123 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {tab === "system" && (
+          <div className="space-y-4">
+            {!platformStats ? (
+              <YzLoader />
+            ) : (
+              <>
+                <div>
+                  <div className="eyebrow mb-2 px-1">Tavsiya (referral)</div>
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    <StatCard
+                      label="Takliflar"
+                      value={platformStats.referrals_total}
+                      tone="indigo"
+                      icon={Gift}
+                    />
+                    <StatCard
+                      label="Yakunlangan"
+                      value={platformStats.referrals_completed}
+                      tone="mint"
+                      icon={Check}
+                    />
+                    <StatCard
+                      label="Konversiya"
+                      value={`${platformStats.referral_conversion_pct}%`}
+                      tone="lemon"
+                      icon={TrendingUp}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="eyebrow mb-2 px-1">Promo-kodlar</div>
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    <StatCard
+                      label="Jami"
+                      value={platformStats.promo_total}
+                      sub={`Faol: ${platformStats.promo_active}`}
+                      tone="indigo"
+                      icon={Sparkles}
+                    />
+                    <StatCard
+                      label="Ishlatilgan"
+                      value={platformStats.promo_uses}
+                      tone="mint"
+                      icon={Check}
+                    />
+                    <StatCard
+                      label="Navbat (waitlist)"
+                      value={platformStats.waitlist_waiting}
+                      sub={`Jami: ${platformStats.waitlist_total}`}
+                      tone="coral"
+                      icon={Clock}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="eyebrow mb-2 px-1">Umumiy</div>
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    <StatCard
+                      label="Bronlar"
+                      value={platformStats.bookings_total}
+                      tone="indigo"
+                      icon={ActivityIcon}
+                    />
+                    <StatCard
+                      label="Mijozlar"
+                      value={platformStats.clients_total}
+                      tone="mint"
+                      icon={Users}
+                    />
+                    <StatCard
+                      label="Sharhlar"
+                      value={platformStats.reviews_total}
+                      sub={
+                        platformStats.reviews_avg != null
+                          ? `O‘rtacha: ${platformStats.reviews_avg}★`
+                          : undefined
+                      }
+                      tone="lemon"
+                      icon={Star}
+                    />
+                  </div>
+                </div>
+
+                <div className="card-soft p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#E6FAF3] text-[#0E9577]">
+                      <Database className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-display text-base font-extrabold text-ink-900">
+                        Oxirgi avto-nusxa
+                      </h3>
+                      {platformStats.last_backup ? (
+                        <div className="mt-1 text-xs text-ink-500">
+                          <span className="font-mono">{platformStats.last_backup.name}</span>
+                          <span className="mx-1 text-ink-300">·</span>
+                          {platformStats.last_backup.size_kb} KB
+                          <span className="mx-1 text-ink-300">·</span>
+                          {platformStats.last_backup.modified_at
+                            .replace("T", " ")
+                            .slice(0, 16)}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-ink-400">
+                          Avto-nusxa yo‘q (import qilinmagan)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 

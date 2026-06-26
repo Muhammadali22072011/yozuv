@@ -26,11 +26,15 @@ from app.models import (
     PaymentRecordStatus,
     PaymentStatus,
     PaymentTransaction,
+    PromoCode,
+    Referral,
+    ReferralStatus,
     Review,
     Subscription,
     SubscriptionPlan,
     SubscriptionStatus,
     User,
+    WaitlistEntry,
 )
 import httpx
 
@@ -1410,4 +1414,82 @@ def business_activity(
         "revenue_total_uzs": int(revenue_total),
         "reviews_count": int(reviews_count),
         "reviews_avg": round(float(reviews_avg), 1) if reviews_avg is not None else None,
+    }
+
+
+@router.get("/platform-stats")
+def platform_stats(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    """Platform-wide engagement + system health for the admin overview.
+
+    Aggregates the growth-loop features (referrals, waitlist, promo
+    codes) that otherwise have no admin surface, plus the latest
+    auto-backup snapshot written before the last destructive import.
+    """
+    referrals_total = db.query(func.count(Referral.id)).scalar() or 0
+    referrals_completed = (
+        db.query(func.count(Referral.id))
+        .filter(Referral.status == ReferralStatus.COMPLETED)
+        .scalar()
+        or 0
+    )
+    referral_conv = (
+        round(100 * referrals_completed / referrals_total) if referrals_total else 0
+    )
+
+    waitlist_total = db.query(func.count(WaitlistEntry.id)).scalar() or 0
+    waitlist_waiting = (
+        db.query(func.count(WaitlistEntry.id))
+        .filter(WaitlistEntry.notified_at.is_(None))
+        .scalar()
+        or 0
+    )
+
+    promo_total = db.query(func.count(PromoCode.id)).scalar() or 0
+    promo_active = (
+        db.query(func.count(PromoCode.id))
+        .filter(PromoCode.is_active.is_(True))
+        .scalar()
+        or 0
+    )
+    promo_uses = db.query(func.coalesce(func.sum(PromoCode.uses_count), 0)).scalar() or 0
+
+    bookings_total = db.query(func.count(Booking.id)).scalar() or 0
+    clients_total = db.query(func.count(Client.id)).scalar() or 0
+    reviews_total = db.query(func.count(Review.id)).scalar() or 0
+    reviews_avg = db.query(func.avg(Review.rating)).scalar()
+
+    # Latest auto-snapshot written by backup_import (best-effort).
+    last_backup: dict | None = None
+    try:
+        from app.config import get_settings as _get_settings
+
+        backups_dir = Path(_get_settings().uploads_dir) / "backups"
+        if backups_dir.is_dir():
+            snaps = sorted(backups_dir.glob("auto-*.json"), reverse=True)
+            if snaps:
+                st = snaps[0].stat()
+                last_backup = {
+                    "name": snaps[0].name,
+                    "size_kb": round(st.st_size / 1024, 1),
+                    "modified_at": datetime.fromtimestamp(
+                        st.st_mtime, tz=timezone.utc
+                    ).isoformat(),
+                }
+    except Exception:
+        last_backup = None
+
+    return {
+        "referrals_total": int(referrals_total),
+        "referrals_completed": int(referrals_completed),
+        "referral_conversion_pct": referral_conv,
+        "waitlist_total": int(waitlist_total),
+        "waitlist_waiting": int(waitlist_waiting),
+        "promo_total": int(promo_total),
+        "promo_active": int(promo_active),
+        "promo_uses": int(promo_uses),
+        "bookings_total": int(bookings_total),
+        "clients_total": int(clients_total),
+        "reviews_total": int(reviews_total),
+        "reviews_avg": round(float(reviews_avg), 1) if reviews_avg is not None else None,
+        "last_backup": last_backup,
     }
