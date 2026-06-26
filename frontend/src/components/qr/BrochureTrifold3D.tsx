@@ -285,6 +285,7 @@ export default function BrochureTrifold3D({
   const [spin, setSpin] = useState(-14);
   const [back, setBack] = useState(false);
   const [flipping, setFlipping] = useState(false);
+  const [flipScale, setFlipScale] = useState(1);
 
   const handle = `t.me/${botUsername}?start=${slug || ""}`;
   const bizName = name || "Yozuv";
@@ -296,8 +297,11 @@ export default function BrochureTrifold3D({
 
   const t = fold / 100;
   const triStyle: React.CSSProperties & Record<string, string | number> = {
-    transform: `rotateX(7deg) rotateY(${spin + (back ? 180 : 0)}deg)`,
-    transition: flipping ? "transform .5s cubic-bezier(.4,0,.2,1)" : "transform .15s linear",
+    // Flip = collapse edge-on (scaleX→0), swap content, expand. No 180°
+    // rotation — that would turn the panels' hidden backface to the viewer
+    // and the back would render blank.
+    transform: `rotateX(7deg) rotateY(${spin}deg) scaleX(${flipScale})`,
+    transition: flipping ? "transform .25s ease" : "transform .15s linear",
     ["--fa"]: `${(t * 72).toFixed(2)}deg`,
     ["--sh"]: (0.08 + t * 0.5).toFixed(3),
   };
@@ -305,8 +309,10 @@ export default function BrochureTrifold3D({
   function flip() {
     if (flipping) return;
     setFlipping(true);
-    window.setTimeout(() => setBack((b) => !b), 250); // swap at the midpoint
-    window.setTimeout(() => setFlipping(false), 520);
+    setFlipScale(0); // collapse to an edge
+    window.setTimeout(() => setBack((b) => !b), 260); // swap content while collapsed
+    window.setTimeout(() => setFlipScale(1), 280); // expand the new side
+    window.setTimeout(() => setFlipping(false), 560);
   }
 
   const logoImg = (
