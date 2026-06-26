@@ -1,6 +1,7 @@
 from datetime import date as _date
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_owned_business
 from app.models import Booking, BookingStatus, Business, Client, ClientBlock
+from app.services.notification_service import send_telegram_message_async
+from app.utils.htmlsafe import h
 
 router = APIRouter(prefix="/business/me", tags=["clients"])
 
@@ -244,3 +247,70 @@ def list_blocked(
         }
         for block, c in rows
     ]
+
+
+class BroadcastBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post("/broadcast")
+async def broadcast_to_clients(
+    body: BroadcastBody,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner sends one Telegram message to all of their own clients (distinct
+    telegram_ids that have booked here). Blocked clients are excluded; the
+    text is HTML-escaped since notification_service sends parse_mode=HTML."""
+    blocked = {
+        row[0]
+        for row in db.query(ClientBlock.client_id).filter(
+            ClientBlock.business_id == business.id
+        )
+    }
+    rows = (
+        db.query(Client.id, Client.telegram_id)
+        .join(Booking, Booking.client_id == Client.id)
+        .filter(
+            Booking.business_id == business.id,
+            Client.telegram_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    targets: list[int] = []
+    seen: set[int] = set()
+    for cid, tg in rows:
+        if cid in blocked or not tg:
+            continue
+        tg_int = int(tg)
+        if tg_int in seen:
+            continue
+        seen.add(tg_int)
+        targets.append(tg_int)
+
+    text = f"<b>{h(business.name)}</b>\n\n{h(body.text.strip())}"
+
+    import asyncio
+
+    sem = asyncio.Semaphore(20)
+    sent = 0
+    failed = 0
+    async with httpx.AsyncClient() as client:
+
+        async def _one(tg: int) -> bool:
+            async with sem:
+                try:
+                    await send_telegram_message_async(tg, text, client=client)
+                    return True
+                except Exception:
+                    return False
+
+        results = await asyncio.gather(*[_one(t) for t in targets])
+    for ok in results:
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+
+    return {"recipients": len(targets), "sent": sent, "failed": failed}

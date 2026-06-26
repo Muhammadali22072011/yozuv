@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, UserPlus, Users } from "lucide-react";
+import { Megaphone, Search, Send, UserPlus, Users } from "lucide-react";
 import {
   Avatar,
   ClientSheet,
@@ -9,8 +9,16 @@ import {
   ScreenHeader,
   TourFloat,
   fmtSum,
+  useToast,
 } from "@/components/yz";
 import type { ClientDetail, TourStep } from "@/components/yz";
+import {
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetRoot,
+} from "@/components/yz/Sheet";
 import { Chip } from "@/components/yz/Chip";
 import { apiFetch } from "@/lib/api";
 import { usePageTour } from "@/lib/use-page-tour";
@@ -53,7 +61,30 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<ClientDetail | null>(null);
   const [newBookingFor, setNewBookingFor] = useState<string | null>(null);
+  const [bcOpen, setBcOpen] = useState(false);
+  const [bcText, setBcText] = useState("");
+  const [bcBusy, setBcBusy] = useState(false);
+  const toast = useToast();
   const tour = usePageTour("clients_v1", CLIENTS_TOUR);
+
+  async function sendBroadcast() {
+    const text = bcText.trim();
+    if (!text || bcBusy) return;
+    setBcBusy(true);
+    try {
+      const r = await apiFetch<{ recipients: number; sent: number; failed: number }>(
+        "/api/business/me/broadcast",
+        { method: "POST", body: JSON.stringify({ text }) },
+      );
+      toast(`${r.sent}/${r.recipients} mijozga yuborildi`);
+      setBcText("");
+      setBcOpen(false);
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    } finally {
+      setBcBusy(false);
+    }
+  }
 
   useEffect(() => {
     apiFetch<Row[]>("/api/business/me/clients")
@@ -83,7 +114,21 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <ScreenHeader title="Mijozlar" subtitle={`${rows.length} ta faol mijoz`} />
+      <ScreenHeader
+        title="Mijozlar"
+        subtitle={`${rows.length} ta faol mijoz`}
+        right={
+          <button
+            onClick={() => setBcOpen(true)}
+            disabled={rows.length === 0}
+            aria-label="Mijozlarga xabar"
+            title="Mijozlarga xabar"
+            className="grid h-10 w-10 place-items-center rounded-2xl bg-ink-900 text-white tap disabled:opacity-40"
+          >
+            <Megaphone className="h-5 w-5" strokeWidth={2.2} />
+          </button>
+        }
+      />
 
       <div className="mt-2 px-4 md:px-0">
         <div
@@ -196,6 +241,38 @@ export default function ClientsPage() {
         defaultClientId={newBookingFor || undefined}
         onCreated={() => setNewBookingFor(null)}
       />
+
+      <SheetRoot open={bcOpen} onOpenChange={setBcOpen}>
+        <SheetContent>
+          <SheetHeader title="Mijozlarga xabar" />
+          <SheetBody>
+            <p className="mb-3 text-xs text-ink-500">
+              Hamma mijozlaringizga Telegram orqali bitta xabar yuboriladi.
+            </p>
+            <textarea
+              value={bcText}
+              onChange={(e) => setBcText(e.target.value)}
+              rows={5}
+              maxLength={2000}
+              placeholder="Masalan: Ertaga dam olish kuni — yopiqmiz. Dushanba kutamiz!"
+              className="yz-input w-full resize-none text-sm"
+            />
+            <div className="mt-1.5 text-right text-[11px] text-ink-400">
+              {bcText.length}/2000
+            </div>
+          </SheetBody>
+          <SheetFooter>
+            <button
+              onClick={sendBroadcast}
+              disabled={bcBusy || !bcText.trim()}
+              className="btn-primary tap w-full justify-center gap-2 disabled:opacity-50"
+            >
+              {bcBusy ? "Yuborilmoqda…" : "Yuborish"}
+              {!bcBusy && <Send className="h-4 w-4" />}
+            </button>
+          </SheetFooter>
+        </SheetContent>
+      </SheetRoot>
 
       <TourFloat tour={tour} />
     </div>
