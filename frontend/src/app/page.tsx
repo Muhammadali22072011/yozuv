@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Categories } from "@/components/landing/Categories";
+import { FAQ } from "@/components/landing/FAQ";
 import { Features } from "@/components/landing/Features";
 import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Pricing } from "@/components/landing/Pricing";
+import { StickyCTA } from "@/components/landing/StickyCTA";
 import { YzLogo } from "@/components/yz/Logo";
 
 export default function HomePage() {
@@ -15,6 +17,7 @@ export default function HomePage() {
       <HowItWorks />
       <Categories />
       <Pricing />
+      <FAQ />
 
       {/* Финальный CTA — единственный «тёмный премиум» момент внизу страницы.
           Градиент задан инлайн-стилем, чтобы гарантированно отрисоваться вне
@@ -61,6 +64,10 @@ export default function HomePage() {
           </p>
         </div>
       </footer>
+
+      {/* Spacer so the fixed mobile CTA never covers the footer. */}
+      <div className="h-20 md:hidden" />
+      <StickyCTA />
     </main>
   );
 }
