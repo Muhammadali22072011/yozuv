@@ -207,9 +207,9 @@ export default function ServicesPage() {
         }
       />
 
-      <div data-tour="services-list" className="mt-3 flex flex-col gap-3 px-4 md:px-0">
+      <div data-tour="services-list" className="mt-3 grid gap-3 px-4 md:px-0 lg:grid-cols-2 2xl:grid-cols-3">
         {loadErr ? (
-          <div className="tile-coral flex items-center gap-3 text-sm font-semibold text-danger">
+          <div className="tile-coral col-span-full flex items-center gap-3 text-sm font-semibold text-danger">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white/70 text-danger">
               <Trash2 className="h-4.5 w-4.5" />
             </div>
@@ -229,7 +229,7 @@ export default function ServicesPage() {
             ))}
           </>
         ) : rows.length === 0 ? (
-          <div className="card-soft flex flex-col items-center gap-3 px-6 py-10 text-center">
+          <div className="card-soft col-span-full flex flex-col items-center gap-3 px-6 py-10 text-center">
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
               <Scissors className="h-6 w-6" />
             </div>

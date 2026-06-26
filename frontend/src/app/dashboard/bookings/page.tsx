@@ -270,9 +270,9 @@ export default function BookingsPage() {
             })}
           </div>
         ) : (
-          <div data-tour="bookings-list" className="flex flex-col gap-2.5">
+          <div data-tour="bookings-list" className="grid gap-2.5 lg:grid-cols-2 2xl:grid-cols-3">
             {visible.length === 0 ? (
-              <div className="card-soft flex flex-col items-center gap-3 px-6 py-10 text-center">
+              <div className="card-soft col-span-full flex flex-col items-center gap-3 px-6 py-10 text-center">
                 <div className="tile-indigo grid h-14 w-14 place-items-center rounded-2xl p-0">
                   <CalendarX2 className="h-6 w-6 text-indigo-500" strokeWidth={2} />
                 </div>
