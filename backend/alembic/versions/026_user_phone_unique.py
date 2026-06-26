@@ -1,7 +1,7 @@
 """unique phone for standalone login
 
-Revision ID: 026
-Revises: 025
+Revision ID: 027
+Revises: 026
 Create Date: 2026-06-26
 """
 
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "026"
-down_revision: Union[str, None] = "025"
+revision: str = "027"
+down_revision: Union[str, None] = "026"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

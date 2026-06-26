@@ -1,11 +1,9 @@
 """payment_transactions.kind + booking_id — booking deposits
 
-NOTE: chains off 025. Other feature branches also add a child of 025 (e.g.
-review-replies' 026). When merging more than one, rebase this down_revision to
-whichever migration lands first (or `alembic merge` the heads).
+Chains: 025 → 026 (review) → 027 (phone) → 028 (this).
 
-Revision ID: 026_deposit
-Revises: 025
+Revision ID: 028
+Revises: 027
 Create Date: 2026-06-26
 """
 
@@ -14,8 +12,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "026_deposit"
-down_revision: Union[str, None] = "025"
+revision: str = "028"
+down_revision: Union[str, None] = "027"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
