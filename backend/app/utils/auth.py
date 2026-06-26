@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -12,6 +13,34 @@ from app.models import User
 settings = get_settings()
 
 ALGORITHM = "HS256"
+
+# Login identifiers can be a username or a phone number. We canonicalize each
+# the same way at store time (set-password) and lookup time (login) so that
+# "+998 90 123 45 67" and "+998901234567" always resolve to the same account.
+_PHONE_CHARS = re.compile(r"^[+\d\s().\-]+$")
+
+
+def looks_like_phone(raw: str) -> bool:
+    """True when the login is phone-ish: only phone characters and at least
+    7 digits. Below that it's treated as a username (so short handles win)."""
+    s = raw.strip()
+    if not s or _PHONE_CHARS.match(s) is None:
+        return False
+    return len(re.sub(r"\D", "", s)) >= 7
+
+
+def canon_phone(raw: str) -> str:
+    """Canonical phone: digits only. Deliberately drops the leading '+',
+    spacing and separators so the SAME number always maps to ONE string —
+    '+998 90 123 45 67' and '998901234567' both become '998901234567'.
+    Store and look up on this form so the two can never fork into two
+    accounts or miss each other at login."""
+    return re.sub(r"\D", "", raw)
+
+
+def canon_username(raw: str) -> str:
+    """Canonical username: stripped, leading '@' removed, lowercased."""
+    return raw.strip().lstrip("@").lower()
 
 # bcrypt hashes at most the first 72 bytes of a password; bcrypt >=4.1 raises
 # instead of truncating silently, so we slice to 72 bytes ourselves. Slicing on

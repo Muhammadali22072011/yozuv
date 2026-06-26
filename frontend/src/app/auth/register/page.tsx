@@ -5,6 +5,7 @@ import { YzLogo } from "@/components/yz/Logo";
 
 const STEPS = [
   "Kirish sahifasida Telegram orqali avtorizatsiya",
+  "Login va parol o‘rnating — ilovaga Telegramsiz ham kirasiz",
   "Dashboardda ochiq qolgan «Onboarding» formasini to‘ldiring",
   "Biznesingiz tayyor — mijozlar QR orqali yoziladi",
 ];
@@ -50,7 +51,7 @@ export default function RegisterPage() {
                   Qanday ishlaydi
                 </div>
                 <div className="text-xs text-ink-500">
-                  2 qadam — keyin biznes yaratasiz
+                  Bir necha qadam — keyin biznes yaratasiz
                 </div>
               </div>
             </div>

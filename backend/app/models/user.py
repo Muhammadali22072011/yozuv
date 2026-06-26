@@ -25,6 +25,16 @@ class User(Base):
             postgresql_where=text("username <> ''"),
             sqlite_where=text("username <> ''"),
         ),
+        # Phone is also a standalone-login identifier, so it needs the same
+        # DB-level uniqueness as username. Empty string is the "no phone"
+        # sentinel and is excluded so password-less accounts can coexist.
+        Index(
+            "uq_users_phone",
+            text("phone"),
+            unique=True,
+            postgresql_where=text("phone <> ''"),
+            sqlite_where=text("phone <> ''"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
