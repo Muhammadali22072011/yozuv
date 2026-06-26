@@ -147,6 +147,7 @@ def _secure_cookies() -> bool:
 def google_start(
     link: int = 0,
     token: str | None = None,
+    ret: str = "",
     db: Session = Depends(get_db),
 ):
     """Begin Sign-in-with-Google. Stashes PKCE verifier + CSRF state in a
@@ -173,6 +174,10 @@ def google_start(
     }
     if link_user_id:
         payload["link_user_id"] = link_user_id
+    # 'app' return target → the callback deep-links back into the Android APK
+    # (yozuv://) instead of redirecting to the web frontend.
+    if ret == "app":
+        payload["ret"] = "app"
     stash = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
     resp = RedirectResponse(build_auth_url(state, challenge), status_code=302)
     resp.set_cookie(
@@ -219,8 +224,13 @@ def google_callback(
             return _google_fail()
         code_verifier = data["cv"]
         link_user_id = data.get("link_user_id")
+        ret = data.get("ret") or ""
     except Exception:
         return _google_fail()
+
+    # Where to send the browser back: the web frontend, or — for the Android
+    # APK — a yozuv:// deep link that re-opens the app with the tokens.
+    front_base = "yozuv://" if ret == "app" else settings.public_app_url.rstrip("/") + "/"
 
     try:
         tokens = exchange_code(code, code_verifier)
@@ -277,7 +287,7 @@ def google_callback(
             )
         db.commit()
         resp = RedirectResponse(
-            f"{app_url}/dashboard/settings?linked=google", status_code=302
+            f"{front_base}dashboard/settings?linked=google", status_code=302
         )
         resp.delete_cookie(_GOOGLE_COOKIE, path="/api/auth/google")
         return resp
@@ -315,9 +325,8 @@ def google_callback(
     sub_id = str(user.id)
     access = create_access_token(sub_id)
     refresh = create_refresh_token(sub_id)
-    app_url = settings.public_app_url.rstrip("/")
     resp = RedirectResponse(
-        f"{app_url}/auth/callback#access={access}&refresh={refresh}",
+        f"{front_base}auth/callback#access={access}&refresh={refresh}",
         status_code=302,
     )
     resp.delete_cookie(_GOOGLE_COOKIE, path="/api/auth/google")
