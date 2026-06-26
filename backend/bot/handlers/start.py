@@ -1,12 +1,10 @@
 import logging
-import os
-from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
-    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -17,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import SessionLocal
+from app.services import blob_store
 from app.models import Booking, BookingStatus, Business, Client, Review, Service, User
 from app.models.enums import BusinessCategory
 from app.utils.clock import local_today
@@ -28,20 +27,14 @@ from bot.utils import safe_edit_text
 logger = logging.getLogger("bot.start")
 
 
-def _logo_local_path(logo_url: str) -> Path | None:
-    """If logo_url points to our own /api/business/logos/<file>, resolve the
-    on-disk path so we can send it via FSInputFile (avoids exposing internal
-    URLs to Telegram and works even when the API isn't publicly reachable yet)."""
-    if not logo_url:
+def _logo_blob(db: Session, logo_url: str):
+    """Fetch the logo bytes for this business from the DB blob store, so we can
+    send them via BufferedInputFile (no internal URL exposed to Telegram, works
+    even before the API is publicly reachable). None if there's no logo."""
+    key = blob_store.key_from_url(logo_url, "/api/business/logos/")
+    if not key:
         return None
-    prefix = "/api/business/logos/"
-    if not logo_url.startswith(prefix):
-        return None
-    fname = os.path.basename(logo_url[len(prefix):])
-    if not fname:
-        return None
-    p = Path(get_settings().uploads_dir) / "logos" / fname
-    return p if p.exists() and p.is_file() else None
+    return blob_store.get_blob(db, key)
 
 router = Router()
 settings = get_settings()
@@ -102,10 +95,12 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
                 is_owner = bool(owner and owner.telegram_id == tg_id)
             # Send the business logo first (if any) as a separate photo so the
             # text+menu below stays editable for subsequent navigation steps.
-            logo_path = _logo_local_path(b.logo_url)
-            if logo_path is not None:
+            logo = _logo_blob(db, b.logo_url)
+            if logo is not None:
                 try:
-                    await message.answer_photo(FSInputFile(str(logo_path)))
+                    await message.answer_photo(
+                        BufferedInputFile(logo.data, filename=logo.key)
+                    )
                 except Exception:
                     logger.exception("send logo failed for biz=%s", b.slug)
             await message.answer(

@@ -6,6 +6,7 @@ from app.models.business import Business
 from app.models.business_photo import BusinessPhoto
 from app.models.client import Client
 from app.models.client_block import ClientBlock
+from app.models.media_blob import MediaBlob
 from app.models.membership import Membership
 from app.models.enums import (
     AuthProvider,
@@ -39,6 +40,7 @@ __all__ = [
     "User",
     "Business",
     "BusinessPhoto",
+    "MediaBlob",
     "Service",
     "Schedule",
     "Staff",

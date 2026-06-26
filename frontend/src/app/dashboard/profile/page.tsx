@@ -12,6 +12,7 @@ import {
 import { ScreenHeader, TourFloat, YzLoader, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import { MapPicker } from "@/components/yz/MapPicker";
+import { BizLogo } from "@/components/yz/BizLogo";
 import { apiBase, apiFetch } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 import { usePageTour } from "@/lib/use-page-tour";
@@ -187,11 +188,11 @@ export default function ProfilePage() {
           <div className="relative mx-auto h-24 w-24">
             <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-3xl bg-ink-50 ring-1 ring-ink-100">
               {biz.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <BizLogo
                   src={`${apiBase()}${biz.logo_url}`}
                   alt={biz.name}
                   className="h-full w-full object-cover"
+                  fallback={<YzLogo size={84} />}
                 />
               ) : (
                 <YzLogo size={84} />

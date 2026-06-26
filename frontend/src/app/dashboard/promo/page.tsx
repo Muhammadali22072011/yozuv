@@ -205,7 +205,7 @@ export default function PromoPage() {
                     style={{ background: "#FFE7E3", color: "#C93A2A" }}
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={2.4} />
-                    O‘chirish
+                    Olib tashlash
                   </button>
                 </div>
               </div>
