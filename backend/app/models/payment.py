@@ -35,6 +35,10 @@ class PaymentTransaction(Base):
     booking_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Partner-referral discount (%) applied to this charge, if any. Recorded
+    # so the referrer's pending discount is consumed only once the payment
+    # actually completes.
+    partner_discount_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     raw_payload: Mapped[str] = mapped_column(Text, default="")
     screenshot_url: Mapped[str] = mapped_column(String(512), default="")
     user_comment: Mapped[str] = mapped_column(Text, default="")

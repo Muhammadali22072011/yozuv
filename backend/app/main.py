@@ -21,6 +21,7 @@ from app.routers import (
     clients,
     files,
     geo,
+    partner_referral,
     payments,
     promo,
     referral,
@@ -153,6 +154,7 @@ app.include_router(subscription.router, prefix="/api")
 app.include_router(promo.router, prefix="/api")
 app.include_router(promo.public_router, prefix="/api")
 app.include_router(referral.router, prefix="/api")
+app.include_router(partner_referral.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(geo.router, prefix="/api")

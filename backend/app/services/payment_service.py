@@ -14,12 +14,28 @@ from app.models import (
     SubscriptionStatus,
     User,
 )
+from app.services import partner_referral_service
 from app.services.notification_service import send_telegram_message
 
 settings = get_settings()
 
 MONTHLY_AMOUNT_UZS = 187_500
 YEARLY_AMOUNT_UZS = 1_875_000
+
+
+def _base_amount(plan: SubscriptionPlan) -> int:
+    return MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+
+
+def _discounted_amount(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[int, int]:
+    """Apply any partner-referral discount the business has earned. Returns
+    (amount_to_charge, partner_discount_percent_applied)."""
+    base = _base_amount(plan)
+    business = db.query(Business).filter(Business.id == business_id).first()
+    pct = int(getattr(business, "pending_partner_discount_percent", 0) or 0) if business else 0
+    pct = max(0, min(100, pct))
+    amount = base - base * pct // 100 if pct else base
+    return amount, pct
 
 
 def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan, amount_paid: int) -> Subscription:
@@ -58,13 +74,14 @@ def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan
 
 
 def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
-    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    amount, partner_pct = _discounted_amount(db, business_id, plan)
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.PAYME,
         amount=amount,
         status=PaymentRecordStatus.PENDING,
         plan=plan.value,
+        partner_discount_percent=partner_pct,
     )
     db.add(tx)
     db.flush()
@@ -92,13 +109,14 @@ def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
 
 
 def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
-    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    amount, partner_pct = _discounted_amount(db, business_id, plan)
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.CLICK,
         amount=amount,
         status=PaymentRecordStatus.PENDING,
         plan=plan.value,
+        partner_discount_percent=partner_pct,
     )
     db.add(tx)
     db.flush()
@@ -137,13 +155,14 @@ def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
 def create_card_payment(
     db: Session, business_id: UUID, plan: SubscriptionPlan
 ) -> PaymentTransaction:
-    amount = MONTHLY_AMOUNT_UZS if plan == SubscriptionPlan.MONTHLY else YEARLY_AMOUNT_UZS
+    amount, partner_pct = _discounted_amount(db, business_id, plan)
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.CARD,
         amount=amount,
         status=PaymentRecordStatus.PENDING,
         plan=plan.value,
+        partner_discount_percent=partner_pct,
     )
     db.add(tx)
     db.flush()
@@ -308,13 +327,32 @@ def complete_transaction_and_notify(db: Session, tx: PaymentTransaction) -> None
 
     business = db.query(Business).filter(Business.id == tx.business_id).first()
     owner = db.query(User).filter(User.id == business.owner_id).first() if business else None
-    if owner:
+    if owner and owner.telegram_id:
         msg = (
             "✅ To'lov qabul qilindi. Obunangiz 30 kunga faollashtirildi."
             if plan == SubscriptionPlan.MONTHLY
             else "✅ To'lov qabul qilindi. Yillik obuna faollashtirildi."
         )
         send_telegram_message(int(owner.telegram_id), msg)
+
+    # Partner (B2B) referral: if this is the referred business's first paid
+    # subscription, reward its referrer; and spend any partner discount this
+    # very payment used.
+    if business is not None:
+        reward = partner_referral_service.grant_reward_if_referred(db, business)
+        if int(getattr(tx, "partner_discount_percent", 0) or 0) > 0:
+            partner_referral_service.consume_discount(
+                db, business, int(tx.partner_discount_percent or 0)
+            )
+        if reward and reward.get("referrer_owner_telegram"):
+            try:
+                send_telegram_message(
+                    reward["referrer_owner_telegram"],
+                    f"🎉 Siz taklif qilgan biznes «{reward['referred_name']}» to'lov qildi!\n"
+                    f"Keyingi obunangizga -{reward['reward_percent']}% chegirma berildi.",
+                )
+            except Exception:
+                pass
 
 
 def refund_transaction(db: Session, tx_id: UUID, business_id: UUID) -> PaymentTransaction:
