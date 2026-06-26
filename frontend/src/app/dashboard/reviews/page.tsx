@@ -205,7 +205,7 @@ export default function ReviewsPage() {
             <div className="text-sm font-semibold text-ink-400">Hali sharh yo‘q</div>
           </div>
         ) : (
-          <div className="mt-4 flex flex-col gap-3">
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {rows.map((r) => (
               <ReviewCard key={r.id} r={r} onReplied={load} />
             ))}

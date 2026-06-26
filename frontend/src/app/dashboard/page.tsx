@@ -323,9 +323,12 @@ export default function DashboardHome() {
       {/* Статистика — яркая feature-карта дохода + пастель-плитки.
           Градиент задан инлайн-стилем — гарантированно виден независимо
           от Tailwind purge/HMR (текст белый, фон обязан быть тёмным). */}
-      <div data-tour="hero-stats" className="mt-5 px-4 md:px-0">
+      <div
+        data-tour="hero-stats"
+        className="mt-5 grid grid-cols-2 gap-3 px-4 md:px-0 lg:grid-cols-12 lg:gap-5"
+      >
         <div
-          className="relative overflow-hidden rounded-4xl p-5 text-white"
+          className="relative col-span-2 overflow-hidden rounded-4xl p-5 text-white lg:col-span-6"
           style={{
             // Сплошной фон-фолбэк ПЕРЕД градиентом: даже если градиент-картинку
             // что-то срежет (forced-colors, странный браузер), под белым текстом
@@ -337,7 +340,7 @@ export default function DashboardHome() {
         >
           <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
           <div className="relative text-[13px] font-semibold text-white/75">Bugungi daromad</div>
-          <div className="relative mt-1 tnum font-display text-[30px] font-extrabold tracking-tightest text-white">
+          <div className="relative mt-1 tnum font-display text-[30px] font-extrabold tracking-tightest text-white lg:text-[36px]">
             {fmtSum(summary.revenue)}
           </div>
           <div className="relative mt-2.5 flex items-center gap-2">
@@ -353,21 +356,23 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div className="rounded-3xl bg-indigo-50 p-4">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-indigo-600">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-            <div className="mt-3 tnum font-display text-[26px] font-extrabold tracking-tighter text-indigo-700">
+        <div className="flex flex-col rounded-3xl bg-indigo-50 p-4 lg:col-span-3">
+          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-indigo-600">
+            <CalendarDays className="h-5 w-5" />
+          </div>
+          <div className="mt-3 lg:mt-auto lg:pt-4">
+            <div className="tnum font-display text-[26px] font-extrabold tracking-tighter text-indigo-700">
               {summary.bookings}
             </div>
             <div className="text-[12px] font-semibold text-indigo-700/70">Bugun · yozilish</div>
           </div>
-          <div className="rounded-3xl p-4" style={{ background: "#E7F8F2" }}>
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-success">
-              <Users className="h-5 w-5" />
-            </div>
-            <div className="mt-3 tnum font-display text-[26px] font-extrabold tracking-tighter text-success">
+        </div>
+        <div className="flex flex-col rounded-3xl p-4 lg:col-span-3" style={{ background: "#E7F8F2" }}>
+          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 text-success">
+            <Users className="h-5 w-5" />
+          </div>
+          <div className="mt-3 lg:mt-auto lg:pt-4">
+            <div className="tnum font-display text-[26px] font-extrabold tracking-tighter text-success">
               {summary.clients}
             </div>
             <div className="text-[12px] font-semibold text-success/70">Mijozlar · hafta</div>
@@ -375,9 +380,14 @@ export default function DashboardHome() {
         </div>
       </div>
 
+      {/* Working area — desktop: two columns (bookings left, quick
+          actions + share-link right). Mobile/Telegram: single stack. */}
+      <div className="mt-6 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6">
+      {/* Left / main column */}
+      <div className="space-y-6 lg:col-span-8">
       {/* Next booking */}
       {next && (
-        <div className="mt-6 px-4 md:px-0">
+        <div className="px-4 md:px-0">
           <SectionLabel title="Keyingi yozilish" action="Jadval" href="/dashboard/bookings" />
           <button
             onClick={() => setActiveBooking(next)}
@@ -423,10 +433,37 @@ export default function DashboardHome() {
         </div>
       )}
 
+      {/* Today timeline */}
+      <div className="px-4 md:px-0">
+        <SectionLabel title="Bugungi kun" action="Barchasi" href="/dashboard/bookings" />
+        <div className="mt-2.5 flex flex-col gap-2">
+          {bookings.length === 0 ? (
+            <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
+              Bugun hali yozilish yo‘q
+            </div>
+          ) : (
+            bookings
+              .slice(0, 4)
+              .map((b) => (
+                <BookingCard
+                  key={b.id}
+                  b={b}
+                  services={services}
+                  clients={clients}
+                  onClick={() => setActiveBooking(b)}
+                />
+              ))
+          )}
+        </div>
+      </div>
+      </div>
+
+      {/* Right column */}
+      <div className="mt-6 space-y-6 lg:col-span-4 lg:mt-0">
       {/* Quick actions */}
-      <div className="mt-6 px-4 md:px-0">
+      <div className="px-4 md:px-0">
         <SectionLabel title="Tezkor amallar" />
-        <div data-tour="quick-actions" className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        <div data-tour="quick-actions" className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4 lg:grid-cols-2">
           <QuickTile
             href="/dashboard/qr"
             label="QR kod"
@@ -458,32 +495,8 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Today timeline */}
-      <div className="mt-6 px-4 md:px-0">
-        <SectionLabel title="Bugungi kun" action="Barchasi" href="/dashboard/bookings" />
-        <div className="mt-2.5 flex flex-col gap-2">
-          {bookings.length === 0 ? (
-            <div className="rounded-[22px] border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
-              Bugun hali yozilish yo‘q
-            </div>
-          ) : (
-            bookings
-              .slice(0, 4)
-              .map((b) => (
-                <BookingCard
-                  key={b.id}
-                  b={b}
-                  services={services}
-                  clients={clients}
-                  onClick={() => setActiveBooking(b)}
-                />
-              ))
-          )}
-        </div>
-      </div>
-
       {/* Bot link */}
-      <div className="mt-6 px-4 md:px-0">
+      <div className="px-4 md:px-0">
         <button
           data-tour="bot-link"
           onClick={() => {
@@ -507,6 +520,8 @@ export default function DashboardHome() {
             <Copy className="h-3.5 w-3.5" /> Nusxa
           </div>
         </button>
+      </div>
+      </div>
       </div>
 
       <BookingSheet
