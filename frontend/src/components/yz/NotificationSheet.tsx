@@ -57,7 +57,7 @@ export function NotificationSheet({
           </h2>
           <button
             onClick={onClose}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-ink-100 text-ink-500 tap transition-colors hover:bg-ink-200/70 hover:text-ink-900"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-ink-100 text-ink-500 tap-icon hover:bg-ink-200/70 hover:text-ink-900"
             aria-label="Yopish"
           >
             <X className="h-5 w-5" strokeWidth={2.2} />

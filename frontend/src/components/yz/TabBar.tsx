@@ -111,12 +111,12 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
           ))}
           <button
             onClick={() => setMoreOpen(true)}
-            className="flex flex-1 flex-col items-center gap-1 py-0.5"
+            className="group flex flex-1 flex-col items-center gap-1 py-0.5"
             aria-label="Yana"
           >
             <span
               className={cn(
-                "grid h-9 w-9 place-items-center rounded-2xl transition-colors",
+                "tap-icon grid h-9 w-9 place-items-center rounded-2xl transition-colors group-active:scale-[0.82]",
                 moreActive ? "bg-indigo-50 text-indigo-600" : "text-ink-400"
               )}
             >
@@ -195,11 +195,14 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
 function TabItem({ tab, active }: { tab: Tab; active: boolean }) {
   const Icon = tab.icon;
   return (
-    <Link href={tab.href} className="flex flex-1 flex-col items-center gap-1 py-0.5">
+    <Link href={tab.href} className="group flex flex-1 flex-col items-center gap-1 py-0.5">
       <span
+        // key пере-монтирует пилюлю при активации → каждый раз заново
+        // проигрывается pop-in (иконка «выскакивает» при выборе вкладки).
+        key={active ? "on" : "off"}
         className={cn(
-          "grid h-9 w-9 place-items-center rounded-2xl transition-colors",
-          active ? "bg-indigo-50 text-indigo-600" : "text-ink-400"
+          "tap-icon grid h-9 w-9 place-items-center rounded-2xl transition-colors group-active:scale-[0.82]",
+          active ? "animate-pop-in bg-indigo-50 text-indigo-600" : "text-ink-400"
         )}
       >
         <Icon className="h-[21px] w-[21px]" strokeWidth={2} />
