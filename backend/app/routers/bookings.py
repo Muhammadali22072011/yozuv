@@ -30,6 +30,7 @@ from app.services import booking_service, waitlist_service
 from app.services.booking_service import acquire_slot_lock
 from app.services.event_bus import publish as publish_event
 from app.services.notification_service import send_telegram_message
+from app.utils.clock import local_today
 from app.utils.ratelimit import rate_limit
 from app.utils.slots import get_available_slots
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
@@ -629,7 +630,9 @@ def cancel_recurring(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    today = date.today()
+    # Business-local "today" — date.today() is the server's wall clock and
+    # would drop or keep the wrong day's bookings across the TZ boundary.
+    today = local_today()
     q = (
         db.query(Booking)
         .filter(
