@@ -1,16 +1,16 @@
 import os
 import uuid
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_owned_business, get_owned_business_download
 from app.models import Business, BusinessPhoto, Service
+from app.services import blob_store
 from app.services.pdf_service import build_brochure_pdf
 from app.services.qr_service import generate_qr
 
@@ -31,41 +31,11 @@ MAX_PHOTOS_PER_BUSINESS = 10
 PHOTO_EXT = LOGO_EXT
 
 
-def _photos_dir() -> Path:
-    p = Path(settings.uploads_dir) / "photos"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _photo_path_from_url(url: str) -> Path | None:
-    if not url:
-        return None
-    prefix = "/api/business/photos/"
-    if not url.startswith(prefix):
-        return None
-    fname = os.path.basename(url[len(prefix):])
-    if not fname:
-        return None
-    return _photos_dir() / fname
-
-
-def _logos_dir() -> Path:
-    p = Path(settings.uploads_dir) / "logos"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _logo_path_from_url(logo_url: str) -> Path | None:
-    """Map a stored logo_url back to a file path, or None if it's external/empty."""
-    if not logo_url:
-        return None
-    prefix = "/api/business/logos/"
-    if not logo_url.startswith(prefix):
-        return None
-    fname = os.path.basename(logo_url[len(prefix):])
-    if not fname:
-        return None
-    return _logos_dir() / fname
+# Public URL prefixes — the stored logo_url / photo url shape. The trailing
+# segment is the MediaBlob key. Kept identical to the old on-disk scheme so
+# nothing downstream changes.
+LOGO_URL_PREFIX = "/api/business/logos/"
+PHOTO_URL_PREFIX = "/api/business/photos/"
 
 
 @router.get("/qr")
@@ -126,18 +96,12 @@ async def upload_logo(
         raise HTTPException(400, "Bo'sh fayl")
 
     fname = f"{uuid.uuid4().hex}{LOGO_EXT[file.content_type]}"
-    path = _logos_dir() / fname
-    path.write_bytes(contents)
-
-    old_path = _logo_path_from_url(business.logo_url)
-    business.logo_url = f"/api/business/logos/{fname}"
+    old_key = blob_store.key_from_url(business.logo_url, LOGO_URL_PREFIX)
+    blob_store.save_blob(db, fname, contents, file.content_type)
+    business.logo_url = f"{LOGO_URL_PREFIX}{fname}"
+    if old_key and old_key != fname:
+        blob_store.delete_blob(db, old_key)
     db.commit()
-
-    if old_path is not None and old_path.exists() and old_path != path:
-        try:
-            old_path.unlink()
-        except OSError:
-            pass
 
     return {"logo_url": business.logo_url}
 
@@ -147,34 +111,24 @@ def delete_logo(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    old_path = _logo_path_from_url(business.logo_url)
+    old_key = blob_store.key_from_url(business.logo_url, LOGO_URL_PREFIX)
     business.logo_url = ""
+    blob_store.delete_blob(db, old_key)
     db.commit()
-    if old_path is not None and old_path.exists():
-        try:
-            old_path.unlink()
-        except OSError:
-            pass
     return {"logo_url": ""}
 
 
 @public_router.get("/logos/{filename}")
-def get_logo(filename: str):
+def get_logo(filename: str, db: Session = Depends(get_db)):
     safe = os.path.basename(filename)
     if safe != filename or "/" in safe or "\\" in safe:
         raise HTTPException(400, "Invalid filename")
-    path = _logos_dir() / safe
-    if not path.exists() or not path.is_file():
+    blob = blob_store.get_blob(db, safe)
+    if blob is None:
         raise HTTPException(404, "Not found")
-    media = "image/jpeg"
-    low = safe.lower()
-    if low.endswith(".png"):
-        media = "image/png"
-    elif low.endswith(".webp"):
-        media = "image/webp"
-    return FileResponse(
-        path,
-        media_type=media,
+    return Response(
+        content=blob.data,
+        media_type=blob.content_type,
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
 
@@ -229,12 +183,11 @@ async def upload_photo(
         )
 
     fname = f"{uuid.uuid4().hex}{PHOTO_EXT[file.content_type]}"
-    path = _photos_dir() / fname
-    path.write_bytes(contents)
+    blob_store.save_blob(db, fname, contents, file.content_type)
 
     photo = BusinessPhoto(
         business_id=business.id,
-        url=f"/api/business/photos/{fname}",
+        url=f"{PHOTO_URL_PREFIX}{fname}",
         order=count,  # append at the end
     )
     db.add(photo)
@@ -259,34 +212,24 @@ def delete_photo(
     )
     if not p:
         raise HTTPException(404, "Not found")
-    fpath = _photo_path_from_url(p.url)
+    fkey = blob_store.key_from_url(p.url, PHOTO_URL_PREFIX)
     db.delete(p)
+    blob_store.delete_blob(db, fkey)
     db.commit()
-    if fpath is not None and fpath.exists():
-        try:
-            fpath.unlink()
-        except OSError:
-            pass
     return {"ok": True}
 
 
 @public_router.get("/photos/{filename}")
-def get_photo(filename: str):
+def get_photo(filename: str, db: Session = Depends(get_db)):
     safe = os.path.basename(filename)
     if safe != filename or "/" in safe or "\\" in safe:
         raise HTTPException(400, "Invalid filename")
-    path = _photos_dir() / safe
-    if not path.exists() or not path.is_file():
+    blob = blob_store.get_blob(db, safe)
+    if blob is None:
         raise HTTPException(404, "Not found")
-    low = safe.lower()
-    media = "image/jpeg"
-    if low.endswith(".png"):
-        media = "image/png"
-    elif low.endswith(".webp"):
-        media = "image/webp"
-    return FileResponse(
-        path,
-        media_type=media,
+    return Response(
+        content=blob.data,
+        media_type=blob.content_type,
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
 

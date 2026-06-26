@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Clock, MapPin, Phone, Sparkles, Star } from "lucide-react";
+import { BizLogo } from "@/components/yz/BizLogo";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
 const BOT = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
@@ -228,11 +229,15 @@ export default async function BusinessPage({
           <div className="card-lg p-5 sm:p-6">
             <div className="flex items-center gap-4 sm:gap-5">
               {logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <BizLogo
                   src={logo}
                   alt={biz.name}
                   className="h-20 w-20 shrink-0 rounded-3xl object-cover shadow-soft ring-1 ring-ink-100"
+                  fallback={
+                    <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-indigo-50 text-3xl">
+                      📍
+                    </div>
+                  }
                 />
               ) : (
                 <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-indigo-50 text-3xl">

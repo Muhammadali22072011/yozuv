@@ -166,7 +166,7 @@ export default function SettingsPage() {
     // tour-seen flags, sets the active onboarding cursor, and routes
     // the user to the first page (Profil). Each per-page tour will
     // auto-fire and auto-advance to the next page on dismiss.
-    toast("Obuchenie qaytadan boshlanmoqda…");
+    toast("Qo'llanma qaytadan boshlanmoqda…");
     startOnboarding((p) => router.push(p));
   }
 
@@ -464,7 +464,7 @@ export default function SettingsPage() {
             onClick={replayTours}
             icon={<GraduationCap className="h-5 w-5 text-indigo-600" />}
             bg="#EEF0FF"
-            label="Obuchenie qaytadan"
+            label="Qo'llanmani qayta ko'rish"
             sub="Har bir sahifa o'z izohini qaytadan ko'rsatadi"
           />
           <Row
