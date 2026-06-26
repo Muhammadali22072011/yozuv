@@ -84,7 +84,7 @@ export function HelpDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[2800] flex items-end justify-center bg-ink-900/40 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[2800] flex items-end justify-center bg-ink-900/50 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div

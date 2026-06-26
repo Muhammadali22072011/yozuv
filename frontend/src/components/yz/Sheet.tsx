@@ -4,7 +4,38 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const SheetRoot = DialogPrimitive.Root;
+// Radix Dialog (react-remove-scroll) toggles `pointer-events: none` on
+// <body> while a modal is open and clears it on close. But when a sheet
+// closes and another opens in the same tick (ClientSheet → NewBookingSheet),
+// or the Root unmounts mid-animation (sheets that `return null` once their
+// data is gone), that cleanup races and leaves <body> stuck unclickable —
+// so EVERY sheet on EVERY page stops responding (incl. its own X button)
+// until a full reload. This wrapper clears the stale style after close,
+// but only once no dialog remains open (so it never breaks a chained open).
+export function SheetRoot({
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return (
+    <DialogPrimitive.Root
+      {...props}
+      onOpenChange={(open) => {
+        onOpenChange?.(open);
+        if (!open && typeof document !== "undefined") {
+          setTimeout(() => {
+            const stillOpen = document.querySelector(
+              '[role="dialog"][data-state="open"]'
+            );
+            if (!stillOpen && document.body.style.pointerEvents === "none") {
+              document.body.style.pointerEvents = "";
+            }
+          }, 0);
+        }
+      }}
+    />
+  );
+}
+
 export const SheetTrigger = DialogPrimitive.Trigger;
 export const SheetPortal = DialogPrimitive.Portal;
 export const SheetClose = DialogPrimitive.Close;
@@ -22,7 +53,11 @@ export function SheetContent({
     height === "auto" ? "auto" : height === "tall" ? "88vh" : height;
   return (
     <SheetPortal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] animate-fadeIn data-[state=closed]:animate-[fadeIn_200ms_ease_reverse]" />
+      {/* No backdrop-blur: a full-screen `backdrop-filter` re-samples the
+          whole viewport every frame and freezes the renderer on large
+          desktop screens — clicks (incl. the close button) stop landing,
+          so the sheet appears stuck. A solid dim is cheap and enough. */}
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/50 animate-fadeIn data-[state=closed]:animate-[fadeIn_200ms_ease_reverse]" />
       <DialogPrimitive.Content
         className={cn(
           "fixed bottom-0 left-0 right-0 z-50 flex max-h-[92vh] flex-col rounded-t-4xl bg-white shadow-[0_-10px_50px_-12px_rgba(11,15,31,0.25)] animate-sheetUp focus:outline-none",

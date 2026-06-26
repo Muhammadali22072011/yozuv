@@ -1562,7 +1562,7 @@ function SubscriptionFormModal({
   const set = (patch: Partial<SubFormState>) => onChange({ ...form, ...patch });
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/50 p-4"
       onClick={onClose}
     >
       <div
@@ -1666,7 +1666,7 @@ function BusinessFormModal({
   const set = (patch: Partial<BizFormState>) => onChange({ ...form, ...patch });
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/50 p-4"
       onClick={onClose}
     >
       <div
