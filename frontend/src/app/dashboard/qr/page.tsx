@@ -8,6 +8,10 @@ import type { TourStep } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 import { usePageTour } from "@/lib/use-page-tour";
+import BrochureTrifold3D from "@/components/qr/BrochureTrifold3D";
+
+type BrochureSvc = { name: string; price: number; duration_minutes: number; is_active: boolean };
+type BrochureDay = { day_of_week: number; start_time: string; end_time: string; is_working: boolean };
 
 const QR_TOUR: TourStep[] = [
   {
@@ -32,6 +36,8 @@ export default function QrPage() {
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [services, setServices] = useState<BrochureSvc[]>([]);
+  const [schedule, setSchedule] = useState<BrochureDay[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
   const tour = usePageTour("qr_v1", QR_TOUR);
@@ -46,6 +52,13 @@ export default function QrPage() {
         const me = await apiFetch<BusinessMe>("/api/business/me");
         if (revoked) return;
         setBiz(me);
+        // brochure data — best-effort, never blocks the page
+        apiFetch<BrochureSvc[]>("/api/business/me/services")
+          .then((s) => !revoked && setServices(s))
+          .catch(() => {});
+        apiFetch<BrochureDay[]>("/api/business/me/schedule")
+          .then((d) => !revoked && setSchedule(d))
+          .catch(() => {});
       } catch (e) {
         const msg = (e as Error).message || "";
         if (/business not found/i.test(msg) || /404/.test(msg)) {
@@ -189,6 +202,25 @@ export default function QrPage() {
           <button onClick={shareLink} disabled={!telegramLink} className="btn-soft tap">
             <Share2 className="mr-2 h-4 w-4" /> {copied ? "✓ Nusxa" : "Ulashish"}
           </button>
+        </div>
+
+        <div className="card-soft mt-4 p-4">
+          <div className="mb-1">
+            <div className="font-display text-[15px] font-bold tracking-tight text-ink-900">3D broshyura</div>
+            <div className="mt-0.5 text-xs text-ink-500">Burab koʻring · aylantiring</div>
+          </div>
+          <BrochureTrifold3D
+            name={biz?.name}
+            slug={biz?.slug}
+            category={biz?.category}
+            botUsername={botUsername}
+            qrUrl={qrUrl}
+            logoUrl={biz?.logo_url}
+            services={services}
+            address={biz?.address}
+            phone={biz?.phone}
+            schedule={schedule}
+          />
         </div>
 
         <div className="card-soft mt-4 p-4">
