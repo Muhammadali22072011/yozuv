@@ -21,7 +21,7 @@ export function SectionLabel({
         (href ? (
           <Link
             href={href}
-            className="inline-flex items-center gap-0.5 text-[13px] font-bold text-indigo-600"
+            className="inline-flex items-center gap-0.5 text-[13px] font-bold text-indigo-600 tap"
           >
             {action}
             <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.6} />

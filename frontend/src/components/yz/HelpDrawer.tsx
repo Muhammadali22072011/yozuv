@@ -104,7 +104,7 @@ export function HelpDrawer({
           <button
             onClick={onClose}
             aria-label="Yopish"
-            className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-ink-100 tap"
+            className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-ink-100 tap-icon"
           >
             <X className="h-4 w-4" />
           </button>

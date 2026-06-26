@@ -29,7 +29,7 @@ export function ScreenHeader({
       {showBack && (
         <button
           onClick={go}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-ink-700 shadow-soft-sm tap-icon"
           aria-label="Orqaga"
         >
           <ArrowLeft className="h-5 w-5" strokeWidth={2.2} />
