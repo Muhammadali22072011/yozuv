@@ -60,7 +60,7 @@ export function Sidebar({ onAddBooking }: { onAddBooking?: () => void }) {
     : links;
 
   return (
-    <aside className="hidden w-64 shrink-0 bg-white shadow-[1px_0_0_rgba(229,231,240,0.8),8px_0_24px_-18px_rgba(11,15,31,0.18)] md:flex md:flex-col">
+    <aside className="hidden w-64 shrink-0 bg-white shadow-[1px_0_0_rgba(229,231,240,0.8),8px_0_24px_-18px_rgba(11,15,31,0.18)] md:sticky md:top-0 md:flex md:h-screen md:flex-col md:self-start">
       <div className="flex items-center gap-3 px-6 pt-8 pb-6">
         <YzLogo size={34} variant="gradient" />
         <div>
