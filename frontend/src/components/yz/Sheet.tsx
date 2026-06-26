@@ -53,7 +53,11 @@ export function SheetContent({
     height === "auto" ? "auto" : height === "tall" ? "88vh" : height;
   return (
     <SheetPortal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] animate-fadeIn data-[state=closed]:animate-[fadeIn_200ms_ease_reverse]" />
+      {/* No backdrop-blur: a full-screen `backdrop-filter` re-samples the
+          whole viewport every frame and freezes the renderer on large
+          desktop screens — clicks (incl. the close button) stop landing,
+          so the sheet appears stuck. A solid dim is cheap and enough. */}
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/50 animate-fadeIn data-[state=closed]:animate-[fadeIn_200ms_ease_reverse]" />
       <DialogPrimitive.Content
         className={cn(
           "fixed bottom-0 left-0 right-0 z-50 flex max-h-[92vh] flex-col rounded-t-4xl bg-white shadow-[0_-10px_50px_-12px_rgba(11,15,31,0.25)] animate-sheetUp focus:outline-none",

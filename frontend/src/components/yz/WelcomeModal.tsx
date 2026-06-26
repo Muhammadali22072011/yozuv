@@ -38,7 +38,7 @@ export function WelcomeModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[2900] flex items-center justify-center bg-ink-900/45 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[2900] flex items-center justify-center bg-ink-900/50 px-4">
       <div
         ref={modalRef}
         role="dialog"
