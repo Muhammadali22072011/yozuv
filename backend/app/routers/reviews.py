@@ -1,4 +1,5 @@
 from datetime import date as _date
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -30,6 +31,12 @@ class ReviewOut(BaseModel):
     comment: str
     client_name: str
     created_at: str
+    owner_reply: str = ""
+    replied_at: str | None = None
+
+
+class ReplyBody(BaseModel):
+    reply: str = Field(default="", max_length=2000)
 
 
 @router.post("/reviews", response_model=ReviewOut)
@@ -132,6 +139,91 @@ def list_reviews(
                 comment=r.comment,
                 client_name=name,
                 created_at=r.created_at.isoformat() if r.created_at else "",
+                owner_reply=r.owner_reply or "",
+                replied_at=r.replied_at.isoformat() if r.replied_at else None,
+            )
+        )
+    return out
+
+
+@router.put("/business/me/reviews/{review_id}/reply", response_model=ReviewOut)
+def reply_to_review(
+    review_id: UUID,
+    body: ReplyBody,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner sets (or clears, with empty text) a public reply to a review."""
+    review = (
+        db.query(Review)
+        .filter(Review.id == review_id, Review.business_id == business.id)
+        .first()
+    )
+    if not review:
+        raise HTTPException(404, "Review not found")
+    text = body.reply.strip()[:2000]
+    review.owner_reply = text
+    review.replied_at = datetime.now(timezone.utc) if text else None
+    db.commit()
+    db.refresh(review)
+
+    name = "Mijoz"
+    if review.client_id:
+        c = db.query(Client).filter(Client.id == review.client_id).first()
+        if c:
+            name = f"{c.first_name or ''} {c.last_name or ''}".strip() or "Mijoz"
+    return ReviewOut(
+        id=str(review.id),
+        booking_id=str(review.booking_id) if review.booking_id else None,
+        rating=review.rating,
+        comment=review.comment,
+        client_name=name,
+        created_at=review.created_at.isoformat() if review.created_at else "",
+        owner_reply=review.owner_reply or "",
+        replied_at=review.replied_at.isoformat() if review.replied_at else None,
+    )
+
+
+@router.get("/business/{slug}/reviews", response_model=list[ReviewOut])
+def public_reviews(slug: str, db: Session = Depends(get_db)):
+    """Public, recent reviews with the owner's replies — rendered on the
+    business profile page. Only the client's first name is exposed."""
+    biz = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
+    if not biz:
+        raise HTTPException(404, "Not found")
+    rows = (
+        db.query(Review)
+        .filter(Review.business_id == biz.id, Review.comment != "")
+        .order_by(Review.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    client_ids = {r.client_id for r in rows if r.client_id}
+    clients_by_id: dict = {}
+    if client_ids:
+        clients_by_id = {
+            c.id: c for c in db.query(Client).filter(Client.id.in_(client_ids)).all()
+        }
+    out: list[ReviewOut] = []
+    for r in rows:
+        name = "Mijoz"
+        c = clients_by_id.get(r.client_id) if r.client_id else None
+        if c:
+            name = (c.first_name or "").strip() or "Mijoz"
+        out.append(
+            ReviewOut(
+                id=str(r.id),
+                booking_id=None,
+                rating=r.rating,
+                comment=r.comment,
+                client_name=name,
+                created_at=r.created_at.isoformat() if r.created_at else "",
+                owner_reply=r.owner_reply or "",
+                replied_at=r.replied_at.isoformat() if r.replied_at else None,
             )
         )
     return out

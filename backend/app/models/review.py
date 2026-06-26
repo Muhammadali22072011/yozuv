@@ -31,6 +31,12 @@ class Review(Base):
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..5
     comment: Mapped[str] = mapped_column(Text, default="")
+    # Owner's public reply, shown under the review on the business page.
+    # Empty = no reply yet.
+    owner_reply: Mapped[str] = mapped_column(Text, default="")
+    replied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # tz-aware UTC default; the column is DateTime(timezone=True) so a
     # naive datetime.utcnow() value would mix with aware comparisons.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

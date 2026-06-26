@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquareHeart, Star } from "lucide-react";
-import { Avatar, ScreenHeader } from "@/components/yz";
+import { CornerDownRight, MessageSquareHeart, Star } from "lucide-react";
+import { Avatar, ScreenHeader, useToast } from "@/components/yz";
 import { apiFetch } from "@/lib/api";
 
 type Review = {
@@ -12,6 +12,8 @@ type Review = {
   comment: string;
   client_name: string;
   created_at: string;
+  owner_reply: string;
+  replied_at: string | null;
 };
 
 type Summary = { average_rating: number; count: number };
@@ -31,13 +33,120 @@ function Stars({ n, size = 16 }: { n: number; size?: number }) {
   );
 }
 
+function ReviewCard({
+  r,
+  onReplied,
+}: {
+  r: Review;
+  onReplied: () => void;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(r.owner_reply || "");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/business/me/reviews/${r.id}/reply`, {
+        method: "PUT",
+        body: JSON.stringify({ reply: text.trim() }),
+      });
+      toast(text.trim() ? "Javob saqlandi" : "Javob o‘chirildi");
+      setEditing(false);
+      onReplied();
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card-soft p-4">
+      <div className="flex items-center gap-3">
+        <Avatar name={r.client_name || "Mijoz"} size={40} />
+        <div className="flex-1 min-w-0">
+          <div className="truncate font-display text-sm font-bold tracking-tight text-ink-900">
+            {r.client_name || "Mijoz"}
+          </div>
+          <div className="tnum text-[11px] font-semibold text-ink-400">
+            {r.created_at.slice(0, 10)}
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-full bg-warn-bg px-2.5 py-1">
+          <Star className="h-3.5 w-3.5 fill-lemon text-lemon" strokeWidth={0} />
+          <span className="tnum text-xs font-bold text-ink-700">{r.rating}</span>
+        </span>
+      </div>
+      {r.comment && (
+        <p className="mt-3 rounded-2xl bg-ink-50 px-3.5 py-2.5 text-sm leading-relaxed text-ink-700">
+          {r.comment}
+        </p>
+      )}
+
+      {r.owner_reply && !editing && (
+        <div className="mt-2.5 flex gap-2 rounded-2xl bg-indigo-50 px-3.5 py-2.5">
+          <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">
+              Sizning javobingiz
+            </div>
+            <p className="mt-0.5 text-sm leading-relaxed text-ink-700">{r.owner_reply}</p>
+          </div>
+        </div>
+      )}
+
+      {editing ? (
+        <div className="mt-2.5">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            placeholder="Mijozga javob yozing…"
+            className="yz-input w-full resize-none text-sm"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={save}
+              disabled={busy}
+              className="btn-primary tap flex-1 justify-center py-2.5 text-sm disabled:opacity-50"
+            >
+              {busy ? "…" : "Saqlash"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setText(r.owner_reply || "");
+              }}
+              className="btn-soft tap px-4 py-2.5 text-sm"
+            >
+              Bekor
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="mt-2.5 text-xs font-bold text-indigo-600 tap"
+        >
+          {r.owner_reply ? "Javobni tahrirlash" : "Javob berish"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ReviewsPage() {
   const [rows, setRows] = useState<Review[]>([]);
   const [sum, setSum] = useState<Summary>({ average_rating: 0, count: 0 });
 
-  useEffect(() => {
+  function load() {
     apiFetch<Review[]>("/api/business/me/reviews").then(setRows).catch(() => {});
     apiFetch<Summary>("/api/business/me/reviews/summary").then(setSum).catch(() => {});
+  }
+  useEffect(() => {
+    load();
   }, []);
 
   const total = sum.count || rows.length || 0;
@@ -98,28 +207,7 @@ export default function ReviewsPage() {
         ) : (
           <div className="mt-4 flex flex-col gap-3">
             {rows.map((r) => (
-              <div key={r.id} className="card-soft p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar name={r.client_name || "Mijoz"} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-display text-sm font-bold tracking-tight text-ink-900">
-                      {r.client_name || "Mijoz"}
-                    </div>
-                    <div className="tnum text-[11px] font-semibold text-ink-400">
-                      {r.created_at.slice(0, 10)}
-                    </div>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-warn-bg px-2.5 py-1">
-                    <Star className="h-3.5 w-3.5 fill-lemon text-lemon" strokeWidth={0} />
-                    <span className="tnum text-xs font-bold text-ink-700">{r.rating}</span>
-                  </span>
-                </div>
-                {r.comment && (
-                  <p className="mt-3 rounded-2xl bg-ink-50 px-3.5 py-2.5 text-sm leading-relaxed text-ink-700">
-                    {r.comment}
-                  </p>
-                )}
-              </div>
+              <ReviewCard key={r.id} r={r} onReplied={load} />
             ))}
           </div>
         )}

@@ -84,6 +84,24 @@ async function fetchSummary(slug: string): Promise<ReviewSummary> {
   return (await res.json()) as ReviewSummary;
 }
 
+type PublicReview = {
+  id: string;
+  rating: number;
+  comment: string;
+  client_name: string;
+  created_at: string;
+  owner_reply: string;
+};
+
+async function fetchReviews(slug: string): Promise<PublicReview[]> {
+  const res = await fetch(
+    `${API}/api/business/${encodeURIComponent(slug)}/reviews`,
+    { next: { revalidate: 60 } },
+  );
+  if (!res.ok) return [];
+  return (await res.json()) as PublicReview[];
+}
+
 export async function generateMetadata(
   { params }: { params: { slug: string } },
 ): Promise<Metadata> {
@@ -138,9 +156,10 @@ export default async function BusinessPage({
   const biz = await fetchBusiness(params.slug);
   if (!biz) notFound();
 
-  const [services, summary] = await Promise.all([
+  const [services, summary, reviews] = await Promise.all([
     fetchServices(params.slug),
     fetchSummary(params.slug),
+    fetchReviews(params.slug),
   ]);
 
   const cat = CATEGORY_LABEL[biz.category] || "Biznes";
@@ -326,6 +345,40 @@ export default async function BusinessPage({
               Botda yozilish <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
+
+          {reviews.length > 0 && (
+            <div className="mt-10">
+              <h2 className="section-title text-xl">Sharhlar</h2>
+              <ul className="mt-4 space-y-3">
+                {reviews.map((rv) => (
+                  <li key={rv.id} className="card-soft p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-display text-sm font-bold tracking-tight text-ink-900">
+                        {rv.client_name || "Mijoz"}
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warn-bg px-2.5 py-1">
+                        <Star className="h-3.5 w-3.5 fill-lemon text-lemon" strokeWidth={0} />
+                        <span className="tnum text-xs font-bold text-ink-700">{rv.rating}</span>
+                      </span>
+                    </div>
+                    {rv.comment && (
+                      <p className="mt-2 text-sm leading-relaxed text-ink-600">{rv.comment}</p>
+                    )}
+                    {rv.owner_reply && (
+                      <div className="mt-2.5 rounded-2xl bg-indigo-50 px-3.5 py-2.5">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">
+                          Biznes javobi
+                        </div>
+                        <p className="mt-0.5 text-sm leading-relaxed text-ink-700">
+                          {rv.owner_reply}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </section>
 
