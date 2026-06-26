@@ -49,6 +49,39 @@ _login_rate = rate_limit("auth_login", limit=10, window_seconds=60)
 _refresh_rate = rate_limit("auth_refresh", limit=60, window_seconds=60)
 
 
+def _sync_telegram_identity(
+    db: Session, user: User, telegram_id: int, username: str
+) -> None:
+    """Upsert the telegram auth_identities row on every Telegram login, so the
+    identity table stays complete and the inline User.telegram_id column can be
+    dropped in a later phase (the rest of the identity migration)."""
+    subject = str(telegram_id)
+    ident = (
+        db.query(AuthIdentity)
+        .filter(
+            AuthIdentity.provider == AuthProvider.TELEGRAM.value,
+            AuthIdentity.subject == subject,
+        )
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if ident:
+        ident.last_login_at = now
+        if username:
+            ident.display_name = username
+    else:
+        db.add(
+            AuthIdentity(
+                user_id=user.id,
+                provider=AuthProvider.TELEGRAM.value,
+                subject=subject,
+                display_name=username or "",
+                last_login_at=now,
+            )
+        )
+    db.commit()
+
+
 @router.post("/telegram", response_model=TokenPair)
 def auth_telegram(
     body: TelegramAuthRequest,
@@ -82,6 +115,8 @@ def auth_telegram(
         user.last_name = u.get("last_name") or user.last_name
         db.commit()
         db.refresh(user)
+
+    _sync_telegram_identity(db, user, telegram_id, username)
 
     sub = str(user.id)
     return TokenPair(
