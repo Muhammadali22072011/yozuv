@@ -72,18 +72,35 @@ def _admin_telegram_ids() -> set[int]:
     return ids
 
 
-def is_admin_user(user: User) -> bool:
-    admins = _admin_telegram_ids()
-    if not admins:
+def is_admin_user(user: User, db: Session | None = None) -> bool:
+    """True if the user is a platform admin.
+
+    Env ``ADMIN_TELEGRAM_IDS`` are the immutable bootstrap admins. When a
+    db session is provided we also honour panel-managed ``admin_users``
+    rows, so additional admins can be granted at runtime.
+    """
+    if user is None:
         return False
     try:
-        return int(user.telegram_id) in admins
+        tg = int(user.telegram_id)
     except (TypeError, ValueError):
         return False
+    if tg in _admin_telegram_ids():
+        return True
+    if db is not None:
+        from app.models import AdminUser
+
+        return (
+            db.query(AdminUser.id).filter(AdminUser.telegram_id == tg).first()
+            is not None
+        )
+    return False
 
 
-def get_admin_user(user: User = Depends(get_current_user)) -> User:
-    if not is_admin_user(user):
+def get_admin_user(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> User:
+    if not is_admin_user(user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
 

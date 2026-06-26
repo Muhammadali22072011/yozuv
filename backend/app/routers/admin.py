@@ -17,6 +17,7 @@ from app.database import Base, get_db
 from app.deps import get_admin_user
 from app.models import (
     AdminAuditLog,
+    AdminUser,
     Booking,
     BroadcastMessage,
     Business,
@@ -1562,3 +1563,102 @@ def set_plan_prices(
         "monthly_override": ps.monthly_price,
         "yearly_override": ps.yearly_price,
     }
+
+
+@router.get("/admins")
+def list_admins(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    """All platform admins: immutable env superadmins + panel-managed rows."""
+    from app.deps import _admin_telegram_ids
+
+    env_ids = _admin_telegram_ids()
+    out = []
+    for tg in sorted(env_ids):
+        out.append(
+            {
+                "telegram_id": int(tg),
+                "name": "",
+                "source": "env",
+                "removable": False,
+                "created_at": None,
+            }
+        )
+    db_rows = db.query(AdminUser).order_by(AdminUser.created_at.desc()).all()
+    for a in db_rows:
+        if int(a.telegram_id) in env_ids:
+            continue  # env wins; don't list twice
+        out.append(
+            {
+                "telegram_id": int(a.telegram_id),
+                "name": a.name or "",
+                "source": "db",
+                "removable": True,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+        )
+    return out
+
+
+class AdminCreateBody(BaseModel):
+    telegram_id: int = Field(..., gt=0)
+    name: str | None = None
+
+
+@router.post("/admins", status_code=201)
+def add_admin(
+    body: AdminCreateBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    from app.deps import _admin_telegram_ids
+
+    if body.telegram_id in _admin_telegram_ids():
+        raise HTTPException(409, "Already a superadmin (env)")
+    existing = (
+        db.query(AdminUser).filter(AdminUser.telegram_id == body.telegram_id).first()
+    )
+    if existing:
+        raise HTTPException(409, "Already an admin")
+    row = AdminUser(
+        telegram_id=body.telegram_id,
+        name=(body.name or "").strip(),
+        added_by_telegram_id=int(admin.telegram_id) if admin.telegram_id else None,
+    )
+    db.add(row)
+    log_admin_action(
+        db,
+        admin,
+        "admin.add",
+        "AdminUser",
+        None,
+        {"telegram_id": body.telegram_id, "name": row.name},
+    )
+    db.commit()
+    db.refresh(row)
+    return {
+        "telegram_id": int(row.telegram_id),
+        "name": row.name,
+        "source": "db",
+        "removable": True,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.delete("/admins/{telegram_id}")
+def remove_admin(
+    telegram_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    from app.deps import _admin_telegram_ids
+
+    if telegram_id in _admin_telegram_ids():
+        raise HTTPException(400, "Cannot remove a superadmin (set via env)")
+    row = db.query(AdminUser).filter(AdminUser.telegram_id == telegram_id).first()
+    if not row:
+        raise HTTPException(404, "Admin not found")
+    log_admin_action(
+        db, admin, "admin.remove", "AdminUser", None, {"telegram_id": telegram_id}
+    )
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "telegram_id": telegram_id}

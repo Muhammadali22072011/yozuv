@@ -248,7 +248,7 @@ def get_receipt(
     if not path.exists():
         raise HTTPException(404, "Not found")
     # Allow admin, or the owner of the business that created the tx
-    if is_admin_user(user):
+    if is_admin_user(user, db):
         return FileResponse(str(path))
     url = f"/api/payments/receipts/{safe}"
     tx = db.query(PaymentTransaction).filter(PaymentTransaction.screenshot_url == url).first()

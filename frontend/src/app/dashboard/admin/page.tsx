@@ -223,6 +223,14 @@ type PlatformStats = {
   last_backup: { name: string; size_kb: number; modified_at: string } | null;
 };
 
+type AdminItem = {
+  telegram_id: number;
+  name: string;
+  source: "env" | "db";
+  removable: boolean;
+  created_at: string | null;
+};
+
 type AuditEntry = {
   id: string;
   admin_telegram_id: number;
@@ -302,6 +310,10 @@ export default function AdminPage() {
     yearly: "",
   });
   const [savingPrices, setSavingPrices] = useState(false);
+  const [admins, setAdmins] = useState<AdminItem[]>([]);
+  const [newAdminId, setNewAdminId] = useState("");
+  const [newAdminName, setNewAdminName] = useState("");
+  const [addingAdmin, setAddingAdmin] = useState(false);
 
   useEffect(() => {
     apiFetch<{ is_admin?: boolean }>("/api/auth/me")
@@ -431,6 +443,14 @@ export default function AdminPage() {
     }
   }, [toast]);
 
+  const loadAdmins = useCallback(async () => {
+    try {
+      setAdmins(await apiFetch<AdminItem[]>("/api/admin/admins"));
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
   const loadBroadcastHistory = useCallback(async () => {
     try {
       setBroadcastHistory(
@@ -476,7 +496,8 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin || tab !== "system") return;
     loadPlatformStats();
-  }, [isAdmin, tab, loadPlatformStats]);
+    loadAdmins();
+  }, [isAdmin, tab, loadPlatformStats, loadAdmins]);
 
   useEffect(() => {
     if (!isAdmin || tab !== "broadcast") return;
@@ -949,6 +970,40 @@ export default function AdminPage() {
       await loadReviews();
     } catch (e) {
       toast((e as Error).message?.slice(0, 80) || "O‘chirishda xatolik");
+    }
+  }
+
+  async function addAdmin() {
+    const tg = Number(newAdminId.replace(/\D/g, ""));
+    if (!tg || tg <= 0) {
+      toast("Telegram ID kerak");
+      return;
+    }
+    setAddingAdmin(true);
+    try {
+      await apiFetch("/api/admin/admins", {
+        method: "POST",
+        body: JSON.stringify({ telegram_id: tg, name: newAdminName || null }),
+      });
+      toast("Admin qo‘shildi");
+      setNewAdminId("");
+      setNewAdminName("");
+      await loadAdmins();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
+    } finally {
+      setAddingAdmin(false);
+    }
+  }
+
+  async function removeAdmin(tg: number) {
+    if (!window.confirm(`Adminni o‘chirish: ${tg}?`)) return;
+    try {
+      await apiFetch(`/api/admin/admins/${tg}`, { method: "DELETE" });
+      toast("O‘chirildi");
+      await loadAdmins();
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 100) || "Xatolik");
     }
   }
 
@@ -1720,6 +1775,89 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
+                <div className="card-soft p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-700">
+                      <Shield className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-display text-base font-extrabold text-ink-900">
+                        Adminlar
+                      </h3>
+                      <p className="mt-1 text-xs text-ink-500">
+                        ENV adminlarni o‘chirib bo‘lmaydi. Yangilarini bu yerda qo‘shing.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 divide-y divide-ink-100">
+                    {admins.map((a) => (
+                      <div
+                        key={a.telegram_id}
+                        className="flex items-center gap-3 py-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-bold text-ink-900">
+                            {a.name || (
+                              <span className="font-mono">{a.telegram_id}</span>
+                            )}
+                          </div>
+                          {a.name && (
+                            <div className="font-mono text-[11px] text-ink-400">
+                              {a.telegram_id}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                            a.source === "env"
+                              ? "bg-[#FFF3DA] text-[#A8751A]"
+                              : "bg-indigo-50 text-indigo-700"
+                          )}
+                        >
+                          {a.source === "env" ? "Superadmin" : "Admin"}
+                        </span>
+                        {a.removable ? (
+                          <button
+                            onClick={() => removeAdmin(a.telegram_id)}
+                            className="grid h-8 w-8 place-items-center rounded-2xl bg-[#FFE7E3] text-[#C93A2A] tap hover:bg-[#FCD7CE]"
+                            aria-label="O‘chirish"
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={2.6} />
+                          </button>
+                        ) : (
+                          <span className="grid h-8 w-8 place-items-center text-ink-300">
+                            <Shield className="h-4 w-4" />
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <input
+                      value={newAdminId}
+                      onChange={(e) =>
+                        setNewAdminId(e.target.value.replace(/\D/g, ""))
+                      }
+                      placeholder="Telegram ID"
+                      className="yz-input w-36 py-2 font-mono text-sm"
+                    />
+                    <input
+                      value={newAdminName}
+                      onChange={(e) => setNewAdminName(e.target.value)}
+                      placeholder="Ism (ixtiyoriy)"
+                      className="yz-input min-w-[120px] flex-1 py-2 text-sm"
+                    />
+                    <button
+                      onClick={addAdmin}
+                      disabled={addingAdmin}
+                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.6} />
+                      Qo‘shish
+                    </button>
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -2120,6 +2258,8 @@ export default function AdminPage() {
                 <option value="payment.refund">payment.refund</option>
                 <option value="review.delete">review.delete</option>
                 <option value="settings.prices">settings.prices</option>
+                <option value="admin.add">admin.add</option>
+                <option value="admin.remove">admin.remove</option>
                 <option value="broadcast.send">broadcast.send</option>
                 <option value="backup.import">backup.import</option>
               </select>
