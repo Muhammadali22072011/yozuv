@@ -208,7 +208,7 @@ export default function QrPage() {
           <div className="card-soft mt-4 p-4">
             <div className="mb-1">
               <div className="font-display text-[15px] font-bold text-ink-900">3D broshyura</div>
-              <div className="mt-0.5 text-xs text-ink-500">Burab koʻring · aylantiring</div>
+              <div className="mt-0.5 text-xs text-ink-500">Burab koʻring · aylantiring · orqa tomonni oching</div>
             </div>
             <BrochureTrifold3D
               name={biz?.name}
