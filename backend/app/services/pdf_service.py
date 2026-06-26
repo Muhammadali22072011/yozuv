@@ -24,10 +24,12 @@ def _logo_reader() -> ImageReader | None:
 
 # ───────── Design system ─────────
 WHITE = HexColor("#FFFFFF")
-PRIMARY = HexColor("#005AFF")        # main brand
-INK = HexColor("#080808")            # body text / footer
+PRIMARY = HexColor("#4853F5")        # main brand (indigo, matches the app)
+PRIMARY_DARK = HexColor("#3640D4")
+INK = HexColor("#0B0F1F")            # body text / footer
 INK_MUTED = HexColor("#6B6B6B")      # secondary text
-CREAM = HexColor("#F2EFE8")          # neutral block
+CREAM = HexColor("#F4F2EC")          # neutral block
+MINT = HexColor("#0E9577")           # price accent
 
 PAGE_W, PAGE_H = 148 * mm, 210 * mm
 
@@ -114,245 +116,195 @@ def generate_brochure(
     qr_image_bytes: bytes | None = None,
     bot_username: str = "Yozuv_cl_bot",
 ) -> bytes:
-    """Render single-page A5 brochure for a business. Returns PDF bytes."""
+    """Render a single-page A5 brochure for a business. Returns PDF bytes.
+
+    Layout (top→bottom): indigo cover (logo + name + category) · QR card ·
+    services list (vertically centered so few services never leave a gap) ·
+    contacts · footer.
+    """
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
 
-    # Page background — pure white
+    M = 10 * mm  # side margin
+
+    # White page
     c.setFillColor(WHITE)
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
 
-    # Vertical layout (mm) — each band stacked top→bottom, no gaps:
-    # header 45 + qr 70 + services 58 + contacts 25 + footer 12 = 210mm exactly.
-    header_h = 45 * mm
-    qr_h = 70 * mm
-    services_h = 58 * mm
-    contacts_h = 25 * mm
+    # Band geometry (mm), bottom-up coordinates.
+    header_h = 48 * mm
     footer_h = 12 * mm
+    contacts_h = 24 * mm
+    qr_card_h = 70 * mm
+    qr_gap = 5 * mm  # gap between header and the QR card
 
     header_y = PAGE_H - header_h
-    qr_y = header_y - qr_h
-    services_y = qr_y - services_h
-    contacts_y = services_y - contacts_h
     footer_y = 0
+    contacts_y = footer_y + footer_h
+    qr_card_top = header_y - qr_gap
+    qr_card_bottom = qr_card_top - qr_card_h
+    services_top = qr_card_bottom
+    services_bottom = contacts_y + contacts_h
 
-    # ───────────── 1. HEADER ─────────────
+    # ───────────── 1. COVER (indigo) ─────────────
     c.setFillColor(PRIMARY)
     c.rect(0, header_y, PAGE_W, header_h, fill=1, stroke=0)
 
-    # Visual baseline rows for the header — both sides share the same two baselines.
-    name_baseline = header_y + 25 * mm
-    sub_baseline = header_y + 17 * mm
-
-    # Left — brand logo (transparent PNG); falls back to a wordmark if
-    # the file is missing so the PDF never crashes.
-    left_x = 10 * mm
+    # Logo — its PNG already carries a white circle, so it pops on indigo.
     logo = _logo_reader()
-    logo_size = 22 * mm
-    logo_y = (header_y + (header_h - logo_size) / 2)
+    logo_size = 18 * mm
+    logo_x = (PAGE_W - logo_size) / 2
+    logo_y = header_y + header_h - logo_size - 4 * mm
     if logo is not None:
         try:
             c.drawImage(
-                logo,
-                left_x,
-                logo_y,
-                logo_size,
-                logo_size,
-                mask="auto",
-                preserveAspectRatio=True,
+                logo, logo_x, logo_y, logo_size, logo_size,
+                mask="auto", preserveAspectRatio=True,
             )
         except Exception:
             logo = None
     if logo is None:
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 28)
-        c.drawString(left_x, name_baseline, "YOZUV")
-        c.setFont("Helvetica", 8)
-        c.drawString(left_x, sub_baseline, _ascii_safe("Mijozlar uchun aqlli yozilish"))
+        c.setFont("Helvetica-Bold", 18)
+        c.drawCentredString(PAGE_W / 2, logo_y + 5 * mm, "YOZUV")
 
-    # Right — business name + category (right-aligned, same baselines)
-    right_x = PAGE_W - 10 * mm
-    name_max = PAGE_W / 2 - 6 * mm
-    name_clean = _ascii_safe(business_name or "")
-    name_size = _fit_size(c, name_clean, "Helvetica-Bold", 18, 11, name_max)
+    # Business name — centered, autosized to fit.
+    name_clean = _ascii_safe(business_name or "Yozuv")
+    name_max = PAGE_W - 2 * M
+    name_size = _fit_size(c, name_clean, "Helvetica-Bold", 22, 13, name_max)
     name_clean = _truncate(c, name_clean, "Helvetica-Bold", name_size, name_max)
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", name_size)
-    c.drawRightString(right_x, name_baseline + 2 * mm, name_clean)
+    name_baseline = logo_y - 7 * mm
+    c.drawCentredString(PAGE_W / 2, name_baseline, name_clean)
 
-    cat_clean = _truncate(c, _category_label(business_category), "Helvetica", 10, name_max)
+    # Category — centered, semi-transparent.
     c.saveState()
-    c.setFillAlpha(0.7)
+    c.setFillAlpha(0.8)
     c.setFillColor(WHITE)
     c.setFont("Helvetica", 10)
-    c.drawRightString(right_x, sub_baseline, cat_clean)
+    c.drawCentredString(PAGE_W / 2, name_baseline - 6 * mm,
+                        _truncate(c, _category_label(business_category), "Helvetica", 10, name_max))
     c.restoreState()
 
-    # Thin semi-transparent divider at the bottom of the header
-    c.saveState()
-    c.setStrokeColor(WHITE)
-    c.setStrokeAlpha(0.35)
-    c.setLineWidth(0.4)
-    c.line(8 * mm, header_y + 0.6 * mm, PAGE_W - 8 * mm, header_y + 0.6 * mm)
-    c.restoreState()
-
-    # ───────────── 2. QR BLOCK ─────────────
+    # ───────────── 2. QR CARD ─────────────
     c.setFillColor(CREAM)
-    c.rect(0, qr_y, PAGE_W, qr_h, fill=1, stroke=0)
+    c.roundRect(M, qr_card_bottom, PAGE_W - 2 * M, qr_card_h, 6 * mm, fill=1, stroke=0)
 
-    qr_size = 60 * mm
+    qr_size = 46 * mm
     qr_x = (PAGE_W - qr_size) / 2
-    # Leave 10mm at the bottom of the cream block for caption + handle, 0mm gap at top.
-    qr_inner_y = qr_y + qr_h - qr_size  # QR pinned to top of cream
+    qr_y = qr_card_top - 7 * mm - qr_size  # 7mm padding under the card's top
+    # White plate behind the QR so it always scans on the cream card.
+    c.setFillColor(WHITE)
+    c.roundRect(qr_x - 3 * mm, qr_y - 3 * mm, qr_size + 6 * mm, qr_size + 6 * mm, 3 * mm, fill=1, stroke=0)
 
     qr_bytes = qr_image_bytes or _generate_qr_bytes(business_slug or "demo", bot_username)
     try:
-        c.drawImage(ImageReader(BytesIO(qr_bytes)), qr_x, qr_inner_y, qr_size, qr_size, mask="auto")
+        c.drawImage(ImageReader(BytesIO(qr_bytes)), qr_x, qr_y, qr_size, qr_size, mask="auto")
     except Exception:
-        # Fallback rectangle so the layout doesn't collapse
         c.setFillColor(WHITE)
-        c.rect(qr_x, qr_inner_y, qr_size, qr_size, fill=1, stroke=0)
+        c.rect(qr_x, qr_y, qr_size, qr_size, fill=1, stroke=0)
 
-    caption_y = qr_inner_y - 5 * mm
+    cap_y = qr_y - 7 * mm
     c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawCentredString(PAGE_W / 2, caption_y, _ascii_safe("Yozilish uchun QR-kodni skaner qiling"))
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(PAGE_W / 2, cap_y, _ascii_safe("Skaner qiling va yoziling"))
 
     handle = f"t.me/{bot_username}?start={business_slug or ''}"
     c.setFillColor(INK_MUTED)
-    c.setFont("Helvetica", 7)
-    c.drawCentredString(PAGE_W / 2, caption_y - 4 * mm, _truncate(c, handle, "Helvetica", 7, PAGE_W - 20 * mm))
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(PAGE_W / 2, cap_y - 5 * mm, _truncate(c, handle, "Helvetica", 8, PAGE_W - 2 * M - 6 * mm))
 
-    # ───────────── 3. SERVICES ─────────────
-    c.setFillColor(WHITE)
-    c.rect(0, services_y, PAGE_W, services_h, fill=1, stroke=0)
-
-    title_y = services_y + services_h - 7 * mm
-    c.setFillColor(PRIMARY)
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(10 * mm, title_y, "Xizmatlar")
-
-    # Underline accent under the title
-    c.setStrokeColor(PRIMARY)
-    c.setLineWidth(0.6)
-    c.line(10 * mm, title_y - 1.5 * mm, 22 * mm, title_y - 1.5 * mm)
-
+    # ───────────── 3. SERVICES (vertically centered) ─────────────
     rows = list(services or [])[:6]
+    title_h = 9 * mm
+    line_h = 7 * mm
+    block_h = title_h + (len(rows) * line_h if rows else line_h)
+    region_h = services_top - services_bottom
+    block_top = services_bottom + (region_h + block_h) / 2  # vertical center
+
+    title_y = block_top - 5 * mm
+    c.setFillColor(PRIMARY)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(M, title_y, "Xizmatlar")
+    c.setStrokeColor(PRIMARY)
+    c.setLineWidth(1.2)
+    c.line(M, title_y - 2 * mm, M + 13 * mm, title_y - 2 * mm)
+
     if not rows:
         c.setFillColor(INK_MUTED)
         c.setFont("Helvetica", 9)
-        c.drawCentredString(PAGE_W / 2, services_y + services_h / 2 - 4, "Xizmatlar mavjud emas")
+        c.drawCentredString(PAGE_W / 2, title_y - 10 * mm, _ascii_safe("Xizmatlar tez orada"))
     else:
-        col_gap = 4 * mm
-        col_w = (PAGE_W - 20 * mm - col_gap) / 2
-        col_x = [10 * mm, 10 * mm + col_w + col_gap]
-        list_top = title_y - 7 * mm
-        line_h = 5.5 * mm
-
+        right_x = PAGE_W - M
         for i, svc in enumerate(rows):
-            col = i % 2
-            row = i // 2
-            x = col_x[col]
-            y = list_top - row * line_h
-
-            name = _ascii_safe(svc.get("name") or "")
+            y = title_y - title_h - i * line_h + 2 * mm
             price_text = _format_price(svc.get("price"))
             duration = svc.get("duration_minutes")
-            dur_text = f"({duration} daq)" if duration else ""
+            dur_text = f"{duration} daq" if duration else ""
 
-            # Right side: price (bold ink)
+            # Price (bold, right)
             c.setFillColor(INK)
-            c.setFont("Helvetica-Bold", 8)
-            price_w = c.stringWidth(price_text, "Helvetica-Bold", 8)
-            c.drawString(x + col_w - price_w, y, price_text)
+            c.setFont("Helvetica-Bold", 9)
+            price_w = c.stringWidth(price_text, "Helvetica-Bold", 9)
+            c.drawString(right_x - price_w, y, price_text)
 
-            # Duration sits to the LEFT of the price, in muted gray
+            # Duration (muted, left of price)
             dur_w = 0
             if dur_text:
                 c.setFillColor(INK_MUTED)
-                c.setFont("Helvetica", 7)
-                dur_w = c.stringWidth(dur_text, "Helvetica", 7)
-                c.drawString(x + col_w - price_w - 1.5 * mm - dur_w, y, dur_text)
+                c.setFont("Helvetica", 7.5)
+                dur_w = c.stringWidth(dur_text, "Helvetica", 7.5)
+                c.drawString(right_x - price_w - 2 * mm - dur_w, y, dur_text)
 
-            # Left side: bullet + name, truncated to fit
-            bullet = "• "
+            # Bullet + name (left)
             c.setFillColor(PRIMARY)
-            c.setFont("Helvetica-Bold", 8)
-            c.drawString(x, y, bullet)
-            bullet_w = c.stringWidth(bullet, "Helvetica-Bold", 8)
-
-            name_max = col_w - bullet_w - price_w - 2.5 * mm - (dur_w + 1.5 * mm if dur_text else 0)
-            name = _truncate(c, name, "Helvetica", 8, max(name_max, 6 * mm))
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(M, y, "•")
+            name_x = M + 4 * mm
+            name_max_w = (right_x - price_w - dur_w - (3 * mm if dur_text else 0)) - name_x - 3 * mm
+            name = _truncate(c, _ascii_safe(svc.get("name") or ""), "Helvetica", 9, max(name_max_w, 10 * mm))
             c.setFillColor(INK)
-            c.setFont("Helvetica", 8)
-            c.drawString(x + bullet_w, y, name)
+            c.setFont("Helvetica", 9)
+            c.drawString(name_x, y, name)
 
     # ───────────── 4. CONTACTS ─────────────
     c.setFillColor(CREAM)
     c.rect(0, contacts_y, PAGE_W, contacts_h, fill=1, stroke=0)
 
-    parts = []
+    items = []
     if address:
-        parts.append(("Manzil", _ascii_safe(address)))
+        items.append(("Manzil", _ascii_safe(address)))
     if phone:
-        parts.append(("Tel", _ascii_safe(phone)))
+        items.append(("Tel", _ascii_safe(phone)))
     if schedule_text:
-        parts.append(("Vaqt", _ascii_safe(schedule_text)))
+        items.append(("Vaqt", _ascii_safe(schedule_text)))
 
-    if parts:
-        # Render in a single line, truncating each part proportionally if needed.
-        font = "Helvetica"
-        bold = "Helvetica-Bold"
-        size = 8
-        sep = "   |   "
-
-        # Build segments [(label, value)] and measure
-        sep_w = c.stringWidth(sep, font, size)
-        avail = PAGE_W - 16 * mm - sep_w * (len(parts) - 1)
-        per_part = avail / len(parts)
-
-        # Truncate each value if its segment exceeds its share
-        rendered = []
-        for label, value in parts:
+    if items:
+        n = len(items)
+        gap = contacts_h / (n + 1)
+        for idx, (label, value) in enumerate(items):
+            y = contacts_y + contacts_h - gap * (idx + 1) - 1 * mm
             label_text = f"{label}: "
-            label_w = c.stringWidth(label_text, bold, size)
-            value_max = max(per_part - label_w, 8 * mm)
-            value = _truncate(c, value, font, size, value_max)
-            seg_w = label_w + c.stringWidth(value, font, size)
-            rendered.append((label_text, label_w, value, seg_w))
-
-        total_w = sum(r[3] for r in rendered) + sep_w * (len(rendered) - 1)
-        x = (PAGE_W - total_w) / 2
-        y = contacts_y + contacts_h / 2 - 2
-
-        for idx, (label_text, label_w, value, seg_w) in enumerate(rendered):
             c.setFillColor(PRIMARY)
-            c.setFont(bold, size)
-            c.drawString(x, y, label_text)
+            c.setFont("Helvetica-Bold", 8.5)
+            c.drawString(M, y, label_text)
+            lw = c.stringWidth(label_text, "Helvetica-Bold", 8.5)
             c.setFillColor(INK)
-            c.setFont(font, size)
-            c.drawString(x + label_w, y, value)
-            x += seg_w
-            if idx < len(rendered) - 1:
-                c.setFillColor(INK_MUTED)
-                c.setFont(font, size)
-                c.drawString(x, y, sep)
-                x += sep_w
+            c.setFont("Helvetica", 8.5)
+            c.drawString(M + lw, y, _truncate(c, value, "Helvetica", 8.5, PAGE_W - M - (M + lw)))
 
     # ───────────── 5. FOOTER ─────────────
     c.setFillColor(INK)
     c.rect(0, footer_y, PAGE_W, footer_h, fill=1, stroke=0)
-
-    foot_baseline = footer_y + footer_h / 2 - 2.2
+    fb = footer_y + footer_h / 2 - 2.2
     c.setFillColor(WHITE)
     c.setFont("Helvetica", 7)
-    c.drawString(8 * mm, foot_baseline, "(c) YOZUV")
-
+    c.drawString(M - 2 * mm, fb, "(c) YOZUV")
     c.setFont("Helvetica-Bold", 8)
-    c.drawCentredString(PAGE_W / 2, foot_baseline, "yozuv.uz")
-
+    c.drawCentredString(PAGE_W / 2, fb, "yozuv.uz")
     c.setFont("Helvetica", 7)
-    c.drawRightString(PAGE_W - 8 * mm, foot_baseline, _ascii_safe("Online yozilish platformasi"))
+    c.drawRightString(PAGE_W - M + 2 * mm, fb, _ascii_safe("Online yozilish platformasi"))
 
     c.showPage()
     c.save()
