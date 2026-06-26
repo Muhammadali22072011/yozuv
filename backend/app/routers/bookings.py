@@ -658,15 +658,44 @@ def slots_for_date(
     slug: str,
     service_id: UUID,
     date: date = Query(...),
+    staff_id: UUID | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     if slug == "me":
         raise HTTPException(404, "Not found")
-    b = db.query(Business).filter(Business.slug == slug).first()
+    # Only active businesses take bookings (don't offer slots for a blocked or
+    # soft-deleted business).
+    b = db.query(Business).filter(Business.slug == slug, Business.is_active.is_(True)).first()
     if not b:
         raise HTTPException(404, "Not found")
-    service = db.query(Service).filter(Service.id == service_id, Service.business_id == b.id).first()
+    service = (
+        db.query(Service)
+        .filter(
+            Service.id == service_id,
+            Service.business_id == b.id,
+            Service.is_active.is_(True),
+        )
+        .first()
+    )
     if not service:
         raise HTTPException(404, "Service not found")
-    times = get_available_slots(b.id, date, service.duration_minutes, db)
+    # A specific master → only that master's bookings block slots (others run
+    # in parallel). Validate they belong here and are active.
+    if staff_id is not None:
+        from app.models import Staff
+
+        staff_ok = (
+            db.query(Staff.id)
+            .filter(
+                Staff.id == staff_id,
+                Staff.business_id == b.id,
+                Staff.is_active.is_(True),
+            )
+            .first()
+        )
+        if not staff_ok:
+            raise HTTPException(404, "Staff not found")
+    times = get_available_slots(
+        b.id, date, service.duration_minutes, db, staff_id=staff_id
+    )
     return {"slots": [t.strftime("%H:%M") for t in times]}

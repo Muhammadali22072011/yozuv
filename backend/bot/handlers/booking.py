@@ -290,7 +290,7 @@ async def pick_staff(cb: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("day:"))
-async def pick_day(cb: CallbackQuery):
+async def pick_day(cb: CallbackQuery, state: FSMContext):
     _, sid, d_iso = cb.data.split(":", 2)
     d = date.fromisoformat(d_iso)
     db = SessionLocal()
@@ -300,7 +300,12 @@ async def pick_day(cb: CallbackQuery):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        slots = get_available_slots(b.id, d, service.duration_minutes, db)
+        # Offer slots for the chosen master only (empty = any → per-business).
+        staff_raw = str((await state.get_data()).get("staff_id") or "")
+        staff_uuid = UUID(staff_raw) if staff_raw else None
+        slots = get_available_slots(
+            b.id, d, service.duration_minutes, db, staff_id=staff_uuid
+        )
         times = [t.strftime("%H:%M") for t in slots]
         if not times:
             sched = get_schedule_for_weekday(db, b.id, d.weekday())
