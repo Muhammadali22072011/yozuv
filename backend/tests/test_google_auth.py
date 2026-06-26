@@ -2,6 +2,11 @@
 import pytest
 
 from app.config import get_settings
+from app.utils.auth import create_access_token
+
+
+def _auth(user):
+    return {"Authorization": f"Bearer {create_access_token(str(user.id))}"}
 
 
 @pytest.fixture()
@@ -55,3 +60,26 @@ def test_callback_missing_code_redirects(client, google_enabled):
     r = client.get("/api/auth/google/callback", follow_redirects=False)
     assert r.status_code in (302, 307)
     assert "/auth/login" in r.headers["location"]
+
+
+def test_identities_lists_methods(client, owner_user):
+    r = client.get("/api/auth/identities", headers=_auth(owner_user))
+    assert r.status_code == 200
+    methods = {m["provider"]: m for m in r.json()["methods"]}
+    assert methods["telegram"]["connected"] is True
+    assert methods["google"]["connected"] is False
+    assert methods["password"]["connected"] is False
+
+
+def test_disconnect_google_not_connected_404(client, owner_user):
+    r = client.delete("/api/auth/identities/google", headers=_auth(owner_user))
+    assert r.status_code == 404
+
+
+def test_link_start_redirects_to_google(client, owner_user, google_enabled):
+    token = create_access_token(str(owner_user.id))
+    r = client.get(
+        f"/api/auth/google/start?link=1&token={token}", follow_redirects=False
+    )
+    assert r.status_code in (302, 307)
+    assert r.headers["location"].startswith("https://accounts.google.com")
