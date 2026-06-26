@@ -96,6 +96,13 @@ def create_business(
             )
         )
 
+    # Partner (B2B) referral: if this owner signed up with another salon's
+    # code, link them so the referrer is rewarded on this business's first payment.
+    if getattr(body, "partner_code", ""):
+        from app.services import partner_referral_service
+
+        partner_referral_service.attach_referral_on_signup(db, b, body.partner_code)
+
     db.commit()
     db.refresh(b)
     return b

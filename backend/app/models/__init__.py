@@ -4,6 +4,7 @@ from app.models.booking import Booking
 from app.models.broadcast_message import BroadcastMessage
 from app.models.business import Business
 from app.models.business_photo import BusinessPhoto
+from app.models.business_referral import BusinessReferral
 from app.models.client import Client
 from app.models.client_block import ClientBlock
 from app.models.media_blob import MediaBlob
@@ -43,6 +44,7 @@ __all__ = [
     "Business",
     "BusinessPhoto",
     "MediaBlob",
+    "BusinessReferral",
     "Service",
     "Schedule",
     "Staff",

@@ -91,6 +91,7 @@ export default function OnboardingPage() {
     tuman: "",
     latitude: null as number | null,
     longitude: null as number | null,
+    partner_code: "",
   });
   const [slugTouched, setSlugTouched] = useState(false);
   const [services, setServices] = useState<DraftService[]>([
@@ -104,6 +105,14 @@ export default function OnboardingPage() {
       .then(() => router.replace("/dashboard"))
       .catch(() => setLoading(false));
   }, [router]);
+
+  // Pre-fill the partner code if the owner arrived via a partner link
+  // (…/dashboard/onboarding?ref=PXXXX). They can still edit/clear it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) setBiz((f) => ({ ...f, partner_code: ref.trim().toUpperCase() }));
+  }, []);
 
   function next() {
     setErr("");
@@ -174,6 +183,7 @@ export default function OnboardingPage() {
             tuman: biz.tuman.trim(),
             latitude: biz.latitude,
             longitude: biz.longitude,
+            partner_code: biz.partner_code.trim(),
           }),
         });
       } catch (e) {
@@ -371,6 +381,7 @@ type Step1Biz = {
   tuman: string;
   latitude: number | null;
   longitude: number | null;
+  partner_code: string;
 };
 
 function Step1({
@@ -546,6 +557,18 @@ function Step1({
             className="yz-input mt-1.5"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink-500">
+          Taklif kodi (ixtiyoriy)
+        </label>
+        <input
+          value={biz.partner_code}
+          onChange={(e) => setBiz({ ...biz, partner_code: e.target.value.toUpperCase() })}
+          placeholder="Sizni boshqa biznes taklif qilgan bo'lsa — kodini kiriting"
+          className="yz-input mt-1.5 font-mono uppercase"
+        />
       </div>
     </div>
   );

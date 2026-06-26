@@ -31,6 +31,9 @@ class BusinessCreate(BaseModel):
     tuman: str = Field(default="", max_length=128)
     latitude: float | None = None
     longitude: float | None = None
+    # Optional partner-referral code: another salon's code, entered by a new
+    # owner at signup. Grants that referrer a discount once this business pays.
+    partner_code: str = Field(default="", max_length=16)
 
 
 class BusinessUpdate(BaseModel):
