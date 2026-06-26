@@ -1,3 +1,4 @@
+from datetime import date, time
 from uuid import UUID
 
 from aiogram import F, Router
@@ -10,6 +11,7 @@ from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Review, Service
 from app.utils.clock import local_today
 from app.utils.htmlsafe import h
+from app.utils.slots import get_available_slots, next_working_dates
 from bot.keyboards.inline import back_to_menu_kb
 from bot.utils import safe_edit_text
 
@@ -68,6 +70,7 @@ async def cmd_mybookings(message: Message):
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text=review_label, callback_data=f"rev:{b.id}")],
+                    [InlineKeyboardButton(text="🔄 Vaqtni o'zgartirish", callback_data=f"resc:{b.id}")],
                     [InlineKeyboardButton(text="Bekor qilish", callback_data=f"cxl:{b.id}")],
                 ]
             )
@@ -370,6 +373,102 @@ async def cancel_booking(cb: CallbackQuery):
         _cancel_service(db, b.id, b.business_id, reason="", by_client=True)
         db.commit()
         await cb.message.edit_text("Yozilish bekor qilindi.")
+    finally:
+        db.close()
+    await cb.answer()
+
+
+def _own_active_booking(db, bid: str, telegram_id: int) -> Booking | None:
+    b = db.query(Booking).filter(Booking.id == UUID(bid)).first()
+    client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
+    if not b or not client or b.client_id != client.id:
+        return None
+    if b.status not in (BookingStatus.PENDING, BookingStatus.CONFIRMED):
+        return None
+    return b
+
+
+@router.callback_query(F.data.startswith("resc:"))
+async def reschedule_pick_day(cb: CallbackQuery):
+    bid = cb.data.split(":", 1)[1]
+    db = SessionLocal()
+    try:
+        b = _own_active_booking(db, bid, cb.from_user.id)
+        if not b:
+            await cb.answer("O'zgartirib bo'lmaydi", show_alert=True)
+            return
+        dates = next_working_dates(db, b.business_id, count=7)
+        rows = [
+            [InlineKeyboardButton(text=d.isoformat(), callback_data=f"rday:{bid}:{d.isoformat()}")]
+            for d in dates
+        ]
+        if not rows:
+            await cb.answer("Bo'sh kun yo'q", show_alert=True)
+            return
+        await safe_edit_text(
+            cb, "Yangi sanani tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)
+        )
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("rday:"))
+async def reschedule_pick_time(cb: CallbackQuery):
+    _, bid, d_iso = cb.data.split(":", 2)
+    db = SessionLocal()
+    try:
+        b = _own_active_booking(db, bid, cb.from_user.id)
+        if not b:
+            await cb.answer("O'zgartirib bo'lmaydi", show_alert=True)
+            return
+        svc = db.query(Service).filter(Service.id == b.service_id).first()
+        dur = svc.duration_minutes if svc else 30
+        slots = get_available_slots(b.business_id, date.fromisoformat(d_iso), dur, db)
+        if not slots:
+            await cb.answer("Bu kunda bo'sh vaqt yo'q", show_alert=True)
+            return
+        rows: list[list[InlineKeyboardButton]] = []
+        row: list[InlineKeyboardButton] = []
+        for t in slots:
+            ts = t.strftime("%H:%M")  # slots are time objects → "HH:MM"
+            row.append(InlineKeyboardButton(text=ts, callback_data=f"rtime:{bid}:{d_iso}:{ts}"))
+            if len(row) == 3:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+        rows.append([InlineKeyboardButton(text="◀️ Sanalar", callback_data=f"resc:{bid}")])
+        await safe_edit_text(
+            cb, "Yangi vaqtni tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)
+        )
+    finally:
+        db.close()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("rtime:"))
+async def reschedule_apply(cb: CallbackQuery):
+    _, bid, d_iso, t_str = cb.data.split(":", 3)
+    db = SessionLocal()
+    try:
+        from app.services.booking_service import reschedule_booking
+
+        hh, mm = t_str.split(":")
+        try:
+            reschedule_booking(
+                db,
+                UUID(bid),
+                date.fromisoformat(d_iso),
+                time(int(hh), int(mm)),
+                client_telegram_id=cb.from_user.id,
+            )
+            db.commit()
+        except ValueError:
+            db.rollback()
+            await cb.answer("Bu vaqt band yoki o'zgartirib bo'lmaydi", show_alert=True)
+            return
+        await cb.message.edit_text(f"✅ Yozilish ko'chirildi: {d_iso} {t_str}")
     finally:
         db.close()
     await cb.answer()

@@ -399,3 +399,59 @@ def confirm_booking(db: Session, booking_id: UUID, business_id: UUID) -> Booking
         return None
     b.status = BookingStatus.CONFIRMED
     return b
+
+
+def reschedule_booking(
+    db: Session,
+    booking_id: UUID,
+    new_date: _date,
+    new_start: _time,
+    *,
+    business_id: UUID | None = None,
+    client_telegram_id: int | None = None,
+) -> Booking:
+    """Move an existing booking to a new date/time, keeping the SAME row
+    (preserving recurrence/promo/loyalty links) instead of cancel+rebook.
+
+    Scope it by business (owner) and/or by the booking's client (bot self-
+    service). Raises ValueError if not found / not yours / not active / the
+    new slot conflicts. Caller commits + fires notifications."""
+    q = db.query(Booking).filter(Booking.id == booking_id)
+    if business_id is not None:
+        q = q.filter(Booking.business_id == business_id)
+    b = q.first()
+    if not b:
+        raise ValueError("Booking not found")
+    if client_telegram_id is not None:
+        client = db.query(Client).filter(Client.id == b.client_id).first()
+        if not client or int(client.telegram_id or 0) != int(client_telegram_id):
+            raise ValueError("Not your booking")
+    if b.status not in (BookingStatus.PENDING, BookingStatus.CONFIRMED):
+        raise ValueError("Booking is not active")
+
+    service = db.query(Service).filter(Service.id == b.service_id).first()
+    duration = service.duration_minutes if service else 30
+    new_end = (
+        datetime.combine(new_date, new_start) + timedelta(minutes=duration)
+    ).time()
+
+    # Same lock + overlap discipline as create, but EXCLUDING this booking so
+    # it never conflicts with itself; per-staff when the booking has a master.
+    acquire_slot_lock(db, b.business_id, new_date, new_start)
+    conflict_q = db.query(Booking).filter(
+        Booking.id != b.id,
+        Booking.business_id == b.business_id,
+        Booking.date == new_date,
+        Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+        Booking.start_time < new_end,
+        Booking.end_time > new_start,
+    )
+    if b.staff_id is not None:
+        conflict_q = conflict_q.filter(Booking.staff_id == b.staff_id)
+    if conflict_q.with_for_update().first():
+        raise ValueError("Requested time slot is no longer available")
+
+    b.date = new_date
+    b.start_time = new_start
+    b.end_time = new_end
+    return b
