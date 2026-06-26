@@ -6,9 +6,6 @@ import { Download, FileDown, FileText, Share2 } from "lucide-react";
 import { ScreenHeader, TourFloat, YzLogo, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
 import BrochureTrifold3D from "@/components/qr/BrochureTrifold3D";
-
-type BrochureSvc = { name: string; price: number; duration_minutes: number; is_active: boolean };
-type BrochureDay = { day_of_week: number; start_time: string; end_time: string; is_working: boolean };
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import type { BusinessMe } from "@/types";
 import { usePageTour } from "@/lib/use-page-tour";
@@ -211,7 +208,7 @@ export default function QrPage() {
           <div className="card-soft mt-4 p-4">
             <div className="mb-1">
               <div className="font-display text-[15px] font-bold text-ink-900">3D broshyura</div>
-              <div className="mt-0.5 text-xs text-ink-500">Burab koʻring · aylantiring</div>
+              <div className="mt-0.5 text-xs text-ink-500">Burab koʻring · aylantiring · orqa tomonni oching</div>
             </div>
             <BrochureTrifold3D
               name={biz?.name}
