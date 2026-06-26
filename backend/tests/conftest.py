@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 # Point settings at SQLite before importing anything from the app
@@ -31,6 +31,19 @@ engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+# pysqlite manages transactions itself and emits BEGIN at the wrong time, which
+# breaks SAVEPOINT-based test isolation (committed rows leak across tests). The
+# documented fix: stop the driver from emitting BEGIN, and emit it ourselves.
+@event.listens_for(engine, "connect")
+def _sqlite_disable_autobegin(dbapi_connection, connection_record):
+    dbapi_connection.isolation_level = None
+
+
+@event.listens_for(engine, "begin")
+def _sqlite_emit_begin(conn):
+    conn.exec_driver_sql("BEGIN")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def create_tables():
     Base.metadata.create_all(bind=engine)
@@ -40,9 +53,18 @@ def create_tables():
 
 @pytest.fixture()
 def db():
+    # Each test runs inside an outer transaction that is rolled back at
+    # teardown, so committed rows never leak between tests. Endpoints under
+    # test call session.commit(); join_transaction_mode="create_savepoint"
+    # (SQLAlchemy 2.0) makes the session join the outer transaction via a
+    # SAVEPOINT, so every commit is released only to that savepoint and the
+    # outer rollback still wipes everything. Without it, a commit would reach
+    # the real transaction and leak across tests.
     connection = engine.connect()
     transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
+    session = TestingSessionLocal(
+        bind=connection, join_transaction_mode="create_savepoint"
+    )
     yield session
     session.close()
     transaction.rollback()
