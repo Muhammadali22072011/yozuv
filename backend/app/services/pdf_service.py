@@ -307,8 +307,130 @@ def generate_brochure(
     c.drawRightString(PAGE_W - M + 2 * mm, fb, _ascii_safe("Online yozilish platformasi"))
 
     c.showPage()
+
+    # ═════════════ PAGE 2 — Yozuv marketing (the brochure's back) ═════════════
+    _draw_marketing_page(c)
+
+    c.showPage()
     c.save()
     return buffer.getvalue()
+
+
+def _draw_marketing_page(c: canvas.Canvas) -> None:
+    """Second A5 page — what Yozuv offers (features + plan). Print double-sided."""
+    M = 10 * mm
+
+    c.setFillColor(WHITE)
+    c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+
+    # ── header (indigo) ──
+    header_h = 42 * mm
+    header_y = PAGE_H - header_h
+    c.setFillColor(PRIMARY)
+    c.rect(0, header_y, PAGE_W, header_h, fill=1, stroke=0)
+
+    logo = _logo_reader()
+    tx = M
+    if logo is not None:
+        try:
+            c.drawImage(logo, M, header_y + (header_h - 16 * mm) / 2, 16 * mm, 16 * mm,
+                        mask="auto", preserveAspectRatio=True)
+            tx = M + 20 * mm
+        except Exception:
+            tx = M
+
+    c.setFillColor(WHITE)
+    c.saveState()
+    c.setFillAlpha(0.7)
+    c.setFont("Helvetica-Bold", 7.5)
+    c.drawString(tx, header_y + header_h - 13 * mm, "TELEGRAM MINI APP")
+    c.restoreState()
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(tx, header_y + header_h - 21 * mm, "Yozuv")
+    c.saveState()
+    c.setFillAlpha(0.85)
+    c.setFont("Helvetica", 8.5)
+    c.drawString(tx, header_y + header_h - 28 * mm, _ascii_safe("Mijozlar Telegram orqali yoziladi"))
+    c.restoreState()
+
+    # ── features ──
+    y = header_y - 12 * mm
+    c.setFillColor(PRIMARY)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(M, y, "Imkoniyatlar")
+    c.setStrokeColor(PRIMARY)
+    c.setLineWidth(1.2)
+    c.line(M, y - 2 * mm, M + 15 * mm, y - 2 * mm)
+
+    feats = [
+        ("Aqlli yozilish", "Mijoz xizmat va vaqt tanlaydi"),
+        ("Tasdiqlash / Rad etish", "Bir tugma bilan boshqarish"),
+        ("Payme / Click to'lov", "To'g'ridan-to'g'ri Telegramda"),
+        ("Analitika", "Daromad va statistika"),
+        ("QR-broshyura", "Avtomatik PDF va QR-kod"),
+        ("Katalog", "Mijozlar sizni topadi"),
+    ]
+    fy = y - 9 * mm
+    for nm, ds in feats:
+        c.setFillColor(PRIMARY)
+        c.circle(M + 1.5 * mm, fy + 1 * mm, 1.3 * mm, fill=1, stroke=0)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 9.5)
+        c.drawString(M + 6 * mm, fy, _ascii_safe(nm))
+        c.setFillColor(INK_MUTED)
+        c.setFont("Helvetica", 8)
+        c.drawString(M + 6 * mm, fy - 3.8 * mm, _ascii_safe(ds))
+        fy -= 9.5 * mm
+
+    # ── plan card (indigo) ──
+    card_top = fy - 1 * mm
+    card_h = 46 * mm
+    card_y = card_top - card_h
+    c.setFillColor(PRIMARY)
+    c.roundRect(M, card_y, PAGE_W - 2 * M, card_h, 6 * mm, fill=1, stroke=0)
+
+    c.setFillColor(WHITE)
+    c.saveState()
+    c.setFillAlpha(0.7)
+    c.setFont("Helvetica-Bold", 7.5)
+    c.drawString(M + 6 * mm, card_top - 8 * mm, "TARIF - PRO")
+    c.restoreState()
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(M + 6 * mm, card_top - 19 * mm, "$15")
+    price_w = c.stringWidth("$15", "Helvetica-Bold", 26)
+    c.setFont("Helvetica", 11)
+    c.drawString(M + 6 * mm + price_w + 2 * mm, card_top - 19 * mm, "/ oy")
+    c.saveState()
+    c.setFillAlpha(0.85)
+    c.setFont("Helvetica", 8.5)
+    c.drawString(M + 6 * mm, card_top - 24.5 * mm, _ascii_safe("187 500 so'm · barcha imkoniyatlar cheksiz"))
+    c.restoreState()
+
+    perks = ["Cheksiz yozilishlar", "Payme / Click to'lov", "Analitika va eslatmalar", "QR va PDF broshyura"]
+    py = card_top - 31 * mm
+    for p in perks:
+        c.setFillColor(WHITE)
+        c.saveState()
+        c.setFillAlpha(0.95)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(M + 6 * mm, py, "+")
+        c.setFont("Helvetica", 8.5)
+        c.drawString(M + 10 * mm, py, _ascii_safe(p))
+        c.restoreState()
+        py -= 4.4 * mm
+
+    # ── footer ──
+    fh = 12 * mm
+    c.setFillColor(INK)
+    c.rect(0, 0, PAGE_W, fh, fill=1, stroke=0)
+    fb = fh / 2 - 2.2
+    c.setFillColor(WHITE)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(M - 2 * mm, fb, _ascii_safe("14 kun bepul"))
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(PAGE_W / 2, fb, "yozuv.uz")
+    c.setFont("Helvetica", 7)
+    c.drawRightString(PAGE_W - M + 2 * mm, fb, _ascii_safe("Online yozilish platformasi"))
 
 
 # ───────── Backwards-compatible wrapper for existing routers ─────────
