@@ -1493,3 +1493,72 @@ def platform_stats(db: Session = Depends(get_db), _=Depends(get_admin_user)):
         "reviews_avg": round(float(reviews_avg), 1) if reviews_avg is not None else None,
         "last_backup": last_backup,
     }
+
+
+def _get_or_create_platform_settings(db: Session) -> "PlatformSettings":
+    from app.models import PlatformSettings
+
+    ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    if ps is None:
+        ps = PlatformSettings(id=1)
+        db.add(ps)
+        db.flush()
+    return ps
+
+
+@router.get("/plan-prices")
+def get_plan_prices(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    """Current subscription prices (resolved) plus the raw overrides.
+
+    ``monthly``/``yearly`` are the effective prices used at checkout;
+    ``monthly_override``/``yearly_override`` are the stored values where
+    0 means "use the code default".
+    """
+    from app.models import PlatformSettings
+    from app.services.payment_service import MONTHLY_AMOUNT_UZS, YEARLY_AMOUNT_UZS
+
+    ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    monthly_override = int(ps.monthly_price) if ps else 0
+    yearly_override = int(ps.yearly_price) if ps else 0
+    return {
+        "monthly": monthly_override or MONTHLY_AMOUNT_UZS,
+        "yearly": yearly_override or YEARLY_AMOUNT_UZS,
+        "monthly_override": monthly_override,
+        "yearly_override": yearly_override,
+        "default_monthly": MONTHLY_AMOUNT_UZS,
+        "default_yearly": YEARLY_AMOUNT_UZS,
+    }
+
+
+class PlanPricesBody(BaseModel):
+    # 0 (or null) resets to the code default.
+    monthly_price: int = Field(0, ge=0, le=1_000_000_000)
+    yearly_price: int = Field(0, ge=0, le=1_000_000_000)
+
+
+@router.put("/plan-prices")
+def set_plan_prices(
+    body: PlanPricesBody,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user),
+):
+    from app.services.payment_service import MONTHLY_AMOUNT_UZS, YEARLY_AMOUNT_UZS
+
+    ps = _get_or_create_platform_settings(db)
+    ps.monthly_price = int(body.monthly_price)
+    ps.yearly_price = int(body.yearly_price)
+    log_admin_action(
+        db,
+        admin,
+        "settings.prices",
+        "PlatformSettings",
+        None,
+        {"monthly_price": ps.monthly_price, "yearly_price": ps.yearly_price},
+    )
+    db.commit()
+    return {
+        "monthly": ps.monthly_price or MONTHLY_AMOUNT_UZS,
+        "yearly": ps.yearly_price or YEARLY_AMOUNT_UZS,
+        "monthly_override": ps.monthly_price,
+        "yearly_override": ps.yearly_price,
+    }

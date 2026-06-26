@@ -122,6 +122,13 @@ type Pending = {
 
 type CardInfo = { card_number: string; card_holder: string; payment_comment: string };
 
+type PlanPrices = {
+  monthly: number;
+  yearly: number;
+  monthly_override: number;
+  yearly_override: number;
+};
+
 type AdminPayment = {
   id: string;
   business_name: string;
@@ -290,6 +297,11 @@ export default function AdminPage() {
   const [exportingPayments, setExportingPayments] = useState(false);
   const [activity, setActivity] = useState<ActivityModalState | null>(null);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+  const [prices, setPrices] = useState<{ monthly: string; yearly: string }>({
+    monthly: "",
+    yearly: "",
+  });
+  const [savingPrices, setSavingPrices] = useState(false);
 
   useEffect(() => {
     apiFetch<{ is_admin?: boolean }>("/api/auth/me")
@@ -354,6 +366,18 @@ export default function AdminPage() {
       setCard(await apiFetch<CardInfo>("/api/payments/card/info"));
     } catch {
       // optional: card may not be configured yet
+    }
+  }, []);
+
+  const loadPrices = useCallback(async () => {
+    try {
+      const p = await apiFetch<PlanPrices>("/api/admin/plan-prices");
+      setPrices({
+        monthly: p.monthly_override ? String(p.monthly_override) : "",
+        yearly: p.yearly_override ? String(p.yearly_override) : "",
+      });
+    } catch {
+      // prices fall back to code defaults if unreadable
     }
   }, []);
 
@@ -424,6 +448,7 @@ export default function AdminPage() {
     loadPending();
     loadRecent();
     loadCard();
+    loadPrices();
     loadMetrics();
     loadExpiring();
   }, [
@@ -433,6 +458,7 @@ export default function AdminPage() {
     loadPending,
     loadRecent,
     loadCard,
+    loadPrices,
     loadMetrics,
     loadExpiring,
   ]);
@@ -754,6 +780,27 @@ export default function AdminPage() {
       toast((e as Error).message?.slice(0, 80) || "Saqlashda xatolik");
     } finally {
       setSavingCard(false);
+    }
+  }
+
+  async function savePrices() {
+    const monthly = Number(prices.monthly.replace(/\D/g, "")) || 0;
+    const yearly = Number(prices.yearly.replace(/\D/g, "")) || 0;
+    setSavingPrices(true);
+    try {
+      const r = await apiFetch<PlanPrices>("/api/admin/plan-prices", {
+        method: "PUT",
+        body: JSON.stringify({ monthly_price: monthly, yearly_price: yearly }),
+      });
+      setPrices({
+        monthly: r.monthly_override ? String(r.monthly_override) : "",
+        yearly: r.yearly_override ? String(r.yearly_override) : "",
+      });
+      toast("Narxlar saqlandi");
+    } catch (e) {
+      toast((e as Error).message?.slice(0, 80) || "Saqlashda xatolik");
+    } finally {
+      setSavingPrices(false);
     }
   }
 
@@ -1931,6 +1978,59 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+
+            <div className="card-soft space-y-3 p-5 md:col-span-2 md:p-6">
+              <div className="flex items-start gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#FFF3DA] text-[#A8751A]">
+                  <Wallet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-extrabold text-ink-900">
+                    Obuna narxlari
+                  </h3>
+                  <p className="mt-1 text-xs text-ink-500">
+                    Bo‘sh qoldirilsa — standart narx ishlatiladi.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Oylik (so‘m)
+                  </label>
+                  <input
+                    inputMode="numeric"
+                    value={prices.monthly}
+                    onChange={(e) =>
+                      setPrices({ ...prices, monthly: e.target.value.replace(/\D/g, "") })
+                    }
+                    placeholder="187500"
+                    className="yz-input mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Yillik (so‘m)
+                  </label>
+                  <input
+                    inputMode="numeric"
+                    value={prices.yearly}
+                    onChange={(e) =>
+                      setPrices({ ...prices, yearly: e.target.value.replace(/\D/g, "") })
+                    }
+                    placeholder="1875000"
+                    className="yz-input mt-1 font-mono"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={savePrices}
+                disabled={savingPrices}
+                className="btn-primary w-full justify-center"
+              >
+                {savingPrices ? "Saqlanmoqda…" : "Narxlarni saqlash"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -2018,6 +2118,8 @@ export default function AdminPage() {
                 <option value="payment.approve">payment.approve</option>
                 <option value="payment.reject">payment.reject</option>
                 <option value="payment.refund">payment.refund</option>
+                <option value="review.delete">review.delete</option>
+                <option value="settings.prices">settings.prices</option>
                 <option value="broadcast.send">broadcast.send</option>
                 <option value="backup.import">backup.import</option>
               </select>
