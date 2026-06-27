@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import (
     Booking,
     BookingStatus,
@@ -162,7 +162,7 @@ def start_booking_deposit(
 def create_owner_booking(
     body: BookingCreateOwner,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner-created booking from the dashboard. Picks an existing client by id
     and bypasses the public-flow telegram_id lookup."""
@@ -261,7 +261,7 @@ def my_slots(
     date: date = Query(...),
     staff_id: UUID | None = Query(default=None),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner-side available slots — same authoritative logic as the public
     booking page (respects schedule, breaks, holidays, service duration and
@@ -301,7 +301,7 @@ def my_slots(
 @me_router.get("/bookings", response_model=list[BookingRead])
 def list_bookings(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
     booking_date: date | None = None,
     status: BookingStatus | None = None,
     offset: int = 0,
@@ -324,7 +324,7 @@ def update_booking(
     booking_id: UUID,
     body: BookingUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner edit: change service / date / start_time. Recomputes end_time
     and price (only when service changed) and re-validates the slot."""
@@ -402,7 +402,7 @@ def update_booking(
 def confirm(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     b = booking_service.confirm_booking(db, booking_id, business.id)
     if not b:
@@ -416,7 +416,7 @@ def confirm(
 def complete(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner marks a booking as actually finished. Distinct from confirm
     (which only acknowledges a pending request) so the dashboard's
@@ -441,7 +441,7 @@ def cancel(
     booking_id: UUID,
     body: BookingCancelBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     b = booking_service.cancel_booking(db, booking_id, business.id, body.reason)
     if not b:
@@ -546,7 +546,7 @@ def waitlist_join(
 @me_router.get("/waitlist")
 def waitlist_for_owner(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner-side: see pending (un-notified) waitlist entries for this
     business so they can manually fill a slot or contact the client."""
@@ -597,7 +597,7 @@ class RecurringBookingBody(BaseModel):
 def create_recurring(
     body: RecurringBookingBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     service = (
         db.query(Service)
@@ -719,7 +719,7 @@ def cancel_recurring(
     recurrence_id: UUID,
     only_future: bool = True,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     # Business-local "today" — date.today() is the server's wall clock and
     # would drop or keep the wrong day's bookings across the TZ boundary.

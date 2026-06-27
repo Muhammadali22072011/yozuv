@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Business, HolidayDate, Schedule
 
 router = APIRouter(prefix="/business/me", tags=["schedule"])
@@ -42,7 +42,7 @@ class HolidayOut(BaseModel):
 @router.get("/schedule", response_model=list[ScheduleItem])
 def get_schedule(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = db.query(Schedule).filter(Schedule.business_id == business.id).all()
     return [
@@ -62,7 +62,7 @@ def get_schedule(
 def put_schedule(
     body: SchedulePut,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     db.query(Schedule).filter(Schedule.business_id == business.id).delete()
     for d in body.days:
@@ -84,7 +84,7 @@ def put_schedule(
 @router.get("/holidays", response_model=list[HolidayOut])
 def list_holidays(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     return (
         db.query(HolidayDate)
@@ -98,7 +98,7 @@ def list_holidays(
 def add_holiday(
     body: HolidayCreate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     h = HolidayDate(business_id=business.id, date=body.date, reason=body.reason)
     db.add(h)
@@ -111,7 +111,7 @@ def add_holiday(
 def delete_holiday(
     holiday_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     h = db.query(HolidayDate).filter(HolidayDate.id == holiday_id, HolidayDate.business_id == business.id).first()
     if not h:

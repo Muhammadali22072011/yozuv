@@ -39,6 +39,52 @@ def get_plan_amount(db: Session, plan: SubscriptionPlan) -> int:
     return 0
 
 
+# Volume discount for paying for several businesses in one checkout:
+# 1st at full price, 2nd at -15%, 3rd and beyond at -25%. Rewards owners
+# who run a network of branches without giving the whole platform away.
+_BULK_FACTORS = (1.0, 0.85)
+_BULK_FACTOR_REST = 0.75
+
+
+def bulk_factor(position: int) -> float:
+    """Discount multiplier for the business at 0-based `position` in a
+    multi-business checkout."""
+    if position < len(_BULK_FACTORS):
+        return _BULK_FACTORS[position]
+    return _BULK_FACTOR_REST
+
+
+def compute_bulk_amount(db: Session, plan: SubscriptionPlan, count: int) -> int:
+    """Discounted total for buying `plan` for `count` businesses at once,
+    rounded to the nearest 100 so'm."""
+    base = get_plan_amount(db, plan)
+    total = sum(base * bulk_factor(i) for i in range(max(0, count)))
+    return int(round(total / 100) * 100)
+
+
+def tx_business_ids(tx: PaymentTransaction) -> list[UUID]:
+    """Business ids a subscription tx pays for. A normal tx pays for its
+    own business_id; a bulk tx stashes the full list in raw_payload as
+    {"business_ids": [...]}. Always returns at least [tx.business_id]."""
+    import json
+
+    try:
+        data = json.loads(tx.raw_payload or "")
+        ids = data.get("business_ids") if isinstance(data, dict) else None
+        if ids:
+            out: list[UUID] = []
+            for x in ids:
+                try:
+                    out.append(UUID(str(x)))
+                except (ValueError, TypeError):
+                    continue
+            if out:
+                return out
+    except (ValueError, TypeError):
+        pass
+    return [tx.business_id]
+
+
 def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan, amount_paid: int) -> Subscription:
     now = datetime.now(timezone.utc)
     if plan == SubscriptionPlan.MONTHLY:
@@ -149,6 +195,84 @@ def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
         return tx, link
     except Exception:
         return tx, ""
+
+
+def create_bulk_subscription_payment(
+    db: Session,
+    business_ids: list[UUID],
+    plan: SubscriptionPlan,
+    provider: PaymentProvider,
+) -> tuple[PaymentTransaction, str]:
+    """One checkout that pays the (volume-discounted) `plan` for several
+    businesses. Creates a single PaymentTransaction whose amount is the
+    discounted total and whose raw_payload carries the full id list, then
+    builds the provider pay link. The webhook activates every listed
+    business on completion (see complete_transaction_and_notify)."""
+    import json
+
+    if not business_ids:
+        raise ValueError("No businesses selected")
+    amount = compute_bulk_amount(db, plan, len(business_ids))
+    primary = business_ids[0]
+    tx = PaymentTransaction(
+        business_id=primary,
+        provider=provider,
+        amount=amount,
+        status=PaymentRecordStatus.PENDING,
+        plan=plan.value,
+        raw_payload=json.dumps({"business_ids": [str(b) for b in business_ids]}),
+    )
+    db.add(tx)
+    db.flush()
+
+    return_url = settings.public_app_url + "/dashboard/settings"
+    try:
+        if provider == PaymentProvider.PAYME:
+            if not settings.payme_merchant_id or not settings.payme_secret_key:
+                return tx, ""
+            from paytechuz.gateways.payme import PaymeGateway
+
+            payme = PaymeGateway(
+                payme_id=settings.payme_merchant_id,
+                payme_key=settings.payme_secret_key,
+                is_test_mode=(settings.app_env != "production"),
+            )
+            link = payme.create_payment(
+                id=str(tx.id),
+                amount=amount,
+                return_url=return_url,
+                account_field_name="id",
+            )
+            return tx, link
+        if provider == PaymentProvider.CLICK:
+            if not all(
+                [
+                    settings.click_service_id,
+                    settings.click_merchant_id,
+                    settings.click_merchant_user_id,
+                    settings.click_secret_key,
+                ]
+            ):
+                return tx, ""
+            from paytechuz.gateways.click import ClickGateway
+
+            click = ClickGateway(
+                service_id=settings.click_service_id,
+                merchant_id=settings.click_merchant_id,
+                merchant_user_id=settings.click_merchant_user_id,
+                secret_key=settings.click_secret_key,
+                is_test_mode=(settings.app_env != "production"),
+            )
+            link = click.create_payment(
+                id=str(tx.id),
+                amount=amount,
+                description="Yozuv subscription (bulk)",
+                return_url=return_url,
+            )
+            return tx, link
+    except Exception:
+        return tx, ""
+    return tx, ""
 
 
 def create_card_payment(
@@ -321,7 +445,12 @@ def complete_transaction_and_notify(db: Session, tx: PaymentTransaction) -> None
         plan = SubscriptionPlan.YEARLY
     else:
         plan = SubscriptionPlan.MONTHLY
-    activate_subscription(db, tx.business_id, plan, tx.amount)
+    # One tx may cover several businesses (multi-business checkout). Activate
+    # each; split the recorded amount evenly for the per-sub bookkeeping.
+    business_ids = tx_business_ids(tx)
+    per_amount = int(tx.amount // len(business_ids)) if business_ids else tx.amount
+    for bid in business_ids:
+        activate_subscription(db, bid, plan, per_amount)
 
     business = db.query(Business).filter(Business.id == tx.business_id).first()
     owner = db.query(User).filter(User.id == business.owner_id).first() if business else None

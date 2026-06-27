@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_admin_user, get_current_user, get_owned_business, is_admin_user
+from app.deps import get_admin_user, get_current_user, get_active_business, is_admin_user
 from app.models import (
     Business,
     PaymentProvider,
@@ -70,7 +70,7 @@ class CreatePaymentBody(BaseModel):
 def payme_create(
     body: CreatePaymentBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     if body.plan not in (SubscriptionPlan.MONTHLY, SubscriptionPlan.YEARLY):
         raise HTTPException(400, "Invalid plan")
@@ -85,7 +85,7 @@ def payme_create(
 def click_create(
     body: CreatePaymentBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     if body.plan not in (SubscriptionPlan.MONTHLY, SubscriptionPlan.YEARLY):
         raise HTTPException(400, "Invalid plan")
@@ -154,7 +154,7 @@ class CardCreateOut(BaseModel):
 def card_create(
     body: CreatePaymentBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     if body.plan not in (SubscriptionPlan.MONTHLY, SubscriptionPlan.YEARLY):
         raise HTTPException(400, "Invalid plan")
@@ -178,7 +178,7 @@ async def upload_receipt(
     comment: str = Form(""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == transaction_id).first()
     if not tx or tx.business_id != business.id:
@@ -306,7 +306,7 @@ def list_pending(
 def get_status(
     transaction_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == transaction_id).first()
     if not tx or tx.business_id != business.id:

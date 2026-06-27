@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.database import SessionLocal, get_db
 from app.deps import (
     get_current_user,
-    get_owned_business,
+    get_active_business,
     security,
 )
 from app.utils.auth import get_user_from_token
@@ -40,9 +40,15 @@ def create_business(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    existing = db.query(Business).filter(Business.owner_id == user.id).first()
-    if existing:
-        raise HTTPException(400, "Business already exists")
+    # Multi-business: a user may own several. The number they already own
+    # only decides the trial length below (anti-farming), it's no longer a
+    # hard block.
+    owned_count = (
+        db.query(func.count(Business.id))
+        .filter(Business.owner_id == user.id, Business.deleted_at.is_(None))
+        .scalar()
+        or 0
+    )
 
     slug_taken = db.query(Business).filter(Business.slug == body.slug).first()
     if slug_taken:
@@ -80,13 +86,17 @@ def create_business(
         )
     )
 
+    # First business gets the full 14-day trial; every additional one gets
+    # a shorter 7-day trial so the free window can't be farmed by spinning
+    # up throwaway businesses.
     now = datetime.now(timezone.utc)
+    trial_days = 14 if owned_count == 0 else 7
     trial = Subscription(
         business_id=b.id,
         plan=SubscriptionPlan.TRIAL,
         status=SubscriptionStatus.ACTIVE,
         starts_at=now,
-        expires_at=now + timedelta(days=14),
+        expires_at=now + timedelta(days=trial_days),
         amount_paid=0,
     )
     db.add(trial)
@@ -109,7 +119,7 @@ def create_business(
 
 
 @router.get("/me", response_model=BusinessMe)
-def my_business(business: Business = Depends(get_owned_business)):
+def my_business(business: Business = Depends(get_active_business)):
     return business
 
 
@@ -150,7 +160,7 @@ def list_memberships(
 def my_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """One-shot payload that replaces ~10 calls from the dashboard page."""
     today = local_today()
@@ -286,7 +296,7 @@ def my_dashboard(
 @router.get("/me/notifications")
 def my_notifications(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
@@ -389,8 +399,11 @@ def my_notifications(
 async def notifications_stream(
     # SSE: native EventSource can't send custom headers, so we accept
     # the access token via ?token= as well as the usual Authorization
-    # header (same pattern as the brochure download).
+    # header (same pattern as the brochure download). For the same reason
+    # the active business is selected via ?business= rather than the
+    # X-Business-Id header used everywhere else.
     token: str | None = None,
+    business: str | None = None,
     creds: HTTPAuthorizationCredentials | None = Depends(security),
 ):
     """Server-Sent Events feed for the dashboard bell.
@@ -422,10 +435,36 @@ async def notifications_stream(
         user = get_user_from_token(db, raw)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="Invalid user")
-        b = db.query(Business).filter(Business.owner_id == user.id).first()
-        if not b:
-            raise HTTPException(status_code=404, detail="Business not found")
-        business_id = b.id
+        from app.models import Membership
+
+        if business:
+            # Multi-business: stream the business named in ?business=, after
+            # checking the caller actually has a membership for it.
+            try:
+                from uuid import UUID as _UUID
+
+                biz_id = _UUID(business)
+            except ValueError:
+                raise HTTPException(400, "Invalid business id") from None
+            m = (
+                db.query(Membership)
+                .filter(Membership.user_id == user.id, Membership.business_id == biz_id)
+                .first()
+            )
+            if m is None:
+                raise HTTPException(403, "No membership for that business")
+            business_id = biz_id
+        else:
+            # Legacy single-business fallback: the user's primary business.
+            b = (
+                db.query(Business)
+                .filter(Business.owner_id == user.id)
+                .order_by(Business.created_at.asc())
+                .first()
+            )
+            if not b:
+                raise HTTPException(status_code=404, detail="Business not found")
+            business_id = b.id
     finally:
         db.close()
 
@@ -460,7 +499,7 @@ async def notifications_stream(
 def update_business(
     body: BusinessUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
