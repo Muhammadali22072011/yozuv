@@ -15,6 +15,7 @@ import {
   MapPin,
   Pencil,
   Settings as SettingsIcon,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { Avatar, ScreenHeader, useToast } from "@/components/yz";
@@ -574,31 +575,48 @@ export default function SettingsPage() {
                 </span>
                 .
               </div>
-              <div className="mt-3 flex items-center gap-2">
-                <code className="flex-1 truncate rounded-2xl bg-ink-50 px-3 py-2.5 font-mono text-[12px] font-bold tracking-wide text-ink-900">
-                  {typeof window !== "undefined" ? window.location.origin : ""}/auth/login?ref=
-                  {biz.partner_code}
-                </code>
-                <button
-                  onClick={() => {
-                    const link = `${
-                      typeof window !== "undefined" ? window.location.origin : ""
-                    }/auth/login?ref=${biz.partner_code}`;
-                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                      navigator.clipboard
-                        .writeText(link)
-                        .then(() => toast("Havola nusxalandi"))
-                        .catch(() => {});
+              <button
+                onClick={async () => {
+                  const bot = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
+                  // Deep link straight into the Telegram Mini App. The friend
+                  // never leaves Telegram and never sees the website; the app
+                  // reads start_param ("ref_<CODE>") at login and credits us.
+                  const link = `https://t.me/${bot}?startapp=ref_${biz.partner_code}`;
+                  const text = "Yozuv'ga qo‘shiling — ikkalamizga +30 kun bepul";
+                  const tg =
+                    typeof window !== "undefined"
+                      ? (window as unknown as {
+                          Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } };
+                        }).Telegram?.WebApp
+                      : undefined;
+                  // Inside Telegram: open the native "send to…" contact picker.
+                  if (tg?.openTelegramLink) {
+                    tg.openTelegramLink(
+                      `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`,
+                    );
+                    return;
+                  }
+                  // Plain browser / APK: OS share sheet, else copy the link.
+                  if (typeof navigator !== "undefined" && navigator.share) {
+                    try {
+                      await navigator.share({ title: "Yozuv", text: `${text}: ${link}` });
+                    } catch {
+                      /* user cancelled the share sheet */
                     }
-                  }}
-                  className="shrink-0 rounded-2xl bg-ink-900 px-4 py-2.5 font-display text-[13px] font-bold text-white tap"
-                >
-                  Nusxa
-                </button>
-              </div>
-              <div className="mt-2 text-[11px] text-ink-400">
-                Sizning kodingiz: <span className="font-bold">{biz.partner_code}</span>
-              </div>
+                    return;
+                  }
+                  if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    navigator.clipboard
+                      .writeText(link)
+                      .then(() => toast("Havola nusxalandi"))
+                      .catch(() => {});
+                  }
+                }}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink-900 px-4 py-3 font-display text-[14px] font-bold text-white tap"
+              >
+                <Share2 className="h-4 w-4" />
+                Ulashish
+              </button>
             </div>
           </Section>
         )}
