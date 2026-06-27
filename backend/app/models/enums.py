@@ -50,9 +50,22 @@ class ReferralStatus(str, enum.Enum):
 
 
 class SubscriptionPlan(str, enum.Enum):
+    """Billing PERIOD (how long a paid term lasts). Orthogonal to tier."""
+
     TRIAL = "TRIAL"
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
+
+
+class SubscriptionTier(str, enum.Enum):
+    """Packaging by business size — the value metric is active masters
+    (seats). All core features are in every tier; the tier only caps how
+    many staff a business may have (BIZNES is unlimited + multi-branch).
+    TRIAL is always treated as unlimited so the trial shows full value."""
+
+    SOLO = "SOLO"      # 1 master — solo barber / tutor / single-chair
+    SALON = "SALON"    # up to 5 masters — the default/popular tier
+    BIZNES = "BIZNES"  # unlimited masters + branches
 
 
 class SubscriptionStatus(str, enum.Enum):

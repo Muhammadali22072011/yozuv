@@ -84,7 +84,7 @@ def create_public_booking(
     business = booking.business
     service = booking.service
     client = booking.client
-    if business and business.owner_id and client:
+    if business and business.owner_id and client and business.notifications_enabled:
         owner = db.query(User).filter(User.id == business.owner_id).first()
         if owner:
             from bot.locales import t

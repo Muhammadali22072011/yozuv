@@ -66,8 +66,8 @@ const TIPS: Tip[] = [
     a: "Yangi bron, otmen, izoh va obuna haqidagi xabarlar. Tepada raqam — yangi (hali ko'rilmagan) xabarlar soni. Karta yozish bilan o'qilgan deb belgilanadi.",
   },
   {
-    q: "Bir nechta bizneslarim bor — qanday almashtirish mumkin?",
-    a: "Bosh sahifada biznes nomi yonida tugma — bosing va ro'yxatdan tanlang. Sozlamalar tanlangan biznes uchun ko'rsatiladi.",
+    q: "Bir nechta biznesim (filialim) bo'lsa-chi?",
+    a: "Hozircha har bir akkaunt bitta biznesni boshqaradi. Qo'shimcha biznes yoki filial uchun alohida akkaunt (boshqa login bilan) oching.",
   },
 ];
 

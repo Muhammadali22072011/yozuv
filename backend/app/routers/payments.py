@@ -23,6 +23,7 @@ from app.models import (
     PaymentTransaction,
     PlatformSettings,
     SubscriptionPlan,
+    SubscriptionTier,
     User,
 )
 from app.services.audit_service import log_admin_action
@@ -64,6 +65,9 @@ def _get_or_create_platform_settings(db: Session) -> PlatformSettings:
 
 class CreatePaymentBody(BaseModel):
     plan: SubscriptionPlan = Field(..., description="MONTHLY or YEARLY")
+    tier: SubscriptionTier = Field(
+        default=SubscriptionTier.SALON, description="SOLO / SALON / BIZNES"
+    )
 
 
 @router.post("/payme/create")
@@ -74,7 +78,7 @@ def payme_create(
 ):
     if body.plan not in (SubscriptionPlan.MONTHLY, SubscriptionPlan.YEARLY):
         raise HTTPException(400, "Invalid plan")
-    tx, url = create_payme_payment(db, business.id, body.plan)
+    tx, url = create_payme_payment(db, business.id, body.plan, body.tier)
     db.commit()
     if not url:
         raise HTTPException(500, "Payment URL not generated (check Payme credentials)")
@@ -89,7 +93,7 @@ def click_create(
 ):
     if body.plan not in (SubscriptionPlan.MONTHLY, SubscriptionPlan.YEARLY):
         raise HTTPException(400, "Invalid plan")
-    tx, url = create_click_payment(db, business.id, body.plan)
+    tx, url = create_click_payment(db, business.id, body.plan, body.tier)
     db.commit()
     if not url:
         raise HTTPException(500, "Payment URL not generated (check Click credentials)")
@@ -145,6 +149,7 @@ def update_card_info(
 class CardCreateOut(BaseModel):
     transaction_id: str
     amount: int
+    tier: str
     card_number: str
     card_holder: str
     payment_comment: str
@@ -161,11 +166,12 @@ def card_create(
     ps = _get_or_create_platform_settings(db)
     if not ps.card_number:
         raise HTTPException(503, "Admin has not configured a payment card yet")
-    tx = create_card_payment(db, business.id, body.plan)
+    tx = create_card_payment(db, business.id, body.plan, body.tier)
     db.commit()
     return CardCreateOut(
         transaction_id=str(tx.id),
         amount=tx.amount,
+        tier=tx.tier,
         card_number=ps.card_number,
         card_holder=ps.card_holder,
         payment_comment=ps.payment_comment,

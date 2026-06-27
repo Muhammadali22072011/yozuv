@@ -18,8 +18,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.reminders.send_hourly_reminders",
         "schedule": crontab(minute="*"),
     },
-    "trial-expiry-daily": {
-        "task": "app.tasks.reminders.trial_expiry_warnings",
+    "subscription-dunning-daily": {
+        "task": "app.tasks.reminders.subscription_expiry_warnings",
         "schedule": crontab(hour=9, minute=0),
     },
     # 02:30 Tashkent — quiet window. No-op when BACKUP_S3_BUCKET blank.

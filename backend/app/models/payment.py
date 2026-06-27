@@ -29,6 +29,9 @@ class PaymentTransaction(Base):
         String(32), default=PaymentRecordStatus.PENDING, nullable=False
     )
     plan: Mapped[str] = mapped_column(String(32), default="MONTHLY")
+    # Packaging tier this payment buys (SOLO/SALON/BIZNES). Carried on the tx
+    # so the webhook/approve flow activates the right tier. Defaults SALON.
+    tier: Mapped[str] = mapped_column(String(16), default="SALON", nullable=False)
     # 'subscription' (default, billing) or 'deposit' (booking prepayment). A
     # deposit tx also carries booking_id; the webhook routes on this.
     kind: Mapped[str] = mapped_column(String(16), default="subscription", nullable=False)

@@ -43,6 +43,13 @@ export default function LoginPage() {
   // password + Telegram escape-hatch in a plain browser.
   const [inTelegram, setInTelegram] = useState(false);
   const [nativeApp, setNativeApp] = useState(false);
+  // Capture a B2B referral code from the share link (?ref=) and stash it so it
+  // survives the login round-trip; onboarding sends it on business creation.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) localStorage.setItem("yozuv_ref", ref.trim().toUpperCase().slice(0, 16));
+  }, []);
 
   async function loginWithPassword(e: React.FormEvent) {
     e.preventDefault();

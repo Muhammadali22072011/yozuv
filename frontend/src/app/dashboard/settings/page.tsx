@@ -25,6 +25,7 @@ import type { BusinessMe } from "@/types";
 type CardCreateResp = {
   transaction_id: string;
   amount: number;
+  tier: string;
   card_number: string;
   card_holder: string;
   payment_comment: string;
@@ -38,6 +39,25 @@ type TxStatus = {
 };
 
 type Plan = "MONTHLY" | "YEARLY";
+type Tier = "SOLO" | "SALON" | "BIZNES";
+
+type SubInfo = {
+  plan: string;
+  tier?: string;
+  status: string;
+  expires_at: string | null;
+  phase?: string;
+  days_left?: number | null;
+  seat_limit?: number | null;
+  seats_used?: number;
+};
+
+const TIER_LABEL: Record<Tier, string> = { SOLO: "Yakka", SALON: "Salon", BIZNES: "Biznes" };
+const TIER_SEATS: Record<Tier, string> = {
+  SOLO: "1 usta",
+  SALON: "5 ustagacha",
+  BIZNES: "cheksiz usta",
+};
 
 type LoginMethod = {
   provider: string;
@@ -51,9 +71,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const [biz, setBiz] = useState<BusinessMe | null>(null);
   const [me, setMe] = useState<{ first_name: string; last_name: string } | null>(null);
-  const [sub, setSub] = useState<{ plan: string; status: string; expires_at: string | null } | null>(null);
+  const [sub, setSub] = useState<SubInfo | null>(null);
   const [info, setInfo] = useState<CardCreateResp | null>(null);
   const [plan, setPlan] = useState<Plan>("MONTHLY");
+  const [tier, setTier] = useState<Tier>("SALON");
   const [comment, setComment] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -63,26 +84,27 @@ export default function SettingsPage() {
     Promise.all([
       apiFetch<BusinessMe>("/api/business/me"),
       apiFetch<{ first_name: string; last_name: string }>("/api/auth/me").catch(() => null),
-      apiFetch<{ plan: string; status: string; expires_at: string | null }>(
-        "/api/subscription"
-      ).catch(() => null),
+      apiFetch<SubInfo>("/api/subscription").catch(() => null),
     ])
       .then(([b, u, s]) => {
         setBiz(b);
         setMe(u);
         setSub(s);
+        if (s?.tier && (["SOLO", "SALON", "BIZNES"] as string[]).includes(s.tier)) {
+          setTier(s.tier as Tier);
+        }
       })
       .catch(() => {});
   }, []);
 
-  const startCardPayment = async (selectedPlan: Plan) => {
+  const startCardPayment = async (selectedPlan: Plan, selectedTier: Tier) => {
     setStatus(null);
     setFile(null);
     setComment("");
     try {
       const r = await apiFetch<CardCreateResp>("/api/payments/card/create", {
         method: "POST",
-        body: JSON.stringify({ plan: selectedPlan }),
+        body: JSON.stringify({ plan: selectedPlan, tier: selectedTier }),
       });
       setInfo(r);
       setPlan(selectedPlan);
@@ -165,20 +187,32 @@ export default function SettingsPage() {
     window.location.href = "/auth/login";
   }
 
+  // Owner's new-booking alerts. Persisted server-side on the business
+  // (notifications_enabled) — the bot checks it before pinging the owner.
+  // Seeded from biz once it loads (see the effect below).
   const [notifOn, setNotifOn] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("yozuv_notif_on");
-      if (saved !== null) setNotifOn(saved === "1");
-    }
-  }, []);
-  function toggleNotif() {
-    setNotifOn((v) => {
-      const next = !v;
-      if (typeof window !== "undefined") localStorage.setItem("yozuv_notif_on", next ? "1" : "0");
+    if (biz) setNotifOn(biz.notifications_enabled ?? true);
+  }, [biz]);
+  async function toggleNotif() {
+    if (notifSaving) return;
+    const next = !notifOn;
+    setNotifOn(next); // optimistic
+    setNotifSaving(true);
+    try {
+      await apiFetch("/api/business/me", {
+        method: "PUT",
+        body: JSON.stringify({ notifications_enabled: next }),
+      });
+      setBiz((b) => (b ? { ...b, notifications_enabled: next } : b));
       toast(next ? "Bildirishnomalar yoqildi" : "Bildirishnomalar o'chirildi");
-      return next;
-    });
+    } catch {
+      setNotifOn(!next); // revert on failure
+      toast("Saqlashda xatolik");
+    } finally {
+      setNotifSaving(false);
+    }
   }
 
   function replayTours() {
@@ -418,23 +452,62 @@ export default function SettingsPage() {
                     </span>
                   </div>
                 )}
+                {sub.tier && sub.plan !== "TRIAL" && (
+                  <div className="mt-0.5 text-xs text-ink-500">
+                    {TIER_LABEL[sub.tier as Tier] ?? sub.tier} tarifi
+                    {typeof sub.seats_used === "number" && (
+                      <>
+                        {" · "}
+                        {sub.seats_used}
+                        {sub.seat_limit ? `/${sub.seat_limit}` : ""} usta
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
           {!info ? (
-            <div className="flex flex-col gap-2.5 p-2">
+            <div className="flex flex-col gap-3 p-2">
+              <div className="grid grid-cols-3 gap-2">
+                {(["SOLO", "SALON", "BIZNES"] as Tier[]).map((tk) => (
+                  <button
+                    key={tk}
+                    onClick={() => setTier(tk)}
+                    className={`rounded-2xl border-2 px-2 py-2.5 text-center tap ${
+                      tier === tk ? "border-indigo-600 bg-indigo-50" : "border-transparent bg-ink-50"
+                    }`}
+                  >
+                    <div className="font-display text-[13px] font-extrabold text-ink-900">
+                      {TIER_LABEL[tk]}
+                    </div>
+                    <div className="text-[10px] text-ink-500">{TIER_SEATS[tk]}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex rounded-2xl bg-ink-100 p-1">
+                {(["MONTHLY", "YEARLY"] as Plan[]).map((pk) => (
+                  <button
+                    key={pk}
+                    onClick={() => setPlan(pk)}
+                    className={`flex-1 rounded-xl py-2 text-center font-display text-[13px] font-bold tap ${
+                      plan === pk ? "bg-white text-ink-900 shadow-soft-sm" : "text-ink-500"
+                    }`}
+                  >
+                    {pk === "MONTHLY" ? "Oylik" : "Yillik · 2 oy sovg‘a"}
+                  </button>
+                ))}
+              </div>
               <button
-                onClick={() => startCardPayment("MONTHLY")}
+                onClick={() => startCardPayment(plan, tier)}
                 className="btn-primary justify-center text-sm"
               >
-                Oylik uzaytirish
+                {TIER_LABEL[tier]} · {plan === "MONTHLY" ? "oylik" : "yillik"} — karta orqali
               </button>
-              <button
-                onClick={() => startCardPayment("YEARLY")}
-                className="btn-soft justify-center text-sm"
-              >
-                Yillik uzaytirish
-              </button>
+              <p className="px-1 text-[11px] leading-snug text-ink-400">
+                Hech narsa avtomatik yechilmaydi. To‘lovni tasdiqlash uchun chek
+                yuborasiz.
+              </p>
             </div>
           ) : (
             <div className="rounded-3xl bg-ink-50 p-4">
@@ -446,7 +519,8 @@ export default function SettingsPage() {
                 <div className="text-sm text-ink-500">{info.card_holder}</div>
               )}
               <div className="mt-2.5 tnum font-display text-[15px] font-bold tracking-tight text-ink-900">
-                {new Intl.NumberFormat("uz-UZ").format(info.amount)} so‘m · {plan}
+                {new Intl.NumberFormat("uz-UZ").format(info.amount)} so‘m ·{" "}
+                {TIER_LABEL[info.tier as Tier] ?? info.tier} · {plan}
               </div>
               {info.payment_comment && (
                 <div className="mt-2.5 rounded-2xl bg-white p-3 text-sm text-ink-700 shadow-soft-sm">
@@ -489,6 +563,45 @@ export default function SettingsPage() {
             </div>
           )}
         </Section>
+
+        {biz?.partner_code && (
+          <Section title="Do‘st-biznesni taklif qiling">
+            <div className="p-2">
+              <div className="text-[13px] leading-snug text-ink-600">
+                Tanish usta yoki salon egasini taklif qiling — u obuna bo‘lsa,{" "}
+                <span className="font-bold text-ink-900">
+                  ikkalangizga +30 kun bepul
+                </span>
+                .
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <code className="flex-1 truncate rounded-2xl bg-ink-50 px-3 py-2.5 font-mono text-[12px] font-bold tracking-wide text-ink-900">
+                  {typeof window !== "undefined" ? window.location.origin : ""}/auth/login?ref=
+                  {biz.partner_code}
+                </code>
+                <button
+                  onClick={() => {
+                    const link = `${
+                      typeof window !== "undefined" ? window.location.origin : ""
+                    }/auth/login?ref=${biz.partner_code}`;
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard
+                        .writeText(link)
+                        .then(() => toast("Havola nusxalandi"))
+                        .catch(() => {});
+                    }
+                  }}
+                  className="shrink-0 rounded-2xl bg-ink-900 px-4 py-2.5 font-display text-[13px] font-bold text-white tap"
+                >
+                  Nusxa
+                </button>
+              </div>
+              <div className="mt-2 text-[11px] text-ink-400">
+                Sizning kodingiz: <span className="font-bold">{biz.partner_code}</span>
+              </div>
+            </div>
+          </Section>
+        )}
 
         <Section title="Boshqa">
           <Row

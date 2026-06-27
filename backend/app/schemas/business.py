@@ -31,6 +31,9 @@ class BusinessCreate(BaseModel):
     tuman: str = Field(default="", max_length=128)
     latitude: float | None = None
     longitude: float | None = None
+    # B2B referral: the partner_code of the business that invited this owner
+    # (from a ?ref= share link). Optional; blank on self-signup.
+    ref: str = Field(default="", max_length=16)
 
 
 class BusinessUpdate(BaseModel):
@@ -44,6 +47,7 @@ class BusinessUpdate(BaseModel):
     reminder_text: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
     confirmation_mode: ConfirmationMode | None = None
     language: LanguageCode | None = None
+    notifications_enabled: bool | None = None
     viloyat: str | None = Field(default=None, max_length=64)
     tuman: str | None = Field(default=None, max_length=128)
     latitude: float | None = None
@@ -89,6 +93,7 @@ class BusinessMe(BaseModel):
     reminder_text: str
     confirmation_mode: ConfirmationMode
     language: LanguageCode
+    notifications_enabled: bool = True
     is_active: bool
     created_at: datetime
     viloyat: str = ""
@@ -96,6 +101,9 @@ class BusinessMe(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     cancel_window_hours: int = 0
+    # B2B referral share code ("owner brings owner"). Blank for businesses
+    # created before the feature shipped.
+    partner_code: str = ""
 
     class Config:
         from_attributes = True

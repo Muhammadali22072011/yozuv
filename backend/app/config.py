@@ -40,6 +40,24 @@ class Settings(BaseSettings):
 
     next_public_bot_username: str = "Yozuv_cl_bot"
 
+    # Run the periodic jobs (1-hour reminders, birthday greetings, no-show
+    # flagging, re-engagement nudges, scheduled broadcasts) inside this web
+    # process instead of requiring a separate Celery worker+beat service.
+    # Default ON so a single-service deploy "just works" — without it none
+    # of those jobs ever fire. Set INPROCESS_SCHEDULER=false ONLY if you run
+    # a dedicated `celery -A app.celery_app worker -B`, to avoid both the
+    # web process and the worker firing the same job (double-sends).
+    inprocess_scheduler: bool = True
+
+    # Subscription lifecycle (manual-renewal model — Payme/Click have no
+    # reliable auto-charge in UZ, so the owner renews by hand and we soften
+    # the cliff). After expires_at:
+    #   • GRACE  (grace_days)        — new bookings still flow, owner is nudged.
+    #   • LOCKED (then lock_days)    — new public bookings stop, data read-only.
+    #   • DORMANT (after that)       — page paused; data is NEVER deleted.
+    subscription_grace_days: int = 3
+    subscription_lock_days: int = 7
+
     admin_telegram_ids: str = ""
     uploads_dir: str = "/tmp/yozuv_uploads"
     public_api_url: str = "http://localhost:8000"

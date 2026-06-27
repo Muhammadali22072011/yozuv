@@ -55,7 +55,22 @@ class Business(Base):
     referral_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     referral_friend_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     referral_reward_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Owner's master switch for the per-booking Telegram alerts they get
+    # (Sozlamalar → Bildirishnomalar). Off = no new-booking pings; the
+    # client-facing flow (confirmations, reminders) is unaffected.
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # "Founder narx" lock — see PlatformSettings.founder_discount_percent.
+    is_founder: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # B2B referral ("owner brings owner"): this business's own share code,
+    # the business that referred it (set at signup via ?ref=), and a guard so
+    # the +30-day reward is granted exactly once (on the referred business's
+    # first paid subscription).
+    partner_code: Mapped[str] = mapped_column(String(16), default="", index=True)
+    referred_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="SET NULL"), nullable=True
+    )
+    partner_reward_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -24,6 +24,16 @@ class PlatformSettings(Base):
     # so an unconfigured row keeps the historical pricing.
     monthly_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     yearly_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Per-tier MONTHLY price in UZS (yearly = ×10, i.e. 2 months free). 0 =
+    # use the code default (TIER_MONTHLY_DEFAULT in payment_service), so an
+    # unconfigured row keeps the published pricing.
+    solo_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    salon_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    biznes_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # "Founder narx" — first movers in a low-trust market get a permanent
+    # discount on every renewal. Percent off (0-100); applied per-business
+    # when Business.is_founder is set.
+    founder_discount_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
