@@ -114,13 +114,13 @@ export default function ClientsPage() {
         </Chip>
       </div>
 
-      <div data-tour="clients-list" className="mt-4 flex flex-col gap-2.5 px-4 md:px-0">
+      <div data-tour="clients-list" className="mt-4 grid gap-2.5 px-4 md:px-0 lg:grid-cols-2 2xl:grid-cols-3">
         {loading ? (
-          <div className="card-soft p-6 text-center text-sm text-ink-400">
+          <div className="card-soft col-span-full p-6 text-center text-sm text-ink-400">
             Yuklanmoqda…
           </div>
         ) : filtered.length === 0 ? (
-          <div className="card-soft flex flex-col items-center gap-3 p-8 text-center">
+          <div className="card-soft col-span-full flex flex-col items-center gap-3 p-8 text-center">
             <span className="grid h-14 w-14 place-items-center rounded-3xl bg-indigo-50 text-indigo-600">
               {rows.length === 0 ? (
                 <UserPlus className="h-6 w-6" strokeWidth={2} />

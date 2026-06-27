@@ -125,9 +125,9 @@ export default function PromoPage() {
         }
       />
 
-      <div className="mt-4 flex flex-col gap-3 px-4 md:px-0">
+      <div className="mt-4 grid gap-3 px-4 md:px-0 lg:grid-cols-2">
         {rows.length === 0 ? (
-          <div className="card-soft flex flex-col items-center gap-3 px-6 py-10 text-center">
+          <div className="card-soft col-span-full flex flex-col items-center gap-3 px-6 py-10 text-center">
             <div className="grid h-14 w-14 place-items-center rounded-3xl tile-indigo">
               <Ticket className="h-6 w-6 text-indigo-600" strokeWidth={2} />
             </div>
@@ -205,7 +205,7 @@ export default function PromoPage() {
                     style={{ background: "#FFE7E3", color: "#C93A2A" }}
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={2.4} />
-                    O‘chirish
+                    Olib tashlash
                   </button>
                 </div>
               </div>

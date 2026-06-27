@@ -119,7 +119,7 @@ export default function StaffPage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="grid gap-2.5 lg:grid-cols-2 2xl:grid-cols-3">
             {staff.map((s) => (
               <div
                 key={s.id}
