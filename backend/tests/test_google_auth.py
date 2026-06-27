@@ -1,8 +1,15 @@
 """Smoke tests for the Sign-in-with-Google endpoints."""
+import re
+
 import pytest
 
 from app.config import get_settings
-from app.utils.auth import create_access_token
+from app.utils.auth import create_access_token, decode_token
+
+
+def _cookie(r, name: str) -> str | None:
+    m = re.search(rf"{name}=([^;]+)", r.headers.get("set-cookie", ""))
+    return m.group(1) if m else None
 
 
 def _auth(user):
@@ -76,10 +83,40 @@ def test_disconnect_google_not_connected_404(client, owner_user):
     assert r.status_code == 404
 
 
-def test_link_start_redirects_to_google(client, owner_user, google_enabled):
-    token = create_access_token(str(owner_user.id))
+def test_link_token_requires_auth(client):
+    assert client.post("/api/auth/google/link-token").status_code == 401
+
+
+def test_link_token_is_link_scoped(client, owner_user):
+    r = client.post("/api/auth/google/link-token", headers=_auth(owner_user))
+    assert r.status_code == 200
+    assert decode_token(r.json()["link_token"])["type"] == "link"
+
+
+def test_link_start_attaches_user_with_link_token(client, owner_user, google_enabled):
+    lt = (
+        client.post("/api/auth/google/link-token", headers=_auth(owner_user))
+        .json()["link_token"]
+    )
     r = client.get(
-        f"/api/auth/google/start?link=1&token={token}", follow_redirects=False
+        f"/api/auth/google/start?link=1&token={lt}", follow_redirects=False
     )
     assert r.status_code in (302, 307)
     assert r.headers["location"].startswith("https://accounts.google.com")
+    # The link target user must be stashed in the signed state cookie.
+    cookie = _cookie(r, "yz_goauth")
+    assert cookie is not None
+    assert decode_token(cookie)["link_user_id"] == str(owner_user.id)
+
+
+def test_link_start_rejects_access_token(client, owner_user, google_enabled):
+    # A general access token must NOT work for link mode anymore — only a
+    # dedicated link-scoped token attaches the account.
+    at = create_access_token(str(owner_user.id))
+    r = client.get(
+        f"/api/auth/google/start?link=1&token={at}", follow_redirects=False
+    )
+    assert r.status_code in (302, 307)  # still redirects to Google
+    cookie = _cookie(r, "yz_goauth")
+    assert cookie is not None
+    assert "link_user_id" not in decode_token(cookie)
