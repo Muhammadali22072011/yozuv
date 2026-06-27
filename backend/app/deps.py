@@ -105,6 +105,39 @@ def get_admin_user(
     return user
 
 
+def is_superadmin_user(user: User, db: Session | None = None) -> bool:
+    """True for ENV admins and DB admins with role="superadmin".
+
+    Superadmins are the only ones allowed to grant/revoke other admins,
+    so a regular admin can never remove the person who added them.
+    """
+    if user is None:
+        return False
+    try:
+        tg = int(user.telegram_id)
+    except (TypeError, ValueError):
+        return False
+    if tg in _admin_telegram_ids():
+        return True
+    if db is not None:
+        from app.models import AdminUser
+
+        row = db.query(AdminUser).filter(AdminUser.telegram_id == tg).first()
+        return bool(row and row.role == "superadmin")
+    return False
+
+
+def get_superadmin_user(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> User:
+    if not is_superadmin_user(user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required",
+        )
+    return user
+
+
 def get_active_business(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

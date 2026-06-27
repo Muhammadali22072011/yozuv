@@ -40,6 +40,8 @@ class UserMe(BaseModel):
     last_name: str
     phone: str
     is_admin: bool = False
+    # True for ENV admins and DB superadmins — gates the admin-management UI.
+    is_superadmin: bool = False
     # True once a password is set — the forced login+password setup is done.
     # The frontend gates the dashboard on this: False ⇒ send to /auth/setup.
     has_password: bool = False

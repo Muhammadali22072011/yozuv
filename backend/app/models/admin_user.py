@@ -26,5 +26,8 @@ class AdminUser(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), default="")
+    # "admin" — can use the panel; "superadmin" — can also grant/revoke
+    # other admins. ENV ADMIN_TELEGRAM_IDS are always superadmins.
+    role: Mapped[str] = mapped_column(String(16), default="admin", nullable=False)
     added_by_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

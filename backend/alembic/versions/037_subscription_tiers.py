@@ -9,17 +9,22 @@ Adds:
 All new columns have safe server defaults so existing rows keep working
 without a backfill (historical subs read as SALON = the old behaviour).
 
-Revision ID: 036
-Revises: 035
+Revision ID: 037
+Revises: 036
 Create Date: 2026-06-28
+
+Renumbered from 036 → 037: revision 036 collided with 036_business_notifications
+(already on main via the dup-migration-034 fix). Sequenced after it so the
+chain stays linear: 035_multi_business_owner → 036_business_notifications → 037.
 """
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
-revision: str = "036"
-down_revision: Union[str, None] = "035"
+revision: str = "037"
+down_revision: Union[str, None] = "036"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -49,7 +54,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "businesses",
-        sa.Column("referred_by_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("referred_by_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.add_column(
         "businesses",
