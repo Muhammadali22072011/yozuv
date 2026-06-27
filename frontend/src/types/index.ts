@@ -37,4 +37,5 @@ export interface BusinessMe {
   tuman?: string;
   latitude?: number | null;
   longitude?: number | null;
+  partner_code?: string;
 }

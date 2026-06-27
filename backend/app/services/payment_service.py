@@ -12,6 +12,7 @@ from app.models import (
     Subscription,
     SubscriptionPlan,
     SubscriptionStatus,
+    SubscriptionTier,
     User,
 )
 from app.services.notification_service import send_telegram_message
@@ -21,22 +22,69 @@ settings = get_settings()
 MONTHLY_AMOUNT_UZS = 187_500
 YEARLY_AMOUNT_UZS = 1_875_000
 
+# Published MONTHLY price per tier in UZS (yearly = ×10 → 2 months free).
+# Used when PlatformSettings hasn't overridden the tier (stores 0).
+TIER_MONTHLY_DEFAULT = {
+    SubscriptionTier.SOLO: 99_000,
+    SubscriptionTier.SALON: 199_000,
+    SubscriptionTier.BIZNES: 399_000,
+}
 
-def get_plan_amount(db: Session, plan: SubscriptionPlan) -> int:
-    """Resolve a plan price, preferring the admin-configured value.
 
-    PlatformSettings stores 0 when a price hasn't been overridden, in
-    which case we fall back to the historical code constants so pricing
-    is never accidentally set to zero.
+def _coerce_tier(tier) -> SubscriptionTier:
+    if isinstance(tier, SubscriptionTier):
+        return tier
+    try:
+        return SubscriptionTier(str(tier))
+    except ValueError:
+        return SubscriptionTier.SALON
+
+
+def get_plan_amount(
+    db: Session, plan: SubscriptionPlan, tier: "SubscriptionTier | str" = SubscriptionTier.SALON
+) -> int:
+    """Resolve a tier+period price, preferring the admin-configured value.
+
+    PlatformSettings stores 0 when a price hasn't been overridden, in which
+    case we fall back to TIER_MONTHLY_DEFAULT so pricing is never zero. The
+    SALON tier additionally honours the legacy ``monthly_price`` override so
+    existing deployments keep whatever they'd configured. Yearly = ×10.
     """
     from app.models import PlatformSettings
 
+    tier = _coerce_tier(tier)
     ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    col = {
+        SubscriptionTier.SOLO: "solo_price",
+        SubscriptionTier.SALON: "salon_price",
+        SubscriptionTier.BIZNES: "biznes_price",
+    }[tier]
+    base = int(getattr(ps, col, 0) or 0) if ps else 0
+    if not base and tier == SubscriptionTier.SALON and ps and ps.monthly_price:
+        base = int(ps.monthly_price)  # legacy single-price override
+    if not base:
+        base = TIER_MONTHLY_DEFAULT[tier]
+
     if plan == SubscriptionPlan.MONTHLY:
-        return int(ps.monthly_price) if ps and ps.monthly_price else MONTHLY_AMOUNT_UZS
+        return base
     if plan == SubscriptionPlan.YEARLY:
-        return int(ps.yearly_price) if ps and ps.yearly_price else YEARLY_AMOUNT_UZS
+        return base * 10
     return 0
+
+
+def apply_founder_discount(db: Session, business_id: UUID, amount: int) -> int:
+    """If the business is on the founder-price lock, knock the configured
+    percent off and round to the nearest 100 so'm. No-op otherwise."""
+    from app.models import PlatformSettings
+
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz or not getattr(biz, "is_founder", False):
+        return amount
+    ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
+    pct = int(ps.founder_discount_percent) if ps and ps.founder_discount_percent else 0
+    if pct <= 0:
+        return amount
+    return int(round(amount * (100 - pct) / 100 / 100) * 100)
 
 
 # Volume discount for paying for several businesses in one checkout:
@@ -85,7 +133,13 @@ def tx_business_ids(tx: PaymentTransaction) -> list[UUID]:
     return [tx.business_id]
 
 
-def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan, amount_paid: int) -> Subscription:
+def activate_subscription(
+    db: Session,
+    business_id: UUID,
+    plan: SubscriptionPlan,
+    amount_paid: int,
+    tier: "SubscriptionTier | str" = SubscriptionTier.SALON,
+) -> Subscription:
     now = datetime.now(timezone.utc)
     if plan == SubscriptionPlan.MONTHLY:
         expires = now + timedelta(days=30)
@@ -110,6 +164,7 @@ def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan
     new_sub = Subscription(
         business_id=business_id,
         plan=plan,
+        tier=_coerce_tier(tier),
         status=SubscriptionStatus.ACTIVE,
         starts_at=now,
         expires_at=expires,
@@ -120,14 +175,75 @@ def activate_subscription(db: Session, business_id: UUID, plan: SubscriptionPlan
     return new_sub
 
 
-def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
-    amount = get_plan_amount(db, plan)
+def _extend_active_sub(db: Session, business_id: UUID, days: int) -> None:
+    """Push the latest non-cancelled sub's expiry out by `days` (from its
+    current expiry, or from now if already lapsed). Used by the B2B referral
+    reward to gift free time without minting a payment."""
+    now = datetime.now(timezone.utc)
+    sub = (
+        db.query(Subscription)
+        .filter(
+            Subscription.business_id == business_id,
+            Subscription.status != SubscriptionStatus.CANCELLED,
+        )
+        .order_by(Subscription.expires_at.desc())
+        .with_for_update()
+        .first()
+    )
+    if not sub:
+        return
+    exp = sub.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    base = exp if exp > now else now
+    sub.expires_at = base + timedelta(days=days)
+    sub.status = SubscriptionStatus.ACTIVE
+
+
+def grant_partner_reward(db: Session, business_id: UUID) -> None:
+    """On a referred business's FIRST paid subscription, gift +30 days to
+    BOTH it and its inviter. Guarded by ``partner_reward_claimed`` so a
+    renewal never re-triggers. Best-effort: never aborts the activation."""
+    biz = (
+        db.query(Business)
+        .filter(Business.id == business_id)
+        .with_for_update()
+        .first()
+    )
+    if not biz or biz.partner_reward_claimed or not biz.referred_by_id:
+        return
+    biz.partner_reward_claimed = True
+    inviter_id = biz.referred_by_id
+    inviter = db.query(Business).filter(Business.id == inviter_id).first()
+    if not inviter:
+        return
+    _extend_active_sub(db, biz.id, days=30)
+    _extend_active_sub(db, inviter_id, days=30)
+    for bid, text in (
+        (biz.id, "🎁 Do'stingiz taklifi bo'yicha obunangizga +30 kun qo'shildi!"),
+        (inviter_id, "🎁 Taklif qilgan do'stingiz obuna bo'ldi — sizga +30 kun sovg'a!"),
+    ):
+        b = db.query(Business).filter(Business.id == bid).first()
+        owner = db.query(User).filter(User.id == b.owner_id).first() if b else None
+        if owner and owner.telegram_id:
+            try:
+                send_telegram_message(int(owner.telegram_id), text)
+            except Exception:
+                pass
+
+
+def create_payme_payment(
+    db: Session, business_id: UUID, plan: SubscriptionPlan, tier: "SubscriptionTier | str" = SubscriptionTier.SALON
+) -> tuple[PaymentTransaction, str]:
+    tier = _coerce_tier(tier)
+    amount = apply_founder_discount(db, business_id, get_plan_amount(db, plan, tier))
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.PAYME,
         amount=amount,
         status=PaymentRecordStatus.PENDING,
         plan=plan.value,
+        tier=tier.value,
     )
     db.add(tx)
     db.flush()
@@ -154,14 +270,18 @@ def create_payme_payment(db: Session, business_id: UUID, plan: SubscriptionPlan)
         return tx, ""
 
 
-def create_click_payment(db: Session, business_id: UUID, plan: SubscriptionPlan) -> tuple[PaymentTransaction, str]:
-    amount = get_plan_amount(db, plan)
+def create_click_payment(
+    db: Session, business_id: UUID, plan: SubscriptionPlan, tier: "SubscriptionTier | str" = SubscriptionTier.SALON
+) -> tuple[PaymentTransaction, str]:
+    tier = _coerce_tier(tier)
+    amount = apply_founder_discount(db, business_id, get_plan_amount(db, plan, tier))
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.CLICK,
         amount=amount,
         status=PaymentRecordStatus.PENDING,
         plan=plan.value,
+        tier=tier.value,
     )
     db.add(tx)
     db.flush()
@@ -276,15 +396,17 @@ def create_bulk_subscription_payment(
 
 
 def create_card_payment(
-    db: Session, business_id: UUID, plan: SubscriptionPlan
+    db: Session, business_id: UUID, plan: SubscriptionPlan, tier: "SubscriptionTier | str" = SubscriptionTier.SALON
 ) -> PaymentTransaction:
-    amount = get_plan_amount(db, plan)
+    tier = _coerce_tier(tier)
+    amount = apply_founder_discount(db, business_id, get_plan_amount(db, plan, tier))
     tx = PaymentTransaction(
         business_id=business_id,
         provider=PaymentProvider.CARD,
         amount=amount,
         status=PaymentRecordStatus.PENDING,
         plan=plan.value,
+        tier=tier.value,
     )
     db.add(tx)
     db.flush()
@@ -446,11 +568,19 @@ def complete_transaction_and_notify(db: Session, tx: PaymentTransaction) -> None
     else:
         plan = SubscriptionPlan.MONTHLY
     # One tx may cover several businesses (multi-business checkout). Activate
-    # each; split the recorded amount evenly for the per-sub bookkeeping.
+    # each at the tx's tier; split the recorded amount evenly for the per-sub
+    # bookkeeping.
+    tier = getattr(tx, "tier", None) or SubscriptionTier.SALON.value
     business_ids = tx_business_ids(tx)
     per_amount = int(tx.amount // len(business_ids)) if business_ids else tx.amount
     for bid in business_ids:
-        activate_subscription(db, bid, plan, per_amount)
+        activate_subscription(db, bid, plan, per_amount, tier=tier)
+        # B2B "owner brings owner" reward fires on the referred business's
+        # first paid activation (guarded so renewals don't re-trigger).
+        try:
+            grant_partner_reward(db, bid)
+        except Exception:
+            pass
 
     business = db.query(Business).filter(Business.id == tx.business_id).first()
     owner = db.query(User).filter(User.id == business.owner_id).first() if business else None

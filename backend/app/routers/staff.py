@@ -83,6 +83,19 @@ def create_staff(
     db: Session = Depends(get_db),
     business: Business = Depends(get_active_business),
 ):
+    # Seat cap by tier (the value metric). Trial = unlimited, so this only
+    # bites paid SOLO/SALON businesses past their headcount.
+    from app.services.subscription_service import seat_limit
+
+    limit = seat_limit(db, business.id)
+    if limit is not None:
+        count = db.query(Staff).filter(Staff.business_id == business.id).count()
+        if count >= limit:
+            raise HTTPException(
+                402,
+                f"Tarifingiz {limit} ta ustaga mo'ljallangan. "
+                f"Ko'proq usta uchun yuqori tarifga o'ting.",
+            )
     s = Staff(
         business_id=business.id,
         name=body.name,

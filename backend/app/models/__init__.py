@@ -22,6 +22,7 @@ from app.models.enums import (
     ReferralStatus,
     SubscriptionPlan,
     SubscriptionStatus,
+    SubscriptionTier,
 )
 from app.models.payment import PaymentTransaction
 from app.models.platform_settings import PlatformSettings
@@ -69,6 +70,7 @@ __all__ = [
     "PaymentStatus",
     "SubscriptionPlan",
     "SubscriptionStatus",
+    "SubscriptionTier",
     "PaymentProvider",
     "PaymentRecordStatus",
     "WaitlistEntry",

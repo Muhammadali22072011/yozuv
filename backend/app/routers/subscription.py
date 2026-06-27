@@ -12,9 +12,10 @@ from app.models import (
     Membership,
     MembershipRole,
     PaymentProvider,
-    Subscription,
+    Staff,
     SubscriptionPlan,
     SubscriptionStatus,
+    SubscriptionTier,
     User,
 )
 from app.services.payment_service import (
@@ -25,19 +26,36 @@ from app.services.payment_service import (
     create_payme_payment,
     get_plan_amount,
 )
+from app.services.subscription_service import (
+    TIER_SEAT_LIMIT,
+    current_subscription,
+    days_left,
+    phase,
+    seat_limit,
+)
 
 router = APIRouter(prefix="/subscription", tags=["subscription"])
 
 
 class UpgradeBody(BaseModel):
     plan: SubscriptionPlan = Field(..., description="MONTHLY or YEARLY")
+    tier: SubscriptionTier = Field(default=SubscriptionTier.SALON)
     provider: str = Field(..., pattern="^(payme|click)$")
 
 
 class SubscriptionStatusOut(BaseModel):
     plan: SubscriptionPlan
+    tier: str
     status: SubscriptionStatus
     expires_at: str | None
+    # Lifecycle phase (active/grace/locked/dormant) + whole days until
+    # expiry (negative once lapsed) so the dashboard can render the renewal
+    # banner / pay-wall without re-deriving the clock client-side.
+    phase: str
+    days_left: int | None
+    # Seat usage for the current tier (None limit = unlimited).
+    seat_limit: int | None
+    seats_used: int
 
     class Config:
         from_attributes = True
@@ -48,23 +66,52 @@ class UpgradeOut(BaseModel):
     transaction_id: str
 
 
+class TierPriceOut(BaseModel):
+    tier: str
+    monthly: int
+    yearly: int
+    seat_limit: int | None
+
+
+@router.get("/plans", response_model=list[TierPriceOut])
+def list_plans(db: Session = Depends(get_db)):
+    """Live tier pricing (honours admin overrides) for the pricing page and
+    the in-dashboard upgrade selector. Public — no auth needed to see prices."""
+    return [
+        TierPriceOut(
+            tier=tier.value,
+            monthly=get_plan_amount(db, SubscriptionPlan.MONTHLY, tier),
+            yearly=get_plan_amount(db, SubscriptionPlan.YEARLY, tier),
+            seat_limit=TIER_SEAT_LIMIT.get(tier),
+        )
+        for tier in (
+            SubscriptionTier.SOLO,
+            SubscriptionTier.SALON,
+            SubscriptionTier.BIZNES,
+        )
+    ]
+
+
 @router.get("", response_model=SubscriptionStatusOut)
 def subscription_status(
     db: Session = Depends(get_db),
     business: Business = Depends(get_active_business),
 ):
-    sub = (
-        db.query(Subscription)
-        .filter(Subscription.business_id == business.id, Subscription.status == SubscriptionStatus.ACTIVE)
-        .order_by(Subscription.expires_at.desc())
-        .first()
-    )
+    # Latest non-cancelled sub — returned even when lapsed, so the client
+    # can show the grace/locked wall instead of a bare 404.
+    sub = current_subscription(db, business.id)
     if not sub:
         raise HTTPException(404, "No subscription")
+    seats_used = db.query(Staff).filter(Staff.business_id == business.id).count()
     return SubscriptionStatusOut(
         plan=sub.plan,
+        tier=str(sub.tier),
         status=sub.status,
         expires_at=sub.expires_at.isoformat() if sub.expires_at else None,
+        phase=phase(sub),
+        days_left=days_left(sub),
+        seat_limit=seat_limit(db, business.id),
+        seats_used=seats_used,
     )
 
 
@@ -78,9 +125,9 @@ def upgrade(
         raise HTTPException(400, "Invalid plan")
 
     if body.provider == "payme":
-        tx, url = create_payme_payment(db, business.id, body.plan)
+        tx, url = create_payme_payment(db, business.id, body.plan, body.tier)
     else:
-        tx, url = create_click_payment(db, business.id, body.plan)
+        tx, url = create_click_payment(db, business.id, body.plan, body.tier)
     db.commit()
     if not url:
         raise HTTPException(500, "Payment URL not generated (check credentials)")

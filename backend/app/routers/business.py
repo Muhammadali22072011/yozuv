@@ -74,6 +74,18 @@ def create_business(
     db.add(b)
     db.flush()
 
+    # B2B referral ("owner brings owner"): give this business its own share
+    # code, and link the inviter if the signup carried a valid ?ref= code.
+    import secrets as _secrets
+
+    b.partner_code = _secrets.token_hex(3).upper()
+    ref = (body.ref or "").strip().upper()
+    if ref and ref != b.partner_code:
+        inviter = db.query(Business).filter(Business.partner_code == ref).first()
+        if inviter and inviter.id != b.id:
+            b.referred_by_id = inviter.id
+    db.flush()
+
     # Mirror the legacy owner_id link in the new Membership graph so
     # both code paths see this business going forward.
     from app.models import Membership, MembershipRole

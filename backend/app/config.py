@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     # web process and the worker firing the same job (double-sends).
     inprocess_scheduler: bool = True
 
+    # Subscription lifecycle (manual-renewal model — Payme/Click have no
+    # reliable auto-charge in UZ, so the owner renews by hand and we soften
+    # the cliff). After expires_at:
+    #   • GRACE  (grace_days)        — new bookings still flow, owner is nudged.
+    #   • LOCKED (then lock_days)    — new public bookings stop, data read-only.
+    #   • DORMANT (after that)       — page paused; data is NEVER deleted.
+    subscription_grace_days: int = 3
+    subscription_lock_days: int = 7
+
     admin_telegram_ids: str = ""
     uploads_dir: str = "/tmp/yozuv_uploads"
     public_api_url: str = "http://localhost:8000"

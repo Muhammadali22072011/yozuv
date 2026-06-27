@@ -1,49 +1,54 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
 
+// Tier pricing mirrors the backend value metric (active masters / seats).
+// Yearly = ×10 months → 2 months free. Prices in UZS; daily framing anchors
+// to "cheaper than one client".
 const tiers = [
   {
-    name: "Bepul sinov",
-    price: "0 so‘m",
-    note: "14 kun · karta kerak emas",
-    cta: "Bepul boshlash",
+    name: "Yakka",
+    price: "99 000 so‘m",
+    note: "oyiga · 1 usta",
+    sub: "kuniga ~3 300 so‘m — bitta choynak choy puli",
+    cta: "Yakka tarifni tanlash",
     href: "/auth/login",
     perks: [
-      "Barcha imkoniyatlar ochiq",
       "Cheksiz yozilishlar",
-      "Istalgan vaqtda bekor qilasiz",
+      "Eslatma, shaxsiy sahifa, QR",
+      "Sodiqlik kartasi",
     ],
     featured: false,
     badge: "",
   },
   {
-    name: "Oylik",
-    price: "187 500 so‘m",
-    note: "oyiga · ≈ $15",
-    cta: "Oylik tarifni tanlash",
+    name: "Salon",
+    price: "199 000 so‘m",
+    note: "oyiga · 5 ustagacha",
+    sub: "1 mijozdan arzon — yiliga 1 990 000 (2 oy sovg‘a)",
+    cta: "Salon tarifni tanlash",
     href: "/dashboard/settings",
     perks: [
-      "Kuniga ~6 200 so‘m — bitta mijozdan kam",
-      "Cheksiz yozilishlar",
-      "Analitika va eslatmalar",
-      "QR va broshyura",
+      "Hammasi Yakka tarifdan",
+      "Analitika va hisobotlar",
+      "Navbat (waitlist), promokodlar",
     ],
     featured: true,
     badge: "MASHHUR",
   },
   {
-    name: "Yillik",
-    price: "1 875 000 so‘m",
-    note: "yiliga · 2 oy bepul",
-    cta: "Yillik tarifni tanlash",
+    name: "Biznes",
+    price: "399 000 so‘m",
+    note: "oyiga · cheksiz usta",
+    sub: "sex va klinikalar uchun — yiliga 3 990 000",
+    cta: "Biznes tarifni tanlash",
     href: "/dashboard/settings",
     perks: [
-      "2 oy sovg‘a — yiliga 375 000 so‘m tejaysiz",
-      "Hammasi Oylik tarifdan",
-      "Prioritet yordam",
+      "Hammasi Salon tarifdan",
+      "Bir nechta filial",
+      "Jamoa rollari · prioritet yordam",
     ],
     featured: false,
-    badge: "15% TEJASH",
+    badge: "FILIALLAR",
   },
 ];
 
@@ -56,8 +61,8 @@ export function Pricing() {
           Avval 14 kun bepul sinab ko&apos;ring
         </h2>
         <p className="mt-3 max-w-xl text-sm text-ink-500">
-          Karta kerak emas. Yoqmasa — to&apos;lamaysiz. To&apos;lov faqat Payme yoki
-          Click orqali, sumda.
+          Karta kerak emas. Yoqmasa — to&apos;lamaysiz. Hech narsa avtomatik
+          yechilmaydi. To&apos;lov Payme, Click yoki karta orqali — sumda.
         </p>
 
         <div className="mt-10 grid gap-5 md:grid-cols-3 md:items-start">
@@ -84,6 +89,7 @@ export function Pricing() {
                     {t.price}
                   </p>
                   <p className="mt-1.5 text-sm text-white/75 tnum">{t.note}</p>
+                  <p className="mt-1 text-[13px] font-medium text-lemon">{t.sub}</p>
 
                   <ul className="mt-6 space-y-2.5">
                     {t.perks.map((p) => (
@@ -121,6 +127,7 @@ export function Pricing() {
                   {t.price}
                 </p>
                 <p className="mt-1.5 text-sm text-ink-500 tnum">{t.note}</p>
+                <p className="mt-1 text-[13px] font-medium text-indigo-600">{t.sub}</p>
 
                 <ul className="mt-6 space-y-2.5">
                   {t.perks.map((p) => (
@@ -142,6 +149,19 @@ export function Pricing() {
               </div>
             ),
           )}
+        </div>
+
+        {/* ROI + trust row — cheaper than one prevented no-show, paid in soum. */}
+        <p className="mt-8 text-sm text-ink-600">
+          1 ta &laquo;kelmadi&raquo; — bu yo&apos;qolgan mijoz. Yozuv oyiga bitta
+          neyavkani to&apos;xtatsa — o&apos;zini qoplaydi.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-ink-500">
+          <span>Payme</span>
+          <span>Click</span>
+          <span>Uzcard / Humo</span>
+          <span className="text-emerald-700">14 kun bepul · karta kerak emas</span>
+          <span>Avtomatik yechmaymiz</span>
         </div>
       </div>
     </section>

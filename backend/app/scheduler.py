@@ -49,7 +49,7 @@ async def run_scheduler(stop: asyncio.Event) -> None:
         send_birthday_greetings,
         send_hourly_reminders,
         send_reengagement_nudges,
-        trial_expiry_warnings,
+        subscription_expiry_warnings,
     )
 
     # (hour, minute, name, callable) — mirrors celery_app.beat_schedule.
@@ -57,7 +57,7 @@ async def run_scheduler(stop: asyncio.Event) -> None:
     # storage-only, not a customer-facing promise.
     daily_jobs = [
         (3, 0, "flag_no_shows", flag_no_shows),
-        (9, 0, "trial_expiry_warnings", trial_expiry_warnings),
+        (9, 0, "subscription_expiry_warnings", subscription_expiry_warnings),
         (9, 30, "send_birthday_greetings", send_birthday_greetings),
         (10, 0, "send_reengagement_nudges", send_reengagement_nudges),
     ]

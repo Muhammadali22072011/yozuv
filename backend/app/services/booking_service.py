@@ -15,8 +15,6 @@ from app.models import (
     PromoCode,
     Service,
     Staff,
-    Subscription,
-    SubscriptionStatus,
 )
 from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
@@ -76,19 +74,15 @@ def get_or_create_client(db: Session, data: BookingCreatePublic) -> Client:
 
 
 def _check_active_subscription(db: Session, business_id: UUID) -> None:
-    """Raise ValueError if business has no active subscription."""
-    from datetime import timezone
-    now = datetime.now(timezone.utc)
-    sub = (
-        db.query(Subscription)
-        .filter(
-            Subscription.business_id == business_id,
-            Subscription.status == SubscriptionStatus.ACTIVE,
-            Subscription.expires_at > now,
-        )
-        .first()
-    )
-    if not sub:
+    """Raise ValueError if the business may no longer take bookings.
+
+    Delegates to ``subscription_service.booking_allowed`` so the grace
+    window (a lapsed owner keeps taking bookings for a few days while they
+    renew by hand) is honoured in one place, instead of hard-cutting the
+    second ``expires_at`` passes."""
+    from app.services.subscription_service import booking_allowed
+
+    if not booking_allowed(db, business_id):
         raise ValueError("Business subscription has expired")
 
 

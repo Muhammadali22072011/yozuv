@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { BusinessSwitcher } from "@/components/dashboard/BusinessSwitcher";
+import { SubscriptionBanner } from "@/components/dashboard/SubscriptionBanner";
 import { TabBar } from "@/components/yz/TabBar";
 import { NewBookingSheet } from "@/components/yz/NewBookingSheet";
 import { ToastProvider } from "@/components/yz/Toast";
@@ -56,6 +57,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <div className="pt-3 md:pt-0">
               <BusinessSwitcher />
             </div>
+            <SubscriptionBanner />
             {children}
           </div>
         </main>

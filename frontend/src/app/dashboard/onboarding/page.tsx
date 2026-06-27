@@ -184,12 +184,19 @@ export default function OnboardingPage() {
             tuman: biz.tuman.trim(),
             latitude: biz.latitude,
             longitude: biz.longitude,
+            // B2B referral code captured from a ?ref= share link at login.
+            ref:
+              (typeof window !== "undefined" &&
+                (localStorage.getItem("yozuv_ref") ||
+                  new URLSearchParams(window.location.search).get("ref"))) ||
+              "",
           }),
         });
         // Point the active business at the one we just created so the
         // following services/schedule calls (and the dashboard we land on)
         // act against it rather than a previously-selected business.
         if (created?.id) setActiveBusinessId(created.id);
+        if (typeof window !== "undefined") localStorage.removeItem("yozuv_ref");
       } catch (e) {
         const msg = (e as Error).message || "";
         if (!/already exists/i.test(msg)) {

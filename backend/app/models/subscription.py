@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.enums import SubscriptionPlan, SubscriptionStatus
+from app.models.enums import SubscriptionPlan, SubscriptionStatus, SubscriptionTier
 
 
 class Subscription(Base):
@@ -17,6 +17,11 @@ class Subscription(Base):
         UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True
     )
     plan: Mapped[SubscriptionPlan] = mapped_column(String(32), default=SubscriptionPlan.TRIAL, nullable=False)
+    # Packaging tier (seat cap). Defaults to SALON so historical rows keep
+    # the original "up to 5 masters" behaviour without a data backfill.
+    tier: Mapped[SubscriptionTier] = mapped_column(
+        String(16), default=SubscriptionTier.SALON, nullable=False
+    )
     status: Mapped[SubscriptionStatus] = mapped_column(
         String(32), default=SubscriptionStatus.ACTIVE, nullable=False
     )
