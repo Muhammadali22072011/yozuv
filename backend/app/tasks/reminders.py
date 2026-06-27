@@ -26,6 +26,20 @@ def _session() -> Session:
 TZ = ZoneInfo("Asia/Tashkent")
 
 
+def _render_reminder(template: str, *, service: str, business: str) -> str:
+    """Fill the {service}/{business} placeholders in a reminder template.
+
+    The owner's custom reminder_text is free text: it may contain neither
+    placeholder (a plain message) or a stray ``{`` that isn't a valid
+    field. Never crash the whole beat run on one bad template — fall back
+    to sending it verbatim if ``str.format`` chokes.
+    """
+    try:
+        return template.format(service=service, business=business)
+    except (KeyError, IndexError, ValueError):
+        return template
+
+
 @celery_app.task(name="app.tasks.reminders.send_hourly_reminders")
 def send_hourly_reminders() -> None:
     db = _session()
@@ -56,7 +70,13 @@ def send_hourly_reminders() -> None:
             service = db.query(Service).filter(Service.id == b.service_id).first()
             if client and business:
                 lang = str(business.language)
-                text = t(lang, "reminder").format(
+                # Owner-customised reminder text (Profil → Eslatma matni)
+                # wins over the default locale template. It's free text, so
+                # escape it for HTML mode before placeholder substitution.
+                custom = (business.reminder_text or "").strip()
+                template = h(custom) if custom else t(lang, "reminder")
+                text = _render_reminder(
+                    template,
                     service=h(service.name) if service else "",
                     business=h(business.name),
                 )

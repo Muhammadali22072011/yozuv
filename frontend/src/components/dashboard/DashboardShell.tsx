@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { BusinessSwitcher } from "@/components/dashboard/BusinessSwitcher";
 import { TabBar } from "@/components/yz/TabBar";
 import { NewBookingSheet } from "@/components/yz/NewBookingSheet";
 import { ToastProvider } from "@/components/yz/Toast";
@@ -50,6 +51,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 : "lg:max-w-5xl xl:max-w-6xl 2xl:max-w-[1280px]"
             )}
           >
+            {/* Multi-business switcher — renders only for owners of more
+                than one business, so single-business users see nothing. */}
+            <div className="pt-3 md:pt-0">
+              <BusinessSwitcher />
+            </div>
             {children}
           </div>
         </main>

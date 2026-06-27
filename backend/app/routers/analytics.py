@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Booking, BookingStatus, Business, Service
 from app.schemas.analytics import BookingsPoint, PopularService, RevenuePoint, SummaryAnalytics
 from app.utils.clock import local_today
@@ -30,7 +30,7 @@ def _period_start(period: str) -> date:
 def summary(
     period: str = Query("week", pattern="^(today|week|month|year)$"),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     start_d = _period_start(period)
     today = local_today()
@@ -77,7 +77,7 @@ def summary(
 def revenue_chart(
     days: int = Query(7, ge=1, le=400),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     out: list[RevenuePoint] = []
     today = local_today()
@@ -101,7 +101,7 @@ def revenue_chart(
 def bookings_by_day(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     out: list[BookingsPoint] = []
     today = local_today()
@@ -124,7 +124,7 @@ def bookings_by_day(
 @router.get("/popular-services", response_model=list[PopularService])
 def popular_services(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
     limit: int = Query(10, le=50),
 ):
     rows = (
@@ -143,7 +143,7 @@ def popular_services(
 def top_revenue_services(
     days: int = Query(90, ge=1, le=400),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
     limit: int = Query(5, ge=1, le=20),
 ):
     """Top services by revenue (price * count of completed/confirmed
@@ -186,7 +186,7 @@ def top_revenue_services(
 def heatmap(
     days: int = Query(60, ge=7, le=365),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """7x24 grid of booking counts — rows are days of the week
     (0=Mon..6=Sun), columns are hours (0..23). The owner sees the
@@ -223,7 +223,7 @@ def heatmap(
 @router.get("/retention")
 def retention(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Cohort-style retention: of clients whose first visit was 30/60/
     90/180 days ago, what % had at least one more visit since? A
@@ -283,7 +283,7 @@ def retention(
 def funnel(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Booking funnel for the last `days` days:
         created -> confirmed -> completed

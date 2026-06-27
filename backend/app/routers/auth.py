@@ -545,6 +545,33 @@ def disconnect_google(
     return {"ok": True}
 
 
+@router.delete("/account")
+def delete_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete the signed-in account and everything it owns.
+
+    Hard delete: removing the users row fires the ON DELETE CASCADE wired on
+    every FK that points (directly or transitively) at it — the owned
+    business and all of its services, bookings, schedules, subscription,
+    payments, reviews, staff, memberships and auth identities go with it.
+    Global clients (keyed by telegram_id, not owned by the business) are
+    intentionally left intact. Irreversible — the UI gates it behind an
+    explicit confirmation.
+    """
+    uid = user.id
+    # Explicit identity sweep first so the rows are gone even on a backend
+    # that doesn't enforce ON DELETE CASCADE (SQLite in tests); on Postgres
+    # the FK cascade from the users delete already covers it.
+    db.query(AuthIdentity).filter(AuthIdentity.user_id == uid).delete(
+        synchronize_session=False
+    )
+    db.query(User).filter(User.id == uid).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/refresh", response_model=TokenPair)
 def refresh(
     body: RefreshRequest,
@@ -572,7 +599,7 @@ def refresh(
 
 @router.get("/me", response_model=UserMe)
 def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.deps import is_admin_user
+    from app.deps import is_admin_user, is_superadmin_user
     return UserMe(
         id=user.id,
         telegram_id=user.telegram_id,
@@ -581,5 +608,6 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
         last_name=user.last_name,
         phone=user.phone,
         is_admin=is_admin_user(user, db),
+        is_superadmin=is_superadmin_user(user, db),
         has_password=user.password_hash is not None,
     )

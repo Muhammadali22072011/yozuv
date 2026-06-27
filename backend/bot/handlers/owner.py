@@ -5,13 +5,25 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
 from app.database import SessionLocal
-from app.models import Booking, BookingStatus, Business, Client, Service, User
+from app.models import Booking, BookingStatus, Business, Client, Membership, Service, User
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
 from bot import fun
 from bot.keyboards.inline import reject_reasons_kb
 
 router = Router()
+
+
+def _can_manage(db, user_id, business_id) -> bool:
+    """True if the user has any membership (owner/manager/staff) for the
+    business — the multi-business replacement for the old
+    `biz.owner_id == owner.id` check."""
+    return (
+        db.query(Membership.id)
+        .filter(Membership.user_id == user_id, Membership.business_id == business_id)
+        .first()
+        is not None
+    )
 
 _REASONS = {
     "sick": "Usta kasal",
@@ -34,7 +46,7 @@ async def owner_confirm(cb: CallbackQuery):
             await cb.answer("Topilmadi", show_alert=True)
             return
         biz = db.query(Business).filter(Business.id == booking.business_id).first()
-        if not biz or biz.owner_id != owner.id:
+        if not biz or not _can_manage(db, owner.id, biz.id):
             await cb.answer("Ruxsat yo'q", show_alert=True)
             return
         if booking.status != BookingStatus.PENDING:
@@ -101,7 +113,7 @@ async def owner_reject_reason(cb: CallbackQuery):
             await cb.answer("Topilmadi", show_alert=True)
             return
         biz = db.query(Business).filter(Business.id == booking.business_id).first()
-        if not biz or biz.owner_id != owner.id:
+        if not biz or not _can_manage(db, owner.id, biz.id):
             await cb.answer("Ruxsat yo'q", show_alert=True)
             return
         booking_service.cancel_booking(db, UUID(bid), biz.id, reason)

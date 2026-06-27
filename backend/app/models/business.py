@@ -18,8 +18,12 @@ class Business(Base):
     __table_args__ = (UniqueConstraint("slug", name="uq_businesses_slug"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # The creator / primary owner. No longer UNIQUE: one user may own
+    # several businesses (a salon network). Fine-grained access lives in
+    # the Membership graph; owner_id stays as the creator pointer that
+    # drives the ON DELETE CASCADE, admin lookups and owner notifications.
     owner_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
@@ -51,11 +55,15 @@ class Business(Base):
     referral_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     referral_friend_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     referral_reward_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Owner's master switch for the per-booking Telegram alerts they get
+    # (Sozlamalar → Bildirishnomalar). Off = no new-booking pings; the
+    # client-facing flow (confirmations, reminders) is unaffected.
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    owner: Mapped["User"] = relationship("User", back_populates="business")
+    owner: Mapped["User"] = relationship("User", back_populates="businesses")
     services: Mapped[list["Service"]] = relationship("Service", back_populates="business", cascade="all, delete-orphan")
     schedules: Mapped[list["Schedule"]] = relationship(
         "Schedule", back_populates="business", cascade="all, delete-orphan"

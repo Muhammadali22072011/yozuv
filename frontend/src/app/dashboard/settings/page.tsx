@@ -15,6 +15,7 @@ import {
   MapPin,
   Pencil,
   Settings as SettingsIcon,
+  Trash2,
 } from "lucide-react";
 import { Avatar, ScreenHeader, useToast } from "@/components/yz";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
@@ -164,20 +165,32 @@ export default function SettingsPage() {
     window.location.href = "/auth/login";
   }
 
+  // Owner's new-booking alerts. Persisted server-side on the business
+  // (notifications_enabled) — the bot checks it before pinging the owner.
+  // Seeded from biz once it loads (see the effect below).
   const [notifOn, setNotifOn] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("yozuv_notif_on");
-      if (saved !== null) setNotifOn(saved === "1");
-    }
-  }, []);
-  function toggleNotif() {
-    setNotifOn((v) => {
-      const next = !v;
-      if (typeof window !== "undefined") localStorage.setItem("yozuv_notif_on", next ? "1" : "0");
+    if (biz) setNotifOn(biz.notifications_enabled ?? true);
+  }, [biz]);
+  async function toggleNotif() {
+    if (notifSaving) return;
+    const next = !notifOn;
+    setNotifOn(next); // optimistic
+    setNotifSaving(true);
+    try {
+      await apiFetch("/api/business/me", {
+        method: "PUT",
+        body: JSON.stringify({ notifications_enabled: next }),
+      });
+      setBiz((b) => (b ? { ...b, notifications_enabled: next } : b));
       toast(next ? "Bildirishnomalar yoqildi" : "Bildirishnomalar o'chirildi");
-      return next;
-    });
+    } catch {
+      setNotifOn(!next); // revert on failure
+      toast("Saqlashda xatolik");
+    } finally {
+      setNotifSaving(false);
+    }
   }
 
   function replayTours() {
@@ -249,6 +262,24 @@ export default function SettingsPage() {
       loadIdentities();
     } catch (e) {
       toast((e as Error).message || "Xatolik");
+    }
+  }
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  async function deleteAccount() {
+    setDeleting(true);
+    try {
+      await apiFetch("/api/auth/account", { method: "DELETE" });
+      // Account is gone — drop tokens and bounce to login. No toast: the
+      // page is navigating away.
+      localStorage.removeItem("yozuv_access");
+      localStorage.removeItem("yozuv_refresh");
+      window.location.href = "/auth/login";
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   }
 
@@ -516,6 +547,60 @@ export default function SettingsPage() {
             label="Chiqish"
             danger
           />
+        </Section>
+
+        <Section title="Xavfli zona">
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="block w-full text-left tap"
+            >
+              <div className="flex items-center gap-3.5 rounded-2xl px-2.5 py-3 transition-colors hover:bg-coral/5">
+                <div
+                  className="grid h-11 w-11 place-items-center rounded-2xl"
+                  style={{ background: "#FFE7E3" }}
+                >
+                  <Trash2 className="h-5 w-5 text-coral" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-display text-[15px] font-bold tracking-tight text-[#C93A2A]">
+                    Akkauntni o‘chirish
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-ink-400">
+                    Biznes, mijozlar va barcha ma’lumotlar butunlay o‘chadi
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-ink-300" />
+              </div>
+            </button>
+          ) : (
+            <div className="rounded-2xl bg-coral/5 p-4">
+              <div className="font-display text-[15px] font-bold tracking-tight text-[#C93A2A]">
+                Akkauntni butunlay o‘chirasizmi?
+              </div>
+              <div className="mt-1 text-[13px] leading-snug text-ink-600">
+                Biznesingiz, xizmatlar, bandlovlar, jadval va obuna qaytarib
+                bo‘lmaydigan tarzda o‘chiriladi. Bu amalni bekor qilib
+                bo‘lmaydi.
+              </div>
+              <div className="mt-3 flex gap-2.5">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-2xl bg-ink-100 py-3.5 font-display text-sm font-bold text-ink-700 tap"
+                >
+                  Bekor
+                </button>
+                <button
+                  onClick={deleteAccount}
+                  disabled={deleting}
+                  className="flex-1 rounded-2xl bg-coral py-3.5 font-display text-sm font-bold text-white tap disabled:opacity-60"
+                >
+                  {deleting ? "O‘chirilmoqda…" : "Ha, o‘chirish"}
+                </button>
+              </div>
+            </div>
+          )}
         </Section>
 
         <div className="py-6 text-center eyebrow text-ink-300">

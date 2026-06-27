@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Business
 from app.services import referral_service
 
@@ -39,7 +39,7 @@ def _to_out(business: Business, stats: dict) -> ReferralConfigOut:
 @router.get("", response_model=ReferralConfigOut)
 def get_referral(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     stats = referral_service.business_referral_stats(db, business.id)
     return _to_out(business, stats)
@@ -49,7 +49,7 @@ def get_referral(
 def update_referral(
     body: ReferralConfigUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     if body.enabled is not None:
         business.referral_enabled = body.enabled

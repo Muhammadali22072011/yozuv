@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Business, Service, Staff
 
 owner_router = APIRouter(prefix="/business/me", tags=["staff"])
@@ -66,7 +66,7 @@ def _serialize(s: Staff) -> dict:
 @owner_router.get("/staff")
 def list_staff(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = (
         db.query(Staff)
@@ -81,7 +81,7 @@ def list_staff(
 def create_staff(
     body: StaffCreate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = Staff(
         business_id=business.id,
@@ -101,7 +101,7 @@ def update_staff(
     staff_id: UUID,
     body: StaffUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = (
         db.query(Staff)
@@ -121,7 +121,7 @@ def update_staff(
 def toggle_staff(
     staff_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = (
         db.query(Staff)
@@ -140,7 +140,7 @@ def toggle_staff(
 def delete_staff(
     staff_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = (
         db.query(Staff)
@@ -166,7 +166,7 @@ def assign_services(
     staff_id: UUID,
     body: AssignServicesBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Replace this staff member's service set. Validates that every
     listed service belongs to this business — otherwise an owner

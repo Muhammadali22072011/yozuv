@@ -8,7 +8,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Booking, BookingStatus, Business, Client, ClientBlock, Service
 from app.services.notification_service import send_telegram_message_async
 from app.utils.htmlsafe import h
@@ -27,7 +27,7 @@ class BlockBody(BaseModel):
 @router.get("/clients")
 def list_clients(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = (
         db.query(
@@ -103,7 +103,7 @@ def list_clients(
 def client_detail(
     client_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     # Scope to clients who have actually booked with THIS business, otherwise
     # an owner can read any client's PII cross-tenant by guessing/reusing a
@@ -190,7 +190,7 @@ def patch_client(
     client_id: UUID,
     body: ClientPatchBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner-edit fields the client doesn't surface themselves yet —
     currently birthday only. Restricted to clients who've actually
@@ -212,7 +212,7 @@ def block_client(
     client_id: UUID,
     body: BlockBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner adds a client to the business's block list. Idempotent: if
     a block already exists we just update the reason."""
@@ -249,7 +249,7 @@ def block_client(
 def unblock_client(
     client_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     block = (
         db.query(ClientBlock)
@@ -268,7 +268,7 @@ def unblock_client(
 @router.get("/blocked-clients")
 def list_blocked(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = (
         db.query(ClientBlock, Client)
@@ -298,7 +298,7 @@ class BroadcastBody(BaseModel):
 async def broadcast_to_clients(
     body: BroadcastBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner sends one Telegram message to all of their own clients (distinct
     telegram_ids that have booked here). Blocked clients are excluded; the

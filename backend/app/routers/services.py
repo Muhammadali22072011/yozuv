@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Business, Service
 
 router = APIRouter(prefix="/business/me", tags=["services"])
@@ -56,7 +56,7 @@ class ServiceOut(BaseModel):
 @router.get("/services", response_model=list[ServiceOut])
 def list_services(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     return (
         db.query(Service)
@@ -70,7 +70,7 @@ def list_services(
 def create_service(
     body: ServiceCreate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = Service(
         business_id=business.id,
@@ -93,7 +93,7 @@ def update_service(
     service_id: UUID,
     body: ServiceUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = db.query(Service).filter(Service.id == service_id, Service.business_id == business.id).first()
     if not s:
@@ -109,7 +109,7 @@ def update_service(
 def delete_service(
     service_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = db.query(Service).filter(Service.id == service_id, Service.business_id == business.id).first()
     if not s:
@@ -123,7 +123,7 @@ def delete_service(
 def toggle_service(
     service_id: UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     s = db.query(Service).filter(Service.id == service_id, Service.business_id == business.id).first()
     if not s:

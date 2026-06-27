@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Check, Clock, MapPin, Plus, Sparkles, Trash2 } from "lucide-react";
 import { YzLoader } from "@/components/yz/Loader";
 import { YzLogo } from "@/components/yz/Logo";
 import { MapPicker } from "@/components/yz/MapPicker";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, setActiveBusinessId } from "@/lib/api";
 
 const STEP_META: { label: string; title: string; sub: string }[] = [
   {
@@ -75,6 +75,10 @@ function defaultDays(): DraftDay[] {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // ?new=1 → adding an *additional* business. Skip the "already onboarded?"
+  // redirect so an existing owner can run the wizard again for a new branch.
+  const isAdditional = searchParams.get("new") === "1";
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -100,10 +104,16 @@ export default function OnboardingPage() {
   const [days, setDays] = useState<DraftDay[]>(defaultDays());
 
   useEffect(() => {
+    // Adding another business: don't bounce back to the dashboard just
+    // because one already exists — that's the whole point here.
+    if (isAdditional) {
+      setLoading(false);
+      return;
+    }
     apiFetch<{ id: string }>("/api/business/me")
       .then(() => router.replace("/dashboard"))
       .catch(() => setLoading(false));
-  }, [router]);
+  }, [router, isAdditional]);
 
   function next() {
     setErr("");
@@ -161,7 +171,7 @@ export default function OnboardingPage() {
     setSubmitting(true);
     try {
       try {
-        await apiFetch("/api/business", {
+        const created = await apiFetch<{ id: string }>("/api/business", {
           method: "POST",
           body: JSON.stringify({
             name: biz.name.trim(),
@@ -176,6 +186,10 @@ export default function OnboardingPage() {
             longitude: biz.longitude,
           }),
         });
+        // Point the active business at the one we just created so the
+        // following services/schedule calls (and the dashboard we land on)
+        // act against it rather than a previously-selected business.
+        if (created?.id) setActiveBusinessId(created.id);
       } catch (e) {
         const msg = (e as Error).message || "";
         if (!/already exists/i.test(msg)) {

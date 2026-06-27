@@ -866,6 +866,12 @@ def _create_booking_sync(
                 "loyalty_free": loyalty_free,
                 "visit_no": visit_no,
                 "is_new_client": visit_no == 1,
+                # Owner's custom post-booking message (Profil → Yozilishdan
+                # keyingi matn). Appended to the client's confirmation below.
+                "after_booking_text": (b.after_booking_text or "").strip(),
+                # Owner's master notification switch (Sozlamalar →
+                # Bildirishnomalar). False = skip the new-booking ping.
+                "owner_notifications_enabled": bool(b.notifications_enabled),
             },
             None,
         )
@@ -902,6 +908,9 @@ def _client_display_name(from_user) -> str:
 async def _notify_owner_of_booking(info: dict, d: date, t_str: str, from_user) -> None:
     owner_tg_id = info.get("owner_telegram_id")
     if not owner_tg_id:
+        return
+    # Owner muted new-booking alerts in settings — respect it.
+    if not info.get("owner_notifications_enabled", True):
         return
     is_confirmed = info["status"].endswith("CONFIRMED")
     suffix = "tasdiqlangan" if is_confirmed else "kutilmoqda (tasdiqlang)"
@@ -998,6 +1007,12 @@ def _success_text(info: dict, d: date, t_str: str) -> str:
 
     if is_confirmed:
         lines += ["", fun.pick(fun.REMINDER_LINE, seed=seed)]
+
+    # Owner's custom thank-you / directions, appended under the receipt
+    # (Profil → Yozilishdan keyingi matn). Free text → escape for HTML mode.
+    extra = (info.get("after_booking_text") or "").strip()
+    if extra:
+        lines += ["", hs(extra)]
 
     return "\n".join(lines)
 

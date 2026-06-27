@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_owned_business
+from app.deps import get_active_business
 from app.models import Booking, BookingStatus, Business, Client, Review
 from app.services.event_bus import publish as publish_event
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
@@ -109,7 +109,7 @@ def submit_review(body: ReviewCreate, db: Session = Depends(get_db)):
 @router.get("/business/me/reviews", response_model=list[ReviewOut])
 def list_reviews(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     rows = (
         db.query(Review)
@@ -151,7 +151,7 @@ def reply_to_review(
     review_id: UUID,
     body: ReplyBody,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     """Owner sets (or clears, with empty text) a public reply to a review."""
     review = (
@@ -232,7 +232,7 @@ def public_reviews(slug: str, db: Session = Depends(get_db)):
 @router.get("/business/me/reviews/summary")
 def reviews_summary(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(get_active_business),
 ):
     avg = (
         db.query(func.avg(Review.rating))
