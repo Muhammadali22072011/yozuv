@@ -11,13 +11,17 @@ from app.models import Business, Service
 router = APIRouter(prefix="/business/me", tags=["services"])
 
 
+_MAX_PRICE = 1_000_000_000  # 1 mlrd so'm — well above any real service price
+_MAX_DURATION = 1440  # minutes in a day
+
+
 class ServiceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    price: int = 0
-    price_max: int | None = None
-    description: str | None = None
-    duration_minutes: int = 30
-    order: int = 0
+    price: int = Field(default=0, ge=0, le=_MAX_PRICE)
+    price_max: int | None = Field(default=None, ge=0, le=_MAX_PRICE)
+    description: str | None = Field(default=None, max_length=2000)
+    duration_minutes: int = Field(default=30, ge=5, le=_MAX_DURATION)
+    order: int = Field(default=0, ge=0)
     # 0 = loyalty disabled. Cap at 50 — anything bigger is a typo (a
     # business that needs 100 visits before a free one is selling
     # something different).
@@ -25,12 +29,12 @@ class ServiceCreate(BaseModel):
 
 
 class ServiceUpdate(BaseModel):
-    name: str | None = None
-    price: int | None = None
-    price_max: int | None = None
-    description: str | None = None
-    duration_minutes: int | None = None
-    order: int | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    price: int | None = Field(default=None, ge=0, le=_MAX_PRICE)
+    price_max: int | None = Field(default=None, ge=0, le=_MAX_PRICE)
+    description: str | None = Field(default=None, max_length=2000)
+    duration_minutes: int | None = Field(default=None, ge=5, le=_MAX_DURATION)
+    order: int | None = Field(default=None, ge=0)
     loyalty_after_visits: int | None = Field(default=None, ge=0, le=50)
 
 

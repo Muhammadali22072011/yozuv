@@ -70,6 +70,10 @@ export default function PromoPage() {
       setErr("Foiz yoki summa chegirmasidan birini kiriting");
       return;
     }
+    if (pct > 0 && amt > 0) {
+      setErr("Faqat bittasini tanlang: foiz yoki summa");
+      return;
+    }
     if (pct < 0 || pct > 100) {
       setErr("Chegirma foizi 1 dan 100 gacha bo'lishi kerak");
       return;
@@ -234,7 +238,15 @@ export default function PromoPage() {
                   <input
                     type="number"
                     value={form.discount_percent}
-                    onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
+                    onChange={(e) =>
+                      // Percent OR amount, never both — entering a percent
+                      // clears the so'm field so the two can't combine.
+                      setForm({
+                        ...form,
+                        discount_percent: e.target.value,
+                        discount_amount: e.target.value ? "" : form.discount_amount,
+                      })
+                    }
                     className="yz-input mt-1"
                   />
                 </div>
@@ -243,7 +255,13 @@ export default function PromoPage() {
                   <input
                     type="number"
                     value={form.discount_amount}
-                    onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        discount_amount: e.target.value,
+                        discount_percent: e.target.value ? "" : form.discount_percent,
+                      })
+                    }
                     placeholder="10000"
                     className="yz-input mt-1"
                   />

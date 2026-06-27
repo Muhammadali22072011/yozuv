@@ -15,6 +15,19 @@ if (
 }
 const API = ENV_API || "https://yozuv.onrender.com";
 
+/** Error thrown by apiFetch for any non-2xx response, carrying the HTTP
+ * status so callers can distinguish "not found / not onboarded" (404) from
+ * transient failures (500/502/network) instead of treating every error the
+ * same. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("yozuv_access");
@@ -118,8 +131,7 @@ export async function apiFetch<T>(
     } catch {
       // Non-JSON body (JSON.parse threw) — fall through to raw text below.
     }
-    if (detailMessage) throw new Error(detailMessage);
-    throw new Error(text || res.statusText);
+    throw new ApiError(detailMessage || text || res.statusText, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

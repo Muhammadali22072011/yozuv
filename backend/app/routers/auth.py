@@ -25,8 +25,10 @@ from app.utils.auth import (
     canon_phone,
     canon_username,
     create_access_token,
+    create_link_token,
     create_refresh_token,
     decode_token,
+    get_user_from_link_token,
     get_user_from_token,
     hash_password,
     looks_like_phone,
@@ -143,6 +145,15 @@ def _secure_cookies() -> bool:
     return (settings.app_env or "").lower() == "production"
 
 
+@router.post("/google/link-token")
+def google_link_token(user: User = Depends(get_current_user)):
+    """Mint a short-lived (5 min), link-scoped token for the account-link
+    redirect. The frontend fetches this with its Bearer header, then passes
+    it as ?token= to /google/start — so a general access token never has to
+    travel in a URL where it could leak into logs/history."""
+    return {"link_token": create_link_token(str(user.id))}
+
+
 @router.get("/google/start")
 def google_start(
     link: int = 0,
@@ -153,15 +164,16 @@ def google_start(
     """Begin Sign-in-with-Google. Stashes PKCE verifier + CSRF state in a
     short-lived signed cookie, then 302s to Google's consent screen.
 
-    Link mode (?link=1&token=<access>): attach Google to the CURRENT account
-    instead of creating a new one. The token rides the query because a
-    top-level navigation can't send a Bearer header; it only mints a 10-min
-    state cookie and is never persisted."""
+    Link mode (?link=1&token=<link_token>): attach Google to the CURRENT
+    account instead of creating a new one. The token rides the query because a
+    top-level navigation can't send a Bearer header; it MUST be a dedicated
+    5-min link-scoped token (see /google/link-token), never a general access
+    token — query strings leak into access logs, history and Referer."""
     if not google_enabled():
         raise HTTPException(status_code=404, detail="Google login disabled")
     link_user_id = None
     if link and token:
-        u = get_user_from_token(db, token)
+        u = get_user_from_link_token(db, token)
         if u:
             link_user_id = str(u.id)
     state = random_state()

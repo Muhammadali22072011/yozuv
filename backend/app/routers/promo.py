@@ -99,6 +99,8 @@ def create_promo(
         raise HTTPException(400, "Code is required")
     if body.discount_percent == 0 and body.discount_amount == 0:
         raise HTTPException(400, "Specify either percent or amount")
+    if body.discount_percent and body.discount_amount:
+        raise HTTPException(400, "Use either percent or amount, not both")
     exists = (
         db.query(PromoCode)
         .filter(PromoCode.business_id == business.id, PromoCode.code == code)

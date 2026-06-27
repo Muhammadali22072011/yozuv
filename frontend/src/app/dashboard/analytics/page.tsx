@@ -20,10 +20,8 @@ const WEEK_LABELS = ["Ya", "Du", "Se", "Cho", "Pa", "Ju", "Sh"];
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>("week");
   const [rev, setRev] = useState<{ date: string; amount: number }[]>([]);
-  const [bookings, setBookings] = useState<{ date: string; bookings: number }[]>([]);
   const [popular, setPopular] = useState<{ service_id: string; name: string; bookings: number; revenue?: number }[]>([]);
   const [summary, setSummary] = useState({ bookings_count: 0, revenue: 0, clients_count: 0 });
-  const [prevSummary, setPrevSummary] = useState<{ revenue: number } | null>(null);
 
   useEffect(() => {
     const days = DAYS_BY_PERIOD[period];
@@ -31,42 +29,40 @@ export default function AnalyticsPage() {
       apiFetch<{ date: string; amount: number }[]>(
         `/api/business/me/analytics/revenue?days=${days}`
       ).catch(() => []),
-      apiFetch<{ date: string; bookings: number }[]>(
-        `/api/business/me/analytics/bookings-by-day?days=${days}`
-      ).catch(() => []),
       apiFetch<{ service_id: string; name: string; bookings: number; revenue?: number }[]>(
         "/api/business/me/analytics/popular-services"
       ).catch(() => []),
       apiFetch<{ bookings_count: number; revenue: number; clients_count: number }>(
         `/api/business/me/analytics/summary?period=${period}`
       ).catch(() => ({ bookings_count: 0, revenue: 0, clients_count: 0 })),
-    ]).then(([r, b, p, s]) => {
+    ]).then(([r, p, s]) => {
       setRev(r);
-      setBookings(b);
       setPopular(p);
       setSummary(s);
-      // previous period approx from earlier half of revenue series
-      if (r.length > 1) {
-        const half = Math.floor(r.length / 2);
-        const prev = r.slice(0, half).reduce((a, x) => a + x.amount, 0);
-        setPrevSummary({ revenue: prev });
-      } else {
-        setPrevSummary(null);
-      }
     });
   }, [period]);
 
-  const revSum = rev.reduce((a, x) => a + x.amount, 0);
-  const bars = bookings.slice(-7).map((x) => {
+  // The hero card is "Davr daromadi" (period revenue), so the chart under it
+  // must plot the REVENUE series, not booking counts.
+  const bars = rev.slice(-7).map((x) => {
     const d = new Date(x.date);
-    return { day: WEEK_LABELS[d.getDay()], value: x.bookings };
+    return { day: WEEK_LABELS[d.getDay()], value: x.amount };
   });
   const maxBar = Math.max(1, ...bars.map((b) => b.value));
   const highlightIdx = bars.reduce((acc, cur, i) => (cur.value >= (bars[acc]?.value || 0) ? i : acc), 0);
 
-  const pctChange = prevSummary && prevSummary.revenue > 0
-    ? Math.round(((revSum - prevSummary.revenue) / prevSummary.revenue) * 100)
-    : null;
+  // Period-over-period trend: second half of the series vs first half.
+  // (The old code compared the WHOLE series to its own first half, which is
+  // structurally always positive and meaningless.)
+  let pctChange: number | null = null;
+  if (rev.length > 1) {
+    const half = Math.floor(rev.length / 2);
+    const firstHalf = rev.slice(0, half).reduce((a, x) => a + x.amount, 0);
+    const secondHalf = rev.slice(half).reduce((a, x) => a + x.amount, 0);
+    if (firstHalf > 0) {
+      pctChange = Math.round(((secondHalf - firstHalf) / firstHalf) * 100);
+    }
+  }
 
   const topTotal = popular.reduce((a, x) => a + (x.revenue || 0), 0);
   const topColors = ["#FFC94A", "#4853F5", "#FF9FB5", "#22C8A8", "#B8A6FF"];

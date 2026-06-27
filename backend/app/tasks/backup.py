@@ -60,11 +60,23 @@ def _build_dump() -> bytes:
     snapshots."""
     db = SessionLocal()
     try:
+        # Read every table from ONE consistent snapshot. Under the default
+        # READ COMMITTED each statement sees a fresh snapshot, so a concurrent
+        # write between two table reads could produce a referentially-broken
+        # dump. REPEATABLE READ freezes the snapshot for the whole transaction
+        # (Postgres only — no-op/skip elsewhere, e.g. SQLite in tests).
+        bind = db.get_bind()
+        if bind.dialect.name == "postgresql":
+            conn = db.connection(
+                execution_options={"isolation_level": "REPEATABLE READ"}
+            )
+        else:
+            conn = db.connection()
         dump: dict = {
             "version": BACKUP_VERSION,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "tables": {
-                table.name: [dict(r) for r in db.execute(select(table)).mappings().all()]
+                table.name: [dict(r) for r in conn.execute(select(table)).mappings().all()]
                 for table in Base.metadata.sorted_tables
             },
         }

@@ -438,12 +438,20 @@ async def payme_webhook(request: Request, db: Session = Depends(get_db)):
     if not tx_id:
         return {"ok": True}
 
-    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
-    if not tx or tx.status == PaymentRecordStatus.COMPLETED:
-        return {"ok": True}
-
     method = body.get("method", "")
     if method != "PerformTransaction":
+        return {"ok": True}
+
+    # Lock the row and re-check status under the lock so duplicate/concurrent
+    # provider deliveries cannot both pass the idempotency guard and
+    # double-activate the subscription.
+    tx = (
+        db.query(PaymentTransaction)
+        .filter(PaymentTransaction.id == tx_id)
+        .with_for_update()
+        .first()
+    )
+    if not tx or tx.status == PaymentRecordStatus.COMPLETED:
         return {"ok": True}
 
     # Booking deposits confirm the booking; subscription txs activate billing.
@@ -476,9 +484,27 @@ async def click_webhook(request: Request, db: Session = Depends(get_db)):
     if str(body.get("action", "")) != "1":
         return {"ok": True}
 
-    tx = db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
+    # Lock the row and re-check status under the lock (idempotency under
+    # concurrent/duplicate deliveries).
+    tx = (
+        db.query(PaymentTransaction)
+        .filter(PaymentTransaction.id == tx_id)
+        .with_for_update()
+        .first()
+    )
     if not tx or tx.status == PaymentRecordStatus.COMPLETED:
         return {"ok": True}
+
+    # Validate the paid amount matches what we charged. The Click signature
+    # already covers `amount`, but a partial/under-paid callback must never
+    # activate the full plan. Compare in integer so'm with a 1-so'm tolerance.
+    raw_amount = body.get("amount")
+    if raw_amount not in (None, ""):
+        try:
+            if abs(round(float(raw_amount)) - int(tx.amount)) > 1:
+                return {"ok": True}
+        except (TypeError, ValueError):
+            return {"ok": True}
 
     # Booking deposits confirm the booking; subscription txs activate billing.
     if getattr(tx, "kind", "subscription") == "deposit":

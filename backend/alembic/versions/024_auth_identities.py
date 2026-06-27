@@ -79,38 +79,48 @@ def upgrade() -> None:
     )
 
     rows = []
+    # Guard the uq_auth_identity_provider_subject constraint: real data can
+    # contain two accounts that share a phone (phone uniqueness isn't enforced
+    # until a later migration) or a collidable lowercased username. Without
+    # dedup the single batch INSERT would violate the constraint and abort the
+    # whole upgrade. First occurrence wins; later collisions are skipped.
+    seen: set[tuple[str, str]] = set()
+
+    def _add(provider: str, subject: str, **rest) -> None:
+        key = (provider, subject)
+        if key in seen:
+            return
+        seen.add(key)
+        rows.append(
+            {"id": str(uuid.uuid4()), "provider": provider, "subject": subject, **rest}
+        )
+
     for u in users:
         created = u.created_at or now
-        rows.append(
-            {
-                "id": str(uuid.uuid4()),
-                "user_id": str(u.id),
-                "provider": "telegram",
-                "subject": str(u.telegram_id),
-                "email": None,
-                "email_verified": False,
-                "secret": None,
-                "display_name": (u.username or u.first_name or "")[:255],
-                "created_at": created,
-                "last_login_at": created,
-            }
+        _add(
+            "telegram",
+            str(u.telegram_id),
+            user_id=str(u.id),
+            email=None,
+            email_verified=False,
+            secret=None,
+            display_name=(u.username or u.first_name or "")[:255],
+            created_at=created,
+            last_login_at=created,
         )
         if u.password_hash:
             subject = ((u.username or "").strip().lower()) or (u.phone or "").strip()
             if subject:
-                rows.append(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "user_id": str(u.id),
-                        "provider": "password",
-                        "subject": subject,
-                        "email": None,
-                        "email_verified": False,
-                        "secret": u.password_hash,
-                        "display_name": (u.username or "")[:255],
-                        "created_at": created,
-                        "last_login_at": None,
-                    }
+                _add(
+                    "password",
+                    subject,
+                    user_id=str(u.id),
+                    email=None,
+                    email_verified=False,
+                    secret=u.password_hash,
+                    display_name=(u.username or "")[:255],
+                    created_at=created,
+                    last_login_at=None,
                 )
 
     if rows:

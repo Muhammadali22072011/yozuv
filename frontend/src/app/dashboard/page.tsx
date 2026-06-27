@@ -17,7 +17,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import type { BookingRow, BusinessMe } from "@/types";
 import {
   BookingCard,
@@ -138,7 +138,16 @@ export default function DashboardHome() {
     window.addEventListener("yz:bookings-changed", onChanged);
     load()
       .then(() => setReady(true))
-      .catch(() => router.replace("/dashboard/onboarding"));
+      .catch((e) => {
+        // Only a 404 means "no business yet → go onboard". A transient
+        // 500/502/network error must NOT bounce an established owner into
+        // onboarding — render the shell so they can retry.
+        if (e instanceof ApiError && e.status === 404) {
+          router.replace("/dashboard/onboarding");
+        } else {
+          setReady(true);
+        }
+      });
     return () => window.removeEventListener("yz:bookings-changed", onChanged);
   }, [router]);
 

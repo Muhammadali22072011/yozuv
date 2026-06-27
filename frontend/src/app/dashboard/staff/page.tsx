@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Power, Trash2, UserCircle2 } from "lucide-react";
 import { ScreenHeader, TourFloat, YzLoader, useToast } from "@/components/yz";
 import type { TourStep } from "@/components/yz";
@@ -221,6 +221,10 @@ function StaffSheet({
     new Set(initial?.service_ids || []),
   );
   const [saving, setSaving] = useState(false);
+  // Remember a freshly-created staff id so that if the second (assign
+  // services) call fails, a retry UPDATEs that row instead of POSTing a
+  // duplicate. Without this, every retry created another orphan staff record.
+  const createdIdRef = useRef<string | null>(null);
 
   function toggleService(id: string) {
     setPickedServices((prev) => {
@@ -238,7 +242,9 @@ function StaffSheet({
     }
     setSaving(true);
     try {
-      let id = initial?.id;
+      // Reuse an id from a prior partial save (created but services failed)
+      // so a retry never double-creates.
+      let id = initial?.id ?? createdIdRef.current ?? undefined;
       if (id) {
         // Update
         await apiFetch<Staff>(`/api/business/me/staff/${id}`, {
@@ -260,6 +266,7 @@ function StaffSheet({
           }),
         });
         id = created.id;
+        createdIdRef.current = created.id;
       }
 
       // Sync service assignment in a second call so create-then-assign

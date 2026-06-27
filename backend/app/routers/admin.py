@@ -685,7 +685,10 @@ def _select_broadcast_recipients(
                 q = q.filter(Subscription.status == st)
     # Filter out soft-deleted businesses unconditionally.
     q = q.filter(Business.deleted_at.is_(None))
-    return q.all()
+    # DISTINCT: the optional Subscription join can fan a business out into
+    # multiple rows (renewals leave several rows per business), which would
+    # otherwise send the owner the broadcast N times and inflate the counts.
+    return q.distinct().all()
 
 
 async def _send_broadcast_to(
@@ -716,11 +719,17 @@ async def _send_broadcast_to(
                     return False
 
         targets: list[int] = []
+        seen: set[int] = set()
         for _b, owner in rows:
             if not owner or not owner.telegram_id:
                 failed += 1
                 continue
-            targets.append(int(owner.telegram_id))
+            tg = int(owner.telegram_id)
+            # One owner may hold several businesses — never message them twice.
+            if tg in seen:
+                continue
+            seen.add(tg)
+            targets.append(tg)
 
         results = await asyncio.gather(*[_one(t) for t in targets])
         for tg, ok in zip(targets, results):

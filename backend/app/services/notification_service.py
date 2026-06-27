@@ -83,15 +83,17 @@ async def send_telegram_message_async(
         payload["reply_markup"] = reply_markup
 
     async def _do(c: httpx.AsyncClient) -> None:
-        try:
-            resp = await c.post(url, json=payload, timeout=15)
-            if resp.status_code >= 400:
-                logger.warning(
-                    "Telegram sendMessage non-2xx for chat_id=%s: %s %s",
-                    chat_id, resp.status_code, resp.text[:200],
-                )
-        except Exception:
-            logger.exception("send_telegram_message_async failed for chat_id=%s", chat_id)
+        # Unlike the sync fire-and-forget sender, this RAISES on failure so
+        # fan-out callers (broadcasts) can count real successes vs failures.
+        # Swallowing here made every recipient count as "sent" even on 403
+        # (blocked bot), 429 (rate limited) or network errors.
+        resp = await c.post(url, json=payload, timeout=15)
+        if resp.status_code >= 400:
+            logger.warning(
+                "Telegram sendMessage non-2xx for chat_id=%s: %s %s",
+                chat_id, resp.status_code, resp.text[:200],
+            )
+            resp.raise_for_status()
 
     if client is not None:
         await _do(client)

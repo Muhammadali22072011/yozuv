@@ -28,28 +28,40 @@ from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
-# business_id -> set of queues. Each queue is owned by one open SSE
-# stream; we add on subscribe and remove on disconnect.
-_subs: dict[UUID, set[asyncio.Queue]] = defaultdict(set)
-_lock = asyncio.Lock()
+# business_id -> {queue: event_loop}. Each queue is owned by one open SSE
+# stream living on a specific event loop; we add on subscribe and remove on
+# disconnect. We remember the loop because publish() is called from sync route
+# handlers running in an anyio worker THREAD, while the queue is bound to the
+# event-loop thread — asyncio.Queue is not thread-safe, so cross-thread writes
+# must go through loop.call_soon_threadsafe.
+_subs: dict[UUID, dict[asyncio.Queue, asyncio.AbstractEventLoop]] = defaultdict(dict)
+
+
+def _safe_put(q: asyncio.Queue, kind: str, business_id: UUID) -> None:
+    try:
+        q.put_nowait(kind)
+    except asyncio.QueueFull:
+        logger.debug("event_bus: queue full for business=%s, dropping %s", business_id, kind)
+    except Exception:
+        logger.exception("event_bus: unexpected publish error")
 
 
 def publish(business_id: UUID, kind: str) -> None:
-    """Best-effort fire-and-forget. We try to put_nowait into every
-    queue; full queues drop the event (the next heartbeat will catch
-    the frontend up). Doesn't raise — a bus problem must never break
-    the booking write."""
-    queues = _subs.get(business_id)
-    if not queues:
+    """Best-effort fire-and-forget, safe to call from any thread. Schedules
+    the queue write on each subscriber's own event loop. Full queues drop the
+    event (the next heartbeat catches the frontend up). Doesn't raise — a bus
+    problem must never break the booking write."""
+    subs = _subs.get(business_id)
+    if not subs:
         return
-    for q in tuple(queues):
+    for q, loop in tuple(subs.items()):
         try:
-            q.put_nowait(kind)
-        except asyncio.QueueFull:
-            # Slow consumer — skip rather than block the publisher.
-            logger.debug("event_bus: queue full for business=%s, dropping %s", business_id, kind)
+            loop.call_soon_threadsafe(_safe_put, q, kind, business_id)
+        except RuntimeError:
+            # Loop already closed — its stream is gone; ignore.
+            pass
         except Exception:
-            logger.exception("event_bus: unexpected publish error")
+            logger.exception("event_bus: unexpected schedule error")
 
 
 async def subscribe(business_id: UUID) -> AsyncIterator[str]:
@@ -57,8 +69,7 @@ async def subscribe(business_id: UUID) -> AsyncIterator[str]:
     responsible for honouring ``async for`` cancellation; we clean up
     on the way out."""
     q: asyncio.Queue = asyncio.Queue(maxsize=64)
-    async with _lock:
-        _subs[business_id].add(q)
+    _subs[business_id][q] = asyncio.get_running_loop()
     try:
         while True:
             try:
@@ -70,9 +81,8 @@ async def subscribe(business_id: UUID) -> AsyncIterator[str]:
             except asyncio.TimeoutError:
                 yield "ping"
     finally:
-        async with _lock:
-            bucket = _subs.get(business_id)
-            if bucket is not None:
-                bucket.discard(q)
-                if not bucket:
-                    _subs.pop(business_id, None)
+        bucket = _subs.get(business_id)
+        if bucket is not None:
+            bucket.pop(q, None)
+            if not bucket:
+                _subs.pop(business_id, None)

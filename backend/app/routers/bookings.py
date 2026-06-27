@@ -612,6 +612,12 @@ def create_recurring(
         )
         end_time = end_dt.time()
 
+        # Advisory lock per destination slot, mirroring create_owner_booking /
+        # update_booking — SELECT FOR UPDATE alone can't lock an empty slot, so
+        # without this two concurrent creates (or a recurring create racing a
+        # single create) both pass the conflict check and double-book.
+        acquire_slot_lock(db, business.id, slot_date, body.start_time)
+
         conflict_q = (
             db.query(Booking)
             .filter(
@@ -626,7 +632,7 @@ def create_recurring(
         )
         if staff_id is not None:
             conflict_q = conflict_q.filter(Booking.staff_id == staff_id)
-        conflict = conflict_q.first()
+        conflict = conflict_q.with_for_update().first()
         if conflict is not None:
             if body.strict:
                 for b in created:
