@@ -1047,16 +1047,21 @@ export default function AdminPage() {
   }
 
   async function addAdmin() {
-    const tg = Number(newAdminId.replace(/\D/g, ""));
-    if (!tg || tg <= 0) {
-      toast("Telegram ID kerak");
+    const raw = newAdminId.trim();
+    if (!raw) {
+      toast("Telegram ID yoki @username kerak");
       return;
     }
+    // Numeric (no @) → treat as Telegram ID; otherwise resolve by username.
+    const isId = !raw.startsWith("@") && /^\d+$/.test(raw);
+    const payload = isId
+      ? { telegram_id: Number(raw), name: newAdminName || null }
+      : { username: raw.replace(/^@/, ""), name: newAdminName || null };
     setAddingAdmin(true);
     try {
       await apiFetch("/api/admin/admins", {
         method: "POST",
-        body: JSON.stringify({ telegram_id: tg, name: newAdminName || null }),
+        body: JSON.stringify(payload),
       });
       toast("Admin qo‘shildi");
       setNewAdminId("");
@@ -1858,7 +1863,9 @@ export default function AdminPage() {
                         Adminlar
                       </h3>
                       <p className="mt-1 text-xs text-ink-500">
-                        ENV adminlarni o‘chirib bo‘lmaydi. Yangilarini bu yerda qo‘shing.
+                        Telegram ID yoki @username orqali qo‘shing. @username
+                        faqat tizimga kirgan foydalanuvchilar uchun ishlaydi.
+                        ENV (superadmin)larni o‘chirib bo‘lmaydi.
                       </p>
                     </div>
                   </div>
@@ -1909,11 +1916,9 @@ export default function AdminPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <input
                       value={newAdminId}
-                      onChange={(e) =>
-                        setNewAdminId(e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="Telegram ID"
-                      className="yz-input w-36 py-2 font-mono text-sm"
+                      onChange={(e) => setNewAdminId(e.target.value)}
+                      placeholder="Telegram ID yoki @username"
+                      className="yz-input w-52 py-2 font-mono text-sm"
                     />
                     <input
                       value={newAdminName}

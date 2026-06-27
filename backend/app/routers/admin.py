@@ -1699,7 +1699,11 @@ def list_admins(db: Session = Depends(get_db), _=Depends(get_admin_user)):
 
 
 class AdminCreateBody(BaseModel):
-    telegram_id: int = Field(..., gt=0)
+    # Identify the new admin by numeric Telegram ID OR by @username.
+    # At least one is required; username is resolved to an id via the
+    # users table (the person must have logged in at least once).
+    telegram_id: int | None = Field(None, gt=0)
+    username: str | None = None
     name: str | None = None
 
 
@@ -1711,16 +1715,46 @@ def add_admin(
 ):
     from app.deps import _admin_telegram_ids
 
-    if body.telegram_id in _admin_telegram_ids():
+    telegram_id = body.telegram_id
+    name = (body.name or "").strip()
+
+    # Resolve a @username to a Telegram id. Telegram usernames are
+    # case-insensitive and we store them lowercased-unique, so match on
+    # lower(). The user must already exist (have logged in) — we can't
+    # mint an id from a username we've never seen.
+    if telegram_id is None:
+        uname = (body.username or "").strip().lstrip("@")
+        if not uname:
+            raise HTTPException(400, "Telegram ID yoki username kerak")
+        u = (
+            db.query(User)
+            .filter(func.lower(User.username) == uname.lower())
+            .first()
+        )
+        if not u:
+            raise HTTPException(
+                404,
+                f"@{uname} topilmadi. Foydalanuvchi avval tizimga kirishi kerak.",
+            )
+        if not u.telegram_id:
+            raise HTTPException(400, f"@{uname} ning Telegram ID si yo‘q")
+        telegram_id = int(u.telegram_id)
+        if not name:
+            name = (
+                f"{u.first_name or ''} {u.last_name or ''}".strip()
+                or (u.username or "")
+            )
+
+    if telegram_id in _admin_telegram_ids():
         raise HTTPException(409, "Already a superadmin (env)")
     existing = (
-        db.query(AdminUser).filter(AdminUser.telegram_id == body.telegram_id).first()
+        db.query(AdminUser).filter(AdminUser.telegram_id == telegram_id).first()
     )
     if existing:
         raise HTTPException(409, "Already an admin")
     row = AdminUser(
-        telegram_id=body.telegram_id,
-        name=(body.name or "").strip(),
+        telegram_id=telegram_id,
+        name=name,
         added_by_telegram_id=int(admin.telegram_id) if admin.telegram_id else None,
     )
     db.add(row)
@@ -1730,7 +1764,7 @@ def add_admin(
         "admin.add",
         "AdminUser",
         None,
-        {"telegram_id": body.telegram_id, "name": row.name},
+        {"telegram_id": telegram_id, "name": row.name},
     )
     db.commit()
     db.refresh(row)
