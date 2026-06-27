@@ -3,8 +3,17 @@
 Adds the per-business referral config columns and the referral_codes /
 referrals tables backing the "invite a friend" feature.
 
-Revision ID: 026
-Revises: 025
+Revision ID: 033
+Revises: 032
+
+Renumbered from 026 → 033: revision id "026" was already taken by
+026_review_owner_reply (live in prod as 026, with 027/028/029 on top),
+so this migration collided on "026" and broke every backend deploy at
+`alembic upgrade head` (status 255 — same failure mode as the earlier
+media_blobs renumber to 029). Slot it after the current head (032)
+instead. The already-applied 026/027/028/029 are untouched, so prod's
+alembic state stays consistent; `upgrade head` now applies 030→033.
+
 Create Date: 2026-06-26
 """
 
@@ -14,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "026"
-down_revision: Union[str, None] = "025"
+revision: str = "033"
+down_revision: Union[str, None] = "032"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
