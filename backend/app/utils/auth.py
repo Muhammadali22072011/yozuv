@@ -80,8 +80,32 @@ def create_refresh_token(subject: str) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
+def create_link_token(subject: str) -> str:
+    """Short-lived (5 min) token used ONLY to authorize the Google account-link
+    top-level navigation, where the token must ride the URL query (a redirect
+    can't carry a Bearer header). Scoped as type="link" so that even if it
+    leaks into logs/history it cannot be replayed as a general access token."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    to_encode = {"exp": expire, "sub": subject, "type": "link"}
+    return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+
+
 def decode_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+
+
+def get_user_from_link_token(db: Session, token: str) -> User | None:
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "link":
+            return None
+        sub = payload.get("sub")
+        if not sub:
+            return None
+        user_id = UUID(sub)
+    except (JWTError, ValueError):
+        return None
+    return db.query(User).filter(User.id == user_id).first()
 
 
 def get_user_from_token(db: Session, token: str) -> User | None:

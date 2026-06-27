@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   ChevronRight,
@@ -116,13 +116,31 @@ export default function SettingsPage() {
     }
   };
 
+  // One active poller at a time, with its handles in a ref so we can cancel
+  // a previous poll before starting a new one and clean up on unmount —
+  // otherwise re-uploading started a second interval and navigating away
+  // left an interval running (setState-after-unmount) for up to 10 minutes.
+  const pollRef = useRef<{
+    interval?: ReturnType<typeof setInterval>;
+    timeout?: ReturnType<typeof setTimeout>;
+  }>({});
+
+  const stopPoll = () => {
+    if (pollRef.current.interval) clearInterval(pollRef.current.interval);
+    if (pollRef.current.timeout) clearTimeout(pollRef.current.timeout);
+    pollRef.current = {};
+  };
+
+  useEffect(() => stopPoll, []);
+
   const pollStatus = (txId: string) => {
+    stopPoll();
     const interval = setInterval(async () => {
       try {
         const s = await apiFetch<TxStatus>(`/api/payments/status/${txId}`);
         setStatus(s);
         if (s.status.endsWith("COMPLETED") || s.status === "COMPLETED") {
-          clearInterval(interval);
+          stopPoll();
           toast("To‘lov tasdiqlandi");
           const fresh = await apiFetch<{
             plan: string;
@@ -131,12 +149,13 @@ export default function SettingsPage() {
           }>("/api/subscription").catch(() => null);
           setSub(fresh);
         } else if (s.status.includes("REJECTED") || s.status.includes("FAILED")) {
-          clearInterval(interval);
+          stopPoll();
           toast("To‘lov rad etildi");
         }
       } catch {}
     }, 4000);
-    setTimeout(() => clearInterval(interval), 10 * 60 * 1000);
+    pollRef.current.interval = interval;
+    pollRef.current.timeout = setTimeout(stopPoll, 10 * 60 * 1000);
   };
 
   function logout() {
@@ -208,11 +227,20 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function connectGoogle() {
+  async function connectGoogle() {
     const token = getToken();
     if (!token) return;
-    // Top-level nav (OAuth can't ride a Bearer header) — token is short-lived.
-    window.location.href = `${apiBase()}/api/auth/google/start?link=1&token=${encodeURIComponent(token)}`;
+    try {
+      // Fetch a dedicated 5-min, link-scoped token with the Bearer header so
+      // a general access token never travels in the URL (logs/history/Referer).
+      const { link_token } = await apiFetch<{ link_token: string }>(
+        "/api/auth/google/link-token",
+        { method: "POST" },
+      );
+      window.location.href = `${apiBase()}/api/auth/google/start?link=1&token=${encodeURIComponent(link_token)}`;
+    } catch (e) {
+      toast((e as Error).message || "Xatolik");
+    }
   }
   async function disconnectGoogle() {
     try {

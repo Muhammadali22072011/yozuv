@@ -6,8 +6,15 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.deps import get_current_user, get_owned_business, get_owned_business_download
+from fastapi.security import HTTPAuthorizationCredentials
+
+from app.database import SessionLocal, get_db
+from app.deps import (
+    get_current_user,
+    get_owned_business,
+    security,
+)
+from app.utils.auth import get_user_from_token
 from app.models import (
     Booking,
     BookingStatus,
@@ -383,7 +390,8 @@ async def notifications_stream(
     # SSE: native EventSource can't send custom headers, so we accept
     # the access token via ?token= as well as the usual Authorization
     # header (same pattern as the brochure download).
-    business: Business = Depends(get_owned_business_download),
+    token: str | None = None,
+    creds: HTTPAuthorizationCredentials | None = Depends(security),
 ):
     """Server-Sent Events feed for the dashboard bell.
 
@@ -398,13 +406,36 @@ async def notifications_stream(
     """
     from app.services.event_bus import subscribe
 
+    # Resolve auth + business in a SHORT-LIVED session and release the pooled
+    # connection before the (potentially hours-long) stream starts. Depending
+    # on get_db here would keep one DB connection checked out for the entire
+    # SSE lifetime, so a few dozen open dashboards would exhaust the pool.
+    raw: str | None = None
+    if creds and creds.scheme.lower() == "bearer":
+        raw = creds.credentials
+    elif token:
+        raw = token
+    if not raw:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    db = SessionLocal()
+    try:
+        user = get_user_from_token(db, raw)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        b = db.query(Business).filter(Business.owner_id == user.id).first()
+        if not b:
+            raise HTTPException(status_code=404, detail="Business not found")
+        business_id = b.id
+    finally:
+        db.close()
+
     async def gen():
         # Tell the client they're connected so we have something to
         # write before the first real event — long flushes through
         # an idle proxy can otherwise close the stream early.
         yield "event: connected\ndata: {}\n\n"
         try:
-            async for kind in subscribe(business.id):
+            async for kind in subscribe(business_id):
                 payload = json.dumps({"kind": kind})
                 yield f"event: {kind}\ndata: {payload}\n\n"
         except Exception:

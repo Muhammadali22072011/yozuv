@@ -325,13 +325,18 @@ def complete_transaction_and_notify(db: Session, tx: PaymentTransaction) -> None
 
     business = db.query(Business).filter(Business.id == tx.business_id).first()
     owner = db.query(User).filter(User.id == business.owner_id).first() if business else None
-    if owner:
+    # telegram_id is nullable (Google/password-only owners). Never let a
+    # missing/None id or a failed notification abort the activation commit.
+    if owner and owner.telegram_id:
         msg = (
             "✅ To'lov qabul qilindi. Obunangiz 30 kunga faollashtirildi."
             if plan == SubscriptionPlan.MONTHLY
             else "✅ To'lov qabul qilindi. Yillik obuna faollashtirildi."
         )
-        send_telegram_message(int(owner.telegram_id), msg)
+        try:
+            send_telegram_message(int(owner.telegram_id), msg)
+        except Exception:
+            pass
 
 
 def refund_transaction(db: Session, tx_id: UUID, business_id: UUID) -> PaymentTransaction:
@@ -378,11 +383,14 @@ def refund_transaction(db: Session, tx_id: UUID, business_id: UUID) -> PaymentTr
     # Notify owner
     business = db.query(Business).filter(Business.id == business_id).first()
     owner = db.query(User).filter(User.id == business.owner_id).first() if business else None
-    if owner:
-        send_telegram_message(
-            int(owner.telegram_id),
-            f"♻️ To'lovingiz ({tx.amount:,} so'm) qaytarildi. Obunangiz bekor qilindi.",
-        )
+    if owner and owner.telegram_id:
+        try:
+            send_telegram_message(
+                int(owner.telegram_id),
+                f"♻️ To'lovingiz ({tx.amount:,} so'm) qaytarildi. Obunangiz bekor qilindi.",
+            )
+        except Exception:
+            pass
 
     db.flush()
     return tx

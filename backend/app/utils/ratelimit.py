@@ -36,10 +36,20 @@ def _bucket_for(key: str) -> _Bucket:
 
 
 def _client_ip(request: Request) -> str:
-    # Honour proxy chain headers; fall back to peer.
-    xff = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    """Resolve the client IP for rate-limit bucketing.
+
+    X-Forwarded-For is client-controllable, so trusting its LEFTMOST entry
+    lets an attacker land every request in a fresh bucket and defeat the
+    limit entirely. We take the RIGHTMOST entry instead: that hop is appended
+    by the immediate trusted reverse proxy (Render/nginx) from the real peer,
+    so an attacker can prepend spoofed values but cannot forge the last hop.
+    Falls back to the direct peer when no proxy header is present.
+    """
+    xff = request.headers.get("x-forwarded-for", "")
     if xff:
-        return xff
+        hops = [p.strip() for p in xff.split(",") if p.strip()]
+        if hops:
+            return hops[-1]
     if request.client and request.client.host:
         return request.client.host
     return "anon"

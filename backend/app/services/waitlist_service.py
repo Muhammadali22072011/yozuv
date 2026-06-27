@@ -104,7 +104,15 @@ def notify_first_for_slot(
     )
     if service_id is not None:
         q = q.filter(WaitlistEntry.service_id == service_id)
-    entry = q.order_by(WaitlistEntry.created_at.asc()).first()
+    # Lock the head row (skip_locked) so two concurrent cancellations of the
+    # same slot don't both grab the same entry: the second caller skips the
+    # locked head and picks the next waiting client instead of double-pinging
+    # one and starving another. No-op on SQLite (tests).
+    entry = (
+        q.order_by(WaitlistEntry.created_at.asc())
+        .with_for_update(skip_locked=True)
+        .first()
+    )
     if entry is None:
         return None
 

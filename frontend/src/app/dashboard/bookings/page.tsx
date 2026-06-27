@@ -99,9 +99,16 @@ export default function BookingsPage() {
   const visible = useMemo(() => {
     let base = rows;
     if (filter !== "ALL") base = base.filter((r) => r.status === filter);
-    if (view === "day") base = base.filter((r) => r.date === selectedISO);
+    if (view === "day") {
+      base = base.filter((r) => r.date === selectedISO);
+    } else {
+      // Week view must scope to the displayed week — otherwise it listed
+      // every booking across all dates and the counter was wrong.
+      const weekSet = new Set(weekDays.map((d) => isoFor(d)));
+      base = base.filter((r) => weekSet.has(r.date));
+    }
     return base;
-  }, [rows, filter, view, selectedISO]);
+  }, [rows, filter, view, selectedISO, weekDays]);
 
   const today = new Date();
   const isToday = (d: Date) => isoFor(d) === isoFor(today);

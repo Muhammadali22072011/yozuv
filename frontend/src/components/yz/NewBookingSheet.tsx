@@ -54,7 +54,8 @@ export function NewBookingSheet({
   const [step, setStep] = useState(0);
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [busySlots, setBusySlots] = useState<Set<string>>(new Set());
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [q, setQ] = useState("");
   const [client, setClient] = useState<Client | null>(null);
   const [service, setService] = useState<Service | null>(null);
@@ -86,12 +87,37 @@ export function NewBookingSheet({
     });
   }, [open, defaultDate, defaultTime, defaultClientId]);
 
+  // Authoritative availability from the backend (schedule + breaks + holidays
+  // + service duration + real overlap), instead of a naive client-side
+  // exact-start-time check over all statuses.
   useEffect(() => {
-    if (!open) return;
-    apiFetch<{ start_time: string }[]>(`/api/business/me/bookings?booking_date=${date}`)
-      .then((rows) => setBusySlots(new Set(rows.map((r) => r.start_time.slice(0, 5)))))
-      .catch(() => setBusySlots(new Set()));
-  }, [open, date]);
+    if (!open || !service) {
+      setSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    apiFetch<{ slots: string[] }>(
+      `/api/business/me/slots?service_id=${service.id}&date=${date}`,
+    )
+      .then((r) => {
+        if (cancelled) return;
+        setSlots(r.slots);
+        // Keep the selected time valid: if it's no longer offered, snap to the
+        // first available slot.
+        if (r.slots.length && !r.slots.includes(time)) setTime(r.slots[0]);
+      })
+      .catch(() => {
+        if (!cancelled) setSlots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, date, service]);
 
   const filteredClients = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -103,7 +129,10 @@ export function NewBookingSheet({
   }, [clients, q]);
 
   const canNext =
-    (step === 0 && client) || (step === 1 && service) || step === 2 || step === 3;
+    (step === 0 && client) ||
+    (step === 1 && service) ||
+    (step === 2 && slots.includes(time)) ||
+    step === 3;
 
   async function finish() {
     if (!client || !service) return;
@@ -258,40 +287,35 @@ export function NewBookingSheet({
                   className="yz-input w-auto px-3 py-1.5"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  "09:00",
-                  "10:00",
-                  "11:00",
-                  "12:00",
-                  "13:00",
-                  "14:00",
-                  "15:00",
-                  "16:00",
-                  "17:00",
-                  "18:00",
-                ].map((t) => {
-                  const busy = busySlots.has(t);
-                  const active = time === t;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => !busy && setTime(t)}
-                      disabled={busy}
-                      className={cn(
-                        "rounded-2xl border-[1.5px] py-3.5 text-center font-display text-[15px] font-bold transition-colors",
-                        active
-                          ? "yz-grad border-indigo-600 text-white shadow-indigo"
-                          : busy
-                          ? "border-ink-100 bg-ink-100 text-ink-300 line-through"
-                          : "border-ink-200 bg-white text-ink-900 active:opacity-80"
-                      )}
-                    >
-                      {t}
-                    </button>
-                  );
-                })}
-              </div>
+              {slotsLoading ? (
+                <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
+                  Bo‘sh vaqtlar yuklanmoqda…
+                </div>
+              ) : slots.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-6 text-center text-sm text-ink-400">
+                  Bu kunga bo‘sh vaqt yo‘q
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {slots.map((t) => {
+                    const active = time === t;
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => setTime(t)}
+                        className={cn(
+                          "rounded-2xl border-[1.5px] py-3.5 text-center font-display text-[15px] font-bold transition-colors",
+                          active
+                            ? "yz-grad border-indigo-600 text-white shadow-indigo"
+                            : "border-ink-200 bg-white text-ink-900 active:opacity-80"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

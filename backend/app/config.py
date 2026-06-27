@@ -1,8 +1,7 @@
-import os
 import secrets
 from functools import lru_cache
 
-from pydantic import field_validator, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_DEFAULTS = {"change_me", "secret", "changeme", "your_secret_key"}
@@ -19,19 +18,6 @@ class Settings(BaseSettings):
     secret_key: str = "change_me"
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
-
-    @field_validator("secret_key")
-    @classmethod
-    def validate_secret_key(cls, v: str) -> str:
-        # In production (non-local) environments, reject insecure defaults
-        env = os.getenv("APP_ENV", "development").lower()
-        if env == "production":
-            if v.lower() in _INSECURE_DEFAULTS or len(v) < 32:
-                raise ValueError(
-                    "SECRET_KEY must be set to a strong random value (>=32 chars) in production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
-                )
-        return v
 
     bot_token: str = ""
     webhook_url: str = ""
@@ -87,6 +73,15 @@ class Settings(BaseSettings):
         if (self.app_env or "").lower() != "production":
             return self
         errors: list[str] = []
+        # Secret-key strength MUST be gated on the parsed app_env field (which
+        # honours .env), not os.getenv("APP_ENV") — otherwise a deployment that
+        # sets APP_ENV only in .env would silently skip the check and ship a
+        # forgeable JWT signing key.
+        if self.secret_key.lower() in _INSECURE_DEFAULTS or len(self.secret_key) < 32:
+            errors.append(
+                "SECRET_KEY must be a strong random value (>=32 chars) in production "
+                "(generate: python -c \"import secrets; print(secrets.token_hex(32))\")"
+            )
         if not self.bot_token or ":" not in self.bot_token:
             errors.append("BOT_TOKEN is missing or malformed")
         if not self.database_url or "localhost" in self.database_url:

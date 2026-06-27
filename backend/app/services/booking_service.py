@@ -21,6 +21,7 @@ from app.models import (
 from app.models.enums import ConfirmationMode
 from app.schemas.booking import BookingCreatePublic
 from app.services import referral_service
+from app.utils.clock import local_now
 
 
 def _slot_lock_key_for(business_id: UUID, slot_date: _date, slot_start: _time) -> int:
@@ -305,19 +306,30 @@ def _maybe_apply_loyalty(
     n = int(getattr(service, "loyalty_after_visits", 0) or 0)
     if n <= 0:
         return base_price
-    completed = (
+    # Count ACTIVE visits (PENDING/CONFIRMED/COMPLETED), not COMPLETED only.
+    # Counting completed-only let a client spam multiple simultaneous free
+    # bookings on the boundary: each create saw the same completed count and
+    # priced itself 0. Including in-flight bookings advances the counter as
+    # soon as a free one is created, so the next create is no longer free.
+    active_visits = (
         db.query(func.count(Booking.id))
         .filter(
             Booking.service_id == service.id,
             Booking.client_id == client_id,
-            Booking.status == BookingStatus.COMPLETED,
+            Booking.status.in_(
+                [
+                    BookingStatus.PENDING,
+                    BookingStatus.CONFIRMED,
+                    BookingStatus.COMPLETED,
+                ]
+            ),
         )
         .scalar()
         or 0
     )
     # Visit number we are about to create (1-based). If it's a multiple
     # of N, this is a free stamp.
-    next_visit = int(completed) + 1
+    next_visit = int(active_visits) + 1
     if next_visit % n == 0:
         return 0
     return base_price
@@ -364,8 +376,17 @@ def _apply_promo(db: Session, business_id: UUID, raw_code: str, base_price: int)
         return base_price, None
     if p.max_uses and (p.uses_count or 0) >= p.max_uses:
         return base_price, None
-    discount = (base_price * (p.discount_percent or 0) // 100) + (p.discount_amount or 0)
+    discount = _promo_discount(p, base_price)
     return max(0, base_price - discount), p
+
+
+def _promo_discount(p: PromoCode, base_price: int) -> int:
+    """Percent OR amount — never both. The UI presents them as exclusive
+    ("Chegirma %" / "Yoki so'm"); applying both at once silently over-discounts
+    and leaks money. Percent takes precedence when set."""
+    if p.discount_percent:
+        return base_price * p.discount_percent // 100
+    return p.discount_amount or 0
 
 
 def validate_promo_for_business(db: Session, business_id: UUID, raw_code: str, base_price: int) -> dict | None:
@@ -386,7 +407,7 @@ def validate_promo_for_business(db: Session, business_id: UUID, raw_code: str, b
         return None
     if p.max_uses and (p.uses_count or 0) >= p.max_uses:
         return None
-    discount = (base_price * (p.discount_percent or 0) // 100) + (p.discount_amount or 0)
+    discount = _promo_discount(p, base_price)
     return {
         "code": p.code,
         "discount_percent": int(p.discount_percent or 0),
@@ -406,8 +427,6 @@ def cancel_booking(
     business's ``cancel_window_hours`` policy and flag the cancel as
     ``late_cancel`` if it falls inside the window. Owner-side cancels
     don't get the flag — the late-cancel signal is about clients."""
-    from datetime import timezone as _tz
-
     b = (
         db.query(Booking)
         .filter(Booking.id == booking_id, Booking.business_id == business_id)
@@ -420,9 +439,10 @@ def cancel_booking(
         window_hours = int(getattr(biz, "cancel_window_hours", 0) or 0)
         if window_hours > 0:
             slot_dt = datetime.combine(b.date, b.start_time)
-            # Naive compare — slot_dt is local and the window is wall-clock
-            # hours; using utcnow() here would shift by TZ_OFFSET.
-            now_local = datetime.now(_tz.utc).astimezone().replace(tzinfo=None)
+            # slot_dt is naive Tashkent wall-clock. Compare against Tashkent
+            # "now" — .astimezone() would resolve to the SERVER tz (UTC on
+            # Render), shifting the late-cancel boundary by 5 hours.
+            now_local = local_now().replace(tzinfo=None)
             if slot_dt - now_local < timedelta(hours=window_hours):
                 b.late_cancel = True
     b.status = BookingStatus.CANCELLED

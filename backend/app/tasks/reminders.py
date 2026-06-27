@@ -6,9 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.celery_app import celery_app
 
-# Minutes before booking to send reminder (inclusive range)
-REMINDER_WINDOW_MIN = 59.0
-REMINDER_WINDOW_MAX = 61.0
+# Reminder is the "~1 hour before" nudge. We send it on the first beat run
+# where the booking is at most this many minutes away and still in the future.
+# A wide upper bound + the reminder_sent_at idempotency guard means a missed
+# beat run (worker restart, redis hiccup, deploy) is caught on the next run
+# instead of silently skipping the reminder forever.
+REMINDER_LEAD_MAX = 65.0
 from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Service, Subscription, SubscriptionPlan, SubscriptionStatus
 from app.services.notification_service import send_telegram_message
@@ -44,7 +47,9 @@ def send_hourly_reminders() -> None:
         for b in bookings:
             bt = datetime.combine(b.date, b.start_time)
             minutes_until = (bt - now_local).total_seconds() / 60.0
-            if not (REMINDER_WINDOW_MIN <= minutes_until <= REMINDER_WINDOW_MAX):
+            # Skip if the slot is too far out (not yet within the lead window)
+            # or already started/past (the no-show task owns those).
+            if minutes_until < 0 or minutes_until > REMINDER_LEAD_MAX:
                 continue
             client = db.query(Client).filter(Client.id == b.client_id).first()
             business = db.query(Business).filter(Business.id == b.business_id).first()
@@ -248,7 +253,7 @@ def trial_expiry_warnings() -> None:
             from app.models import User
 
             owner = db.query(User).filter(User.id == business.owner_id).first()
-            if owner:
+            if owner and owner.telegram_id:
                 send_telegram_message(
                     int(owner.telegram_id),
                     "⚠️ Trial tugashiga 1 kun qoldi. Obunani yangilang.",

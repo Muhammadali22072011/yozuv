@@ -36,8 +36,14 @@ async def owner_confirm(cb: CallbackQuery):
         if not biz or biz.owner_id != owner.id:
             await cb.answer("Ruxsat yo'q", show_alert=True)
             return
-        if booking.status == BookingStatus.CONFIRMED:
-            await cb.answer("Allaqachon tasdiqlangan", show_alert=True)
+        if booking.status != BookingStatus.PENDING:
+            # Only a pending request can be confirmed. A stale "confirm" tap on
+            # an already-cancelled / no-show / completed booking must NOT
+            # resurrect it to CONFIRMED.
+            if booking.status == BookingStatus.CONFIRMED:
+                await cb.answer("Allaqachon tasdiqlangan", show_alert=True)
+            else:
+                await cb.answer("Bu yozilishni tasdiqlab bo'lmaydi", show_alert=True)
             return
         booking.status = BookingStatus.CONFIRMED
         db.commit()

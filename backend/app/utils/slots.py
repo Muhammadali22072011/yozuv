@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy.orm import Session
 
 from app.models import Booking, BookingStatus, HolidayDate, Schedule
-from app.utils.clock import local_today
+from app.utils.clock import local_now, local_today
 
 # Granularity of slot generation (minutes)
 SLOT_STEP_MINUTES = 30
@@ -68,11 +68,19 @@ def get_available_slots(
     duration = timedelta(minutes=service_duration)
     step = timedelta(minutes=SLOT_STEP_MINUTES)
 
+    # For today, don't offer slots whose start time has already passed
+    # (Tashkent wall-clock). For future dates there is no cutoff.
+    min_start_dt = local_now().replace(tzinfo=None) if d == local_today() else None
+
     slots: list[time] = []
     current_dt = start_dt
 
     while current_dt + duration <= end_dt:
         slot_end_dt = current_dt + duration
+
+        if min_start_dt is not None and current_dt < min_start_dt:
+            current_dt += step
+            continue
 
         if schedule.break_start and schedule.break_end:
             bs = _combine(d, schedule.break_start)

@@ -4,12 +4,12 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_owned_business
-from app.models import Booking, BookingStatus, Business, Client, ClientBlock
+from app.models import Booking, BookingStatus, Business, Client, ClientBlock, Service
 from app.services.notification_service import send_telegram_message_async
 from app.utils.htmlsafe import h
 
@@ -38,6 +38,15 @@ def list_clients(
             Client.phone,
             func.count(Booking.id).label("visits"),
             func.max(Booking.date).label("last_visit"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Booking.status == BookingStatus.COMPLETED, Booking.payment_amount),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("total_spent"),
         )
         .join(Booking, Booking.client_id == Client.id)
         .filter(Booking.business_id == business.id)
@@ -51,6 +60,27 @@ def list_clients(
         .order_by(func.max(Booking.date).desc())
         .all()
     )
+    # Favourite service per client = the service they've booked most often here.
+    fav_rows = (
+        db.query(
+            Booking.client_id,
+            Service.name,
+            func.count(Booking.id).label("n"),
+        )
+        .join(Service, Service.id == Booking.service_id)
+        .filter(Booking.business_id == business.id)
+        .group_by(Booking.client_id, Service.name)
+        .all()
+    )
+    favorite: dict = {}
+    for cid, sname, n in fav_rows:
+        cur = favorite.get(cid)
+        if cur is None or n > cur[1]:
+            favorite[cid] = (sname, n)
+
+    # VIP = 5+ visits here; "new" = first-ever (or single) visit. Both were
+    # referenced by the dashboard filters but never sent by the API.
+    VIP_VISIT_THRESHOLD = 5
     return [
         {
             "id": str(r.id),
@@ -60,6 +90,10 @@ def list_clients(
             "phone": r.phone,
             "visits": int(r.visits),
             "last_visit": r.last_visit.isoformat() if r.last_visit else None,
+            "total_spent": int(r.total_spent or 0),
+            "favorite_service": favorite.get(r.id, (None,))[0],
+            "is_vip": int(r.visits) >= VIP_VISIT_THRESHOLD,
+            "is_new": int(r.visits) <= 1,
         }
         for r in rows
     ]
@@ -71,9 +105,10 @@ def client_detail(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    c = db.query(Client).filter(Client.id == client_id).first()
-    if not c:
-        raise HTTPException(404, "Not found")
+    # Scope to clients who have actually booked with THIS business, otherwise
+    # an owner can read any client's PII cross-tenant by guessing/reusing a
+    # UUID (IDOR). _client_in_business_or_404 enforces the booking link.
+    c = _client_in_business_or_404(db, business.id, client_id)
     bookings = (
         db.query(Booking)
         .filter(Booking.business_id == business.id, Booking.client_id == client_id)
@@ -82,6 +117,11 @@ def client_detail(
     )
     no_show_count = sum(1 for b in bookings if b.status == BookingStatus.NO_SHOW)
     late_cancel_count = sum(1 for b in bookings if getattr(b, "late_cancel", False))
+    total_spent = sum(
+        int(b.payment_amount or 0)
+        for b in bookings
+        if b.status == BookingStatus.COMPLETED
+    )
     block = (
         db.query(ClientBlock)
         .filter(
@@ -113,6 +153,7 @@ def client_detail(
             "total_bookings": len(bookings),
             "no_show_count": no_show_count,
             "late_cancel_count": late_cancel_count,
+            "total_spent": total_spent,
         },
         "block": (
             {

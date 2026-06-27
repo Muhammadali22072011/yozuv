@@ -63,7 +63,16 @@ class Business(Base):
     holidays: Mapped[list["HolidayDate"]] = relationship(
         "HolidayDate", back_populates="business", cascade="all, delete-orphan"
     )
-    bookings: Mapped[list["Booking"]] = relationship("Booking", back_populates="business")
+    # passive_deletes: rely on the DB-level ON DELETE CASCADE on
+    # Booking.business_id when a business is hard-deleted, instead of
+    # SQLAlchemy loading every historical booking and trying to NULL the
+    # NOT NULL business_id (which raised on any business with past bookings).
+    bookings: Mapped[list["Booking"]] = relationship(
+        "Booking",
+        back_populates="business",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     subscriptions: Mapped[list["Subscription"]] = relationship(
         "Subscription", back_populates="business", cascade="all, delete-orphan"
     )
