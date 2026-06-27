@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, TelegramObject
+from aiogram.types import TelegramObject, Update
 
 # Drop per-user timestamps older than this so the map can't grow unbounded.
 _PRUNE_AFTER_SECONDS = 3600
@@ -21,6 +21,17 @@ class ThrottlingMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any],
     ) -> Any:
+        # This middleware sits on the `update` observer, so `event` is always an
+        # Update — the concrete Message/CallbackQuery lives on its sub-fields.
+        callback = getattr(event, "callback_query", None) if isinstance(event, Update) else None
+
+        # Only throttle rapid button presses. Plain messages are user-typed
+        # (review comments, promo codes, phone numbers in FSM flows); dropping
+        # one silently makes the user's text vanish with no feedback, so let
+        # every non-callback update through untouched.
+        if callback is None:
+            return await handler(event, data)
+
         user = data.get("event_from_user")
         if user is None:
             return await handler(event, data)
@@ -29,11 +40,10 @@ class ThrottlingMiddleware(BaseMiddleware):
         if now - self._last[uid] < self.rate_limit:
             # Answer the callback so the client's button spinner stops —
             # silently returning None left it hanging "loading" forever.
-            if isinstance(event, CallbackQuery):
-                try:
-                    await event.answer()
-                except Exception:
-                    pass
+            try:
+                await callback.answer()
+            except Exception:
+                pass
             return None
         self._last[uid] = now
         # Opportunistically prune stale entries so a stream of one-off users
