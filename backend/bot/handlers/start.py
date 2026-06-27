@@ -22,6 +22,7 @@ from app.services import referral_service
 from app.utils.clock import local_today
 from app.utils.htmlsafe import h
 from app.utils.uz_geo import list_tumans, list_viloyats
+from bot import fun
 from bot.keyboards.inline import back_to_menu_kb, business_menu_kb, role_choice_kb
 from bot.utils import safe_edit_text
 
@@ -106,7 +107,7 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
             # straight into HTML mode lets the owner inject <a href="..."> and
             # phish their own clients, so escape it before using.
             welcome = h(b.welcome_text).strip() if b.welcome_text else ""
-            text = welcome or f"Xush kelibsiz! <b>{h(b.name)}</b>\n\nQuyidagilardan tanlang:"
+            text = welcome or fun.pick(fun.WELCOME_FALLBACK).format(name=h(b.name))
             tg_id = message.from_user.id if message.from_user else None
             is_owner = False
             if tg_id:
@@ -140,8 +141,11 @@ async def cmd_start(message: Message, command: CommandObject | None = None):
             if user:
                 biz = db.query(Business).filter(Business.owner_id == user.id).first()
                 if biz:
+                    greet = fun.pick(fun.GREET_OWNER, seed=tg_id).format(
+                        name=h(user.first_name or "usta"), greet=fun.greeting_word()
+                    )
                     await message.answer(
-                        f"👋 Salom, <b>{h(user.first_name or 'usta')}</b>!\n"
+                        f"{greet}\n"
                         f"Biznesingiz: <b>{h(biz.name)}</b>\n"
                         f"Mijozlar havolasi: <code>t.me/{(await message.bot.me()).username}?start={biz.slug}</code>",
                         reply_markup=_owner_kb(),
@@ -425,7 +429,7 @@ async def back_to_menu(cb: CallbackQuery):
             await cb.answer("Biznes topilmadi", show_alert=True)
             return
         welcome = h(b.welcome_text).strip() if b.welcome_text else ""
-        text = welcome or f"Xush kelibsiz! <b>{h(b.name)}</b>\n\nQuyidagilardan tanlang:"
+        text = welcome or fun.pick(fun.WELCOME_FALLBACK).format(name=h(b.name))
         tg_id = cb.from_user.id if cb.from_user else None
         is_owner = False
         if tg_id:
@@ -479,7 +483,7 @@ async def _open_via_referral(message: Message, db: Session, code: str) -> None:
             )
 
     welcome = h(b.welcome_text).strip() if b.welcome_text else ""
-    text = banner + (welcome or f"Xush kelibsiz! <b>{h(b.name)}</b>\n\nQuyidagilardan tanlang:")
+    text = banner + (welcome or fun.pick(fun.WELCOME_FALLBACK).format(name=h(b.name)))
     logo_path = _logo_local_path(b.logo_url)
     if logo_path is not None:
         try:

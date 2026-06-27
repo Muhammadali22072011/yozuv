@@ -7,9 +7,10 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import MenuButtonWebApp, WebAppInfo
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from app.config import get_settings
+from bot import fun
 from bot.handlers import booking, my_bookings, owner, start
 from bot.middlewares.throttling import ThrottlingMiddleware
 
@@ -34,6 +35,15 @@ def build_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
 
 
 async def set_menu_button(bot: Bot) -> None:
+    # Tell Telegram about the commands the bot actually handles so the "/" hint
+    # menu isn't empty. Independent of the WebApp URL, so do it first.
+    try:
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in fun.BOT_COMMANDS]
+        )
+    except Exception:
+        logger.exception("Failed to set bot commands")
+
     app_url = (get_settings().public_app_url or "").rstrip("/")
     if not app_url.startswith("https://"):
         return

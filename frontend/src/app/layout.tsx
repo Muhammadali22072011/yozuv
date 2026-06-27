@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { CapacitorDeepLink } from "@/components/CapacitorDeepLink";
+import { ReferralCapture } from "@/components/ReferralCapture";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin", "latin-ext"],
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`min-h-screen bg-ink-50 ${jakarta.className}`}>
         <CapacitorDeepLink />
+        <ReferralCapture />
         {children}
       </body>
     </html>

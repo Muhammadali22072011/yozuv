@@ -16,14 +16,16 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 
+from sqlalchemy import func
+
 from app.database import SessionLocal
-from app.models import Business, Client, PromoCode, Service, Staff, User
+from app.models import Booking, BookingStatus, Business, Client, PromoCode, Service, Staff, User
 from app.models.referral import Referral
 from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service, waitlist_service
 from app.services.notification_service import send_telegram_message
 from app.utils.clock import local_today
-from app.utils.htmlsafe import h
+from app.utils.htmlsafe import h as hs
 from app.utils.slots import (
     get_available_slots,
     get_bookings_for_date,
@@ -31,6 +33,7 @@ from app.utils.slots import (
     is_holiday,
     next_working_dates,
 )
+from bot import fun
 from bot.keyboards.inline import (
     back_to_menu_kb,
     confirm_kb,
@@ -184,9 +187,23 @@ async def show_service_detail(cb: CallbackQuery):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
+        # Put the loyalty carrot right where the booking decision is made:
+        # the caller's own earned stamps toward a free visit of THIS service.
+        # Skip the client lookup entirely when this service has no loyalty card
+        # (the common case) so the hot browse path stays at one query.
+        text = _service_detail_text(service)
+        if int(getattr(service, "loyalty_after_visits", 0) or 0) > 0:
+            try:
+                client = db.query(Client).filter(Client.telegram_id == cb.from_user.id).first()
+                if client is not None:
+                    lp = booking_service.loyalty_progress(db, service, client.id)
+                    if lp is not None:
+                        text += "\n\n" + fun.loyalty_service_hint(lp[0], lp[1])
+            except Exception:
+                logger.exception("loyalty hint on service detail failed")
         await safe_edit_text(
             cb,
-            _service_detail_text(service),
+            text,
             reply_markup=service_detail_kb(b.slug, sid),
         )
     finally:
@@ -273,11 +290,6 @@ async def pick_staff(cb: CallbackQuery, state: FSMContext):
         await cb.answer()
         return
     _, sid, choice = parts
-    # staff_id carries through FSM state — every downstream callback
-    # (day, time, prom_y/n, confirm) reads it from there. Empty means
-    # "any master" which falls back to per-business slot conflict.
-    await state.update_data(staff_id="" if choice == "any" else choice)
-
     db = SessionLocal()
     try:
         service = db.query(Service).filter(Service.id == UUID(sid)).first()
@@ -285,7 +297,42 @@ async def pick_staff(cb: CallbackQuery, state: FSMContext):
         if not b or not service:
             await cb.answer("Topilmadi", show_alert=True)
             return
-        await _show_dates(cb, db, b, sid)
+
+        # Resolve the bookable days FIRST — if the business never set its hours
+        # there's nothing to advance to, so bail before emitting the dice/reveal
+        # (otherwise the user gets a celebratory roll, then a dead-end alert).
+        days = next_working_dates(db, b.id, 7)
+        if not days:
+            await cb.answer(
+                "Bu biznes hali ish vaqtini sozlamagan. Iltimos, keyinroq urinib ko'ring yoki biznes egasiga murojaat qiling.",
+                show_alert=True,
+            )
+            return
+
+        # staff_id carries through FSM state — every downstream callback
+        # (day, time, prom_y/n, confirm) reads it from there.
+        if choice == "any":
+            # Make the 🎲 honest: actually roll a concrete master instead of
+            # silently falling back to "" (per-business slots). A real UUID is
+            # as valid downstream as "". If no mappable staff, keep "" exactly
+            # as before so single-resource businesses are unaffected.
+            chosen = fun.roll_master(_staff_for_service(db, b.id, service.id))
+            if chosen is not None:
+                await state.update_data(staff_id=str(chosen.id))
+                await fun.celebrate(cb.message, "🎲")
+                try:
+                    await cb.message.answer(
+                        fun.pick(fun.RANDOM_MASTER_REVEAL).format(name=hs(chosen.name))
+                    )
+                except Exception:
+                    logger.exception("random master reveal failed")
+            else:
+                await state.update_data(staff_id="")
+        else:
+            await state.update_data(staff_id=choice)
+
+        items = [(dd.isoformat(), _format_uz_date(dd)) for dd in days]
+        await safe_edit_text(cb, "Sanani tanlang:", reply_markup=dates_kb(b.slug, sid, items))
     finally:
         db.close()
     await cb.answer()
@@ -427,8 +474,7 @@ async def join_waitlist(cb: CallbackQuery):
     if count:
         await safe_edit_text(
             cb,
-            "🔔 Navbatga qo'shildingiz!\n"
-            "Shu kuni biror joy bo'shasa — sizga darhol xabar beramiz.",
+            fun.pick(fun.WAITLIST_JOINED),
             reply_markup=back_to_menu_kb(slug) if slug else None,
         )
         await cb.answer("✅ Qo'shildingiz")
@@ -645,6 +691,8 @@ async def promo_received(message: Message, state: FSMContext):
 
     # Save validated promo so confirm: handler can apply it
     await state.update_data(promo_code=promo["code"], promo_info=promo)
+    # A little "nice, it worked" — react on the user's own code message.
+    await fun.react(message.bot, message.chat.id, message.message_id, "🎉")
 
     db = SessionLocal()
     try:
@@ -743,6 +791,64 @@ def _create_booking_sync(
         except Exception:
             logger.exception("referral reward lookup failed")
 
+        # Loyalty stamp-card progress (stamps already earned toward the current
+        # card) so the success screen can show a filling bar. Dead-code-revival:
+        # booking_service.loyalty_progress was written for exactly this.
+        loyalty_done = loyalty_total = None
+        try:
+            lp = booking_service.loyalty_progress(db, service, booking.client_id)
+            if lp is not None:
+                loyalty_done, loyalty_total = lp
+        except Exception:
+            logger.exception("loyalty progress lookup failed")
+
+        # How many bookings (any status) this client now has at this business,
+        # incl. the one we just made. Drives the "Nth visit" milestone banner
+        # and the owner's "new client" badge — one COUNT, both signals.
+        visit_no = None
+        try:
+            visit_no = int(
+                db.query(func.count(Booking.id))
+                .filter(
+                    Booking.business_id == b.id,
+                    Booking.client_id == booking.client_id,
+                )
+                .scalar()
+                or 0
+            )
+        except Exception:
+            logger.exception("visit count lookup failed")
+
+        # Did the loyalty stamp card make THIS visit free? Decide it explicitly
+        # instead of inferring from payment_amount==0 — a 100% referral-friend
+        # discount also zeroes the price but is NOT a loyalty jackpot. This
+        # mirrors booking_service._maybe_apply_loyalty: it zeroes the price when
+        # the active-visit count (incl. this just-flushed booking) hits a
+        # multiple of N. So loyalty_free == (active % N == 0) AND price is 0.
+        loyalty_free = False
+        try:
+            n = int(getattr(service, "loyalty_after_visits", 0) or 0)
+            if n > 0 and int(booking.payment_amount or 0) == 0:
+                active_visits = int(
+                    db.query(func.count(Booking.id))
+                    .filter(
+                        Booking.service_id == service.id,
+                        Booking.client_id == booking.client_id,
+                        Booking.status.in_(
+                            [
+                                BookingStatus.PENDING,
+                                BookingStatus.CONFIRMED,
+                                BookingStatus.COMPLETED,
+                            ]
+                        ),
+                    )
+                    .scalar()
+                    or 0
+                )
+                loyalty_free = active_visits % n == 0
+        except Exception:
+            logger.exception("loyalty_free computation failed")
+
         return (
             {
                 "booking_id": str(booking.id),
@@ -755,6 +861,11 @@ def _create_booking_sync(
                 "status": str(booking.status),
                 "owner_telegram_id": owner_tg,
                 "referral_reward": referral_reward,
+                "loyalty_done": loyalty_done,
+                "loyalty_total": loyalty_total,
+                "loyalty_free": loyalty_free,
+                "visit_no": visit_no,
+                "is_new_client": visit_no == 1,
                 # Owner's custom post-booking message (Profil → Yozilishdan
                 # keyingi matn). Appended to the client's confirmation below.
                 "after_booking_text": (b.after_booking_text or "").strip(),
@@ -811,12 +922,17 @@ async def _notify_owner_of_booking(info: dict, d: date, t_str: str, from_user) -
     owner_markup = None
     if not is_confirmed:
         owner_markup = owner_decision_kb(info["booking_id"]).model_dump(exclude_none=True)
+    # A new booking should read like a small win, not a dry log line. Vary the
+    # opener; flag a brand-new client. Data block stays identical.
+    head = f"<b>{fun.pick(fun.OWNER_NEW)}</b>"
+    badge = "✨ Birinchi marta keldi!\n" if info.get("is_new_client") else ""
     try:
         await asyncio.to_thread(
             send_telegram_message,
             owner_tg_id,
             (
-                f"🆕 <b>Yangi yozilish</b>\n\n"
+                f"{head}\n\n"
+                f"{badge}"
                 f"👤 {_client_display_name(from_user)}\n"
                 f"📋 {info['service_name']}\n"
                 f"📅 {_format_uz_date(d)} · {t_str}\n"
@@ -852,26 +968,53 @@ async def _notify_referrer(info: dict) -> None:
         logger.exception("referrer notify failed")
 
 
+def _jackpot(info: dict) -> bool:
+    """True only when the loyalty stamp card made THIS visit free. Driven by the
+    explicit ``loyalty_free`` flag computed in _create_booking_sync — NOT by
+    payment_amount==0, which a 100%-promo or 100%-referral discount also produce."""
+    return bool(info.get("loyalty_free"))
+
+
 def _success_text(info: dict, d: date, t_str: str) -> str:
     is_confirmed = info["status"].endswith("CONFIRMED")
-    status_line = (
-        "✅ Yozildingiz!"
-        if is_confirmed
-        else "⏳ So'rov yuborildi — biznes egasi tasdiqlashini kuting."
+    # Seed the random copy on the booking id so re-rendering this exact screen
+    # never flickers between variants.
+    seed = info.get("booking_id")
+
+    jackpot = _jackpot(info)
+    lines: list[str] = []
+    milestone = fun.client_milestone(info.get("visit_no"))
+    if milestone:
+        lines.append(milestone)
+    if jackpot:
+        lines.append(fun.pick(fun.JACKPOT_BANNER, seed=seed))
+    lines.append(
+        fun.pick(fun.SUCCESS_CONFIRMED if is_confirmed else fun.SUCCESS_PENDING, seed=seed)
     )
-    text = (
-        f"{status_line}\n\n"
-        f"📋 {info['service_name']}\n"
-        f"📅 {_format_uz_date(d)} soat {t_str} da\n"
-        f"📍 {info['business_name']}\n\n"
-        "🔔 1 soat oldin eslatma yuboramiz"
-    )
-    # Owner's custom thank-you / directions, appended under the receipt.
-    # Free text → escape for HTML mode.
+    lines += [
+        "",
+        f"📋 {info['service_name']}",
+        f"📅 {_format_uz_date(d)} soat {t_str} da",
+        f"📍 {info['business_name']}",
+    ]
+
+    # Show the progress card only when it adds info. On a jackpot the card's
+    # COMPLETED-only count still reads (N-1)/N ("next is free!") which would
+    # contradict the "this visit is FREE" banner — so let the banner speak.
+    total = info.get("loyalty_total")
+    if total and not jackpot:
+        lines += ["", fun.loyalty_success_block(int(info.get("loyalty_done") or 0), int(total))]
+
+    if is_confirmed:
+        lines += ["", fun.pick(fun.REMINDER_LINE, seed=seed)]
+
+    # Owner's custom thank-you / directions, appended under the receipt
+    # (Profil → Yozilishdan keyingi matn). Free text → escape for HTML mode.
     extra = (info.get("after_booking_text") or "").strip()
     if extra:
-        text += f"\n\n{h(extra)}"
-    return text
+        lines += ["", hs(extra)]
+
+    return "\n".join(lines)
 
 
 @router.callback_query(F.data.startswith("confirm:"))
@@ -932,6 +1075,10 @@ async def confirm_booking(cb: CallbackQuery, state: FSMContext):
         await cb.answer("✅ Yozildingiz")
     except Exception:
         pass
+    # Free loyalty visit? Roll a slot-machine for the moment. Tasteful: only on
+    # the jackpot, not every booking.
+    if _jackpot(info):
+        await fun.celebrate(cb.message, "🎰")
     await _notify_owner_of_booking(info, d, t_str, cb.from_user)
     await _notify_referrer(info)
 
@@ -963,6 +1110,8 @@ async def receive_phone_for_booking(message: Message, state: FSMContext):
         message.from_user.first_name or "",
         message.from_user.last_name or "",
     )
+    # Acknowledge the shared contact with a thumbs-up reaction.
+    await fun.react(message.bot, message.chat.id, message.message_id, "👍")
 
     data = await state.get_data()
     sid = str(data.get("sid") or "")
@@ -1002,5 +1151,7 @@ async def receive_phone_for_booking(message: Message, state: FSMContext):
         _success_text(info, d, t_str),
         reply_markup=back_to_menu_kb(info["business_slug"]),
     )
+    if _jackpot(info):
+        await fun.celebrate(message, "🎰")
     await _notify_owner_of_booking(info, d, t_str, message.from_user)
     await _notify_referrer(info)

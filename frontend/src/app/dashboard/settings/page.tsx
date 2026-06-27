@@ -15,10 +15,10 @@ import {
   MapPin,
   Pencil,
   Settings as SettingsIcon,
-  Share2,
   Trash2,
 } from "lucide-react";
 import { Avatar, ScreenHeader, useToast } from "@/components/yz";
+import { ReferralCard } from "@/components/dashboard/ReferralCard";
 import { apiBase, apiFetch, getToken } from "@/lib/api";
 import { startOnboarding } from "@/lib/onboarding";
 import type { BusinessMe } from "@/types";
@@ -565,61 +565,7 @@ export default function SettingsPage() {
           )}
         </Section>
 
-        {biz?.partner_code && (
-          <Section title="Do‘st-biznesni taklif qiling">
-            <div className="p-2">
-              <div className="text-[13px] leading-snug text-ink-600">
-                Tanish usta yoki salon egasini taklif qiling — u obuna bo‘lsa,{" "}
-                <span className="font-bold text-ink-900">
-                  ikkalangizga +30 kun bepul
-                </span>
-                .
-              </div>
-              <button
-                onClick={async () => {
-                  const bot = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
-                  // Deep link straight into the Telegram Mini App. The friend
-                  // never leaves Telegram and never sees the website; the app
-                  // reads start_param ("ref_<CODE>") at login and credits us.
-                  const link = `https://t.me/${bot}?startapp=ref_${biz.partner_code}`;
-                  const text = "Yozuv'ga qo‘shiling — ikkalamizga +30 kun bepul";
-                  const tg =
-                    typeof window !== "undefined"
-                      ? (window as unknown as {
-                          Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } };
-                        }).Telegram?.WebApp
-                      : undefined;
-                  // Inside Telegram: open the native "send to…" contact picker.
-                  if (tg?.openTelegramLink) {
-                    tg.openTelegramLink(
-                      `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`,
-                    );
-                    return;
-                  }
-                  // Plain browser / APK: OS share sheet, else copy the link.
-                  if (typeof navigator !== "undefined" && navigator.share) {
-                    try {
-                      await navigator.share({ title: "Yozuv", text: `${text}: ${link}` });
-                    } catch {
-                      /* user cancelled the share sheet */
-                    }
-                    return;
-                  }
-                  if (typeof navigator !== "undefined" && navigator.clipboard) {
-                    navigator.clipboard
-                      .writeText(link)
-                      .then(() => toast("Havola nusxalandi"))
-                      .catch(() => {});
-                  }
-                }}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink-900 px-4 py-3 font-display text-[14px] font-bold text-white tap"
-              >
-                <Share2 className="h-4 w-4" />
-                Ulashish
-              </button>
-            </div>
-          </Section>
-        )}
+        {biz?.partner_code && <ReferralCard />}
 
         <Section title="Boshqa">
           <Row

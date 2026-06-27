@@ -39,6 +39,7 @@ import {
 } from "@/components/yz";
 import type { ClientLite, NotificationItem, ServiceLite, TourStep } from "@/components/yz";
 import { StatusBadge } from "@/components/yz/StatusBadge";
+import { ReferralCard } from "@/components/dashboard/ReferralCard";
 import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
 import { startOnboarding } from "@/lib/onboarding";
 
@@ -535,6 +536,11 @@ export default function DashboardHome() {
             <Copy className="h-3.5 w-3.5" /> Nusxa
           </div>
         </button>
+      </div>
+
+      {/* Invite a friend business — referral ad + who you invited */}
+      <div className="px-4 md:px-0">
+        <ReferralCard />
       </div>
       </div>
       </div>
