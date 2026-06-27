@@ -38,6 +38,19 @@ export function isTelegramMiniApp(): boolean {
   return typeof initData === "string" && initData.length > 0;
 }
 
+/**
+ * The start_param handed to a Mini App opened via a deep link such as
+ * `t.me/<bot>?startapp=ref_<CODE>`. Telegram surfaces it on initDataUnsafe.
+ * Returns null in a plain browser or when no param was passed.
+ */
+export function getStartParam(): string | null {
+  if (typeof window === "undefined") return null;
+  const u = window.Telegram?.WebApp?.initDataUnsafe as
+    | { start_param?: string }
+    | undefined;
+  return u?.start_param ?? null;
+}
+
 /** Running inside the Capacitor native shell (Android/iOS APK). */
 export function isNativeApp(): boolean {
   if (typeof window === "undefined") return false;

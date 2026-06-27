@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, Lock, Send, Shield, Sparkles, User as UserIcon } from "lucide-react";
 import { YzLogo } from "@/components/yz/Logo";
 import { apiBase } from "@/lib/api";
-import { isNativeApp, isTelegramMiniApp } from "@/lib/platform";
+import { getStartParam, isNativeApp, isTelegramMiniApp } from "@/lib/platform";
 
 const BOT = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
 
@@ -43,11 +43,18 @@ export default function LoginPage() {
   // password + Telegram escape-hatch in a plain browser.
   const [inTelegram, setInTelegram] = useState(false);
   const [nativeApp, setNativeApp] = useState(false);
-  // Capture a B2B referral code from the share link (?ref=) and stash it so it
-  // survives the login round-trip; onboarding sends it on business creation.
+  // Capture a B2B referral code and stash it so it survives the login
+  // round-trip; onboarding sends it on business creation. Two sources:
+  //   • plain browser  → ?ref=CODE in the URL
+  //   • Telegram Mini App opened via t.me/<bot>?startapp=ref_CODE
+  //     → Telegram hands the payload as start_param ("ref_CODE").
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const ref = new URLSearchParams(window.location.search).get("ref");
+    let ref = new URLSearchParams(window.location.search).get("ref");
+    if (!ref) {
+      const sp = getStartParam();
+      if (sp && sp.startsWith("ref_")) ref = sp.slice("ref_".length);
+    }
     if (ref) localStorage.setItem("yozuv_ref", ref.trim().toUpperCase().slice(0, 16));
   }, []);
 
