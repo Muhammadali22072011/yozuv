@@ -135,6 +135,42 @@ def my_business(business: Business = Depends(get_active_business)):
     return business
 
 
+@router.get("/me/referrals")
+def my_referrals(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_active_business),
+):
+    """B2B partner program summary for the dashboard card: this business's
+    share code, who joined via it, and the +30-day rewards earned. An invitee
+    counts as 'subscribed' once partner_reward_claimed flips — that flag is set
+    on their first paid subscription, which is exactly when the inviter's +30
+    days land, so it doubles as 'this invite paid off'."""
+    invitees = (
+        db.query(Business)
+        .filter(
+            Business.referred_by_id == business.id,
+            Business.deleted_at.is_(None),
+        )
+        .order_by(Business.created_at.desc())
+        .all()
+    )
+    subscribed = sum(1 for b in invitees if b.partner_reward_claimed)
+    return {
+        "code": business.partner_code or "",
+        "invited": len(invitees),
+        "subscribed": subscribed,
+        "days_earned": subscribed * 30,
+        "invitees": [
+            {
+                "name": b.name,
+                "joined_at": b.created_at.isoformat() if b.created_at else None,
+                "subscribed": bool(b.partner_reward_claimed),
+            }
+            for b in invitees
+        ],
+    }
+
+
 @router.get("/memberships")
 def list_memberships(
     user: User = Depends(get_current_user),
