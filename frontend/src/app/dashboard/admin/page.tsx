@@ -227,6 +227,7 @@ type AdminItem = {
   telegram_id: number;
   name: string;
   source: "env" | "db";
+  role: string;
   removable: boolean;
   created_at: string | null;
 };
@@ -271,6 +272,7 @@ const EMPTY_BROADCAST_FILTERS: BroadcastFiltersState = {
 export default function AdminPage() {
   const toast = useToast();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [tab, setTab] = useState<Tab>("summary");
   const [sum, setSum] = useState<Summary | null>(null);
   const [biz, setBiz] = useState<Biz[]>([]);
@@ -317,11 +319,15 @@ export default function AdminPage() {
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [newAdminId, setNewAdminId] = useState("");
   const [newAdminName, setNewAdminName] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState("admin");
   const [addingAdmin, setAddingAdmin] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ is_admin?: boolean }>("/api/auth/me")
-      .then((u) => setIsAdmin(!!u?.is_admin))
+    apiFetch<{ is_admin?: boolean; is_superadmin?: boolean }>("/api/auth/me")
+      .then((u) => {
+        setIsAdmin(!!u?.is_admin);
+        setIsSuperadmin(!!u?.is_superadmin);
+      })
       .catch(() => setIsAdmin(false));
   }, []);
 
@@ -1047,16 +1053,21 @@ export default function AdminPage() {
   }
 
   async function addAdmin() {
-    const tg = Number(newAdminId.replace(/\D/g, ""));
-    if (!tg || tg <= 0) {
-      toast("Telegram ID kerak");
+    const raw = newAdminId.trim();
+    if (!raw) {
+      toast("Telegram ID yoki @username kerak");
       return;
     }
+    // Numeric (no @) → treat as Telegram ID; otherwise resolve by username.
+    const isId = !raw.startsWith("@") && /^\d+$/.test(raw);
+    const payload = isId
+      ? { telegram_id: Number(raw), name: newAdminName || null, role: newAdminRole }
+      : { username: raw.replace(/^@/, ""), name: newAdminName || null, role: newAdminRole };
     setAddingAdmin(true);
     try {
       await apiFetch("/api/admin/admins", {
         method: "POST",
-        body: JSON.stringify({ telegram_id: tg, name: newAdminName || null }),
+        body: JSON.stringify(payload),
       });
       toast("Admin qo‘shildi");
       setNewAdminId("");
@@ -1858,7 +1869,10 @@ export default function AdminPage() {
                         Adminlar
                       </h3>
                       <p className="mt-1 text-xs text-ink-500">
-                        ENV adminlarni o‘chirib bo‘lmaydi. Yangilarini bu yerda qo‘shing.
+                        Superadmin — adminlarni qo‘sha/o‘chira oladi; oddiy
+                        admin faqat paneldan foydalanadi. ENV superadminlarni
+                        va o‘zingizni o‘chirib bo‘lmaydi. @username faqat
+                        tizimga kirgan foydalanuvchilar uchun ishlaydi.
                       </p>
                     </div>
                   </div>
@@ -1883,14 +1897,14 @@ export default function AdminPage() {
                         <span
                           className={cn(
                             "rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
-                            a.source === "env"
+                            a.role === "superadmin"
                               ? "bg-[#FFF3DA] text-[#A8751A]"
                               : "bg-indigo-50 text-indigo-700"
                           )}
                         >
-                          {a.source === "env" ? "Superadmin" : "Admin"}
+                          {a.role === "superadmin" ? "Superadmin" : "Admin"}
                         </span>
-                        {a.removable ? (
+                        {isSuperadmin && a.removable ? (
                           <button
                             onClick={() => removeAdmin(a.telegram_id)}
                             className="grid h-8 w-8 place-items-center rounded-2xl bg-[#FFE7E3] text-[#C93A2A] tap hover:bg-[#FCD7CE]"
@@ -1906,30 +1920,42 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <input
-                      value={newAdminId}
-                      onChange={(e) =>
-                        setNewAdminId(e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="Telegram ID"
-                      className="yz-input w-36 py-2 font-mono text-sm"
-                    />
-                    <input
-                      value={newAdminName}
-                      onChange={(e) => setNewAdminName(e.target.value)}
-                      placeholder="Ism (ixtiyoriy)"
-                      className="yz-input min-w-[120px] flex-1 py-2 text-sm"
-                    />
-                    <button
-                      onClick={addAdmin}
-                      disabled={addingAdmin}
-                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-sm"
-                    >
-                      <Plus className="h-4 w-4" strokeWidth={2.6} />
-                      Qo‘shish
-                    </button>
-                  </div>
+                  {isSuperadmin ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <input
+                        value={newAdminId}
+                        onChange={(e) => setNewAdminId(e.target.value)}
+                        placeholder="Telegram ID yoki @username"
+                        className="yz-input w-52 py-2 font-mono text-sm"
+                      />
+                      <input
+                        value={newAdminName}
+                        onChange={(e) => setNewAdminName(e.target.value)}
+                        placeholder="Ism (ixtiyoriy)"
+                        className="yz-input min-w-[120px] flex-1 py-2 text-sm"
+                      />
+                      <select
+                        value={newAdminRole}
+                        onChange={(e) => setNewAdminRole(e.target.value)}
+                        className="yz-input w-auto py-2 text-sm"
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="superadmin">Superadmin</option>
+                      </select>
+                      <button
+                        onClick={addAdmin}
+                        disabled={addingAdmin}
+                        className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={2.6} />
+                        Qo‘shish
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 rounded-2xl bg-ink-50 px-3 py-2 text-[12px] text-ink-500">
+                      Adminlarni faqat superadmin qo‘sha/o‘chira oladi.
+                    </p>
+                  )}
                 </div>
               </>
             )}

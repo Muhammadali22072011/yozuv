@@ -560,7 +560,7 @@ def refresh(
 
 @router.get("/me", response_model=UserMe)
 def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.deps import is_admin_user
+    from app.deps import is_admin_user, is_superadmin_user
     return UserMe(
         id=user.id,
         telegram_id=user.telegram_id,
@@ -569,5 +569,6 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
         last_name=user.last_name,
         phone=user.phone,
         is_admin=is_admin_user(user, db),
+        is_superadmin=is_superadmin_user(user, db),
         has_password=user.password_hash is not None,
     )
