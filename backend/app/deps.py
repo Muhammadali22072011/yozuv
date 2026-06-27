@@ -146,9 +146,15 @@ def get_active_business(
             raise HTTPException(404, "Business not found")
         return b
 
-    # Legacy fallback — same as get_owned_business so non-migrated
-    # callers keep working.
-    b = db.query(Business).filter(Business.owner_id == user.id).first()
+    # Legacy fallback — no X-Business-Id sent. Resolve the user's primary
+    # (oldest) business. Deterministic ordering matters now that a user can
+    # own several: without it the DB could hand back any of them.
+    b = (
+        db.query(Business)
+        .filter(Business.owner_id == user.id)
+        .order_by(Business.created_at.asc())
+        .first()
+    )
     if not b:
         raise HTTPException(404, "Business not found")
     return b

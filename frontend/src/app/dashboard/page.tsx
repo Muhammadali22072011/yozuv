@@ -17,7 +17,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, getActiveBusinessId } from "@/lib/api";
 import type { BookingRow, BusinessMe } from "@/types";
 import {
   BookingCard,
@@ -240,9 +240,15 @@ export default function DashboardHome() {
     let es: EventSource | null = null;
     try {
       const base = process.env.NEXT_PUBLIC_API_URL || "https://yozuv.onrender.com";
+      // EventSource can't send headers, so the active business rides as a
+      // query param (the stream endpoint reads ?business=, like ?token=).
+      const bizId = getActiveBusinessId();
+      const params = new URLSearchParams();
+      if (token) params.set("token", token);
+      if (bizId) params.set("business", bizId);
+      const qs = params.toString();
       const url =
-        `${base}/api/business/me/notifications/stream` +
-        (token ? `?token=${encodeURIComponent(token)}` : "");
+        `${base}/api/business/me/notifications/stream` + (qs ? `?${qs}` : "");
       es = new EventSource(url, { withCredentials: false });
       const onEvent = () => loadNotifications();
       es.addEventListener("booking_new", onEvent);

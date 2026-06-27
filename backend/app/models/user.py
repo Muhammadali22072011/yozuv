@@ -51,9 +51,26 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
-    business: Mapped["Business | None"] = relationship("Business", back_populates="owner", uselist=False)
+    # A user may own several businesses (a salon network). Each one points
+    # back here via Business.owner_id; the membership graph carries roles.
+    businesses: Mapped[list["Business"]] = relationship(
+        "Business", back_populates="owner", order_by="Business.created_at"
+    )
     # Linked login methods (Telegram, Google, password, …). The account is
     # this User row; each identity is one way to authenticate as it.
     identities: Mapped[list["AuthIdentity"]] = relationship(
         "AuthIdentity", back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def business(self) -> "Business | None":
+        """Back-compat accessor for the single-business era.
+
+        Returns the user's primary (oldest, non-deleted) business so code
+        written before multi-business — and admin lookups — keep working.
+        New code should resolve the *active* business via Membership /
+        the X-Business-Id header instead.
+        """
+        live = [b for b in self.businesses if getattr(b, "deleted_at", None) is None]
+        pool = live or self.businesses
+        return pool[0] if pool else None

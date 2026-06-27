@@ -343,8 +343,9 @@ def create_business(
         )
         db.add(owner)
         db.flush()
-    elif owner.business is not None and owner.business.deleted_at is None:
-        raise HTTPException(409, "Owner already has a business")
+    # Multi-business: an owner may now hold several businesses, so we no
+    # longer reject when they already have one — the admin can spin up an
+    # additional branch the same way the self-serve flow does.
 
     b = Business(
         owner_id=owner.id,
@@ -357,6 +358,33 @@ def create_business(
     )
     db.add(b)
     db.flush()
+
+    # Wire the new business into the membership graph + give it a trial,
+    # mirroring the self-serve create flow so it's visible/usable to the
+    # owner and gated by billing the same way.
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import (
+        Membership,
+        MembershipRole,
+        Subscription,
+        SubscriptionPlan,
+        SubscriptionStatus,
+    )
+
+    db.add(Membership(user_id=owner.id, business_id=b.id, role=MembershipRole.OWNER))
+    now = datetime.now(timezone.utc)
+    db.add(
+        Subscription(
+            business_id=b.id,
+            plan=SubscriptionPlan.TRIAL,
+            status=SubscriptionStatus.ACTIVE,
+            starts_at=now,
+            expires_at=now + timedelta(days=14),
+            amount_paid=0,
+        )
+    )
+
     log_admin_action(
         db,
         admin,

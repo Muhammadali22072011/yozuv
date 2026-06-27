@@ -33,6 +33,25 @@ export function getToken(): string | null {
   return localStorage.getItem("yozuv_access");
 }
 
+// --- Active business (multi-business) ---------------------------------------
+// Which of the user's businesses every authed request acts against. Sent as
+// the X-Business-Id header so the backend's get_active_business resolves the
+// right one. Null = let the backend fall back to the primary business.
+const ACTIVE_BIZ_KEY = "yozuv_active_business";
+
+export function getActiveBusinessId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ACTIVE_BIZ_KEY);
+}
+
+export function setActiveBusinessId(id: string | null): void {
+  if (typeof window === "undefined") return;
+  if (id) localStorage.setItem(ACTIVE_BIZ_KEY, id);
+  else localStorage.removeItem(ACTIVE_BIZ_KEY);
+  // Let listeners (the switcher, data hooks) react without a full reload.
+  window.dispatchEvent(new CustomEvent("yozuv:business-changed", { detail: id }));
+}
+
 function getRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("yozuv_refresh");
@@ -82,6 +101,13 @@ async function doFetch(path: string, options: RequestInit, token: string | null)
     headers.set("Content-Type", "application/json");
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  // Carry the active business on authed requests so the backend acts against
+  // the one the user picked in the switcher. Don't override a header a caller
+  // set explicitly.
+  if (token && !headers.has("X-Business-Id")) {
+    const bizId = getActiveBusinessId();
+    if (bizId) headers.set("X-Business-Id", bizId);
+  }
   return fetch(`${API}${path}`, { ...options, headers });
 }
 
