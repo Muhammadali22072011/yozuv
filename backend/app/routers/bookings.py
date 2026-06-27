@@ -255,6 +255,49 @@ def create_owner_booking(
     return booking
 
 
+@me_router.get("/slots")
+def my_slots(
+    service_id: UUID,
+    date: date = Query(...),
+    staff_id: UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Owner-side available slots — same authoritative logic as the public
+    booking page (respects schedule, breaks, holidays, service duration and
+    real overlap), so the dashboard's New-Booking sheet stops offering times
+    the backend will reject and stops hiding free ones."""
+    service = (
+        db.query(Service)
+        .filter(
+            Service.id == service_id,
+            Service.business_id == business.id,
+            Service.is_active.is_(True),
+        )
+        .first()
+    )
+    if not service:
+        raise HTTPException(404, "Service not found")
+    if staff_id is not None:
+        from app.models import Staff
+
+        staff_ok = (
+            db.query(Staff.id)
+            .filter(
+                Staff.id == staff_id,
+                Staff.business_id == business.id,
+                Staff.is_active.is_(True),
+            )
+            .first()
+        )
+        if not staff_ok:
+            raise HTTPException(404, "Staff not found")
+    times = get_available_slots(
+        business.id, date, service.duration_minutes, db, staff_id=staff_id
+    )
+    return {"slots": [t.strftime("%H:%M") for t in times]}
+
+
 @me_router.get("/bookings", response_model=list[BookingRead])
 def list_bookings(
     db: Session = Depends(get_db),

@@ -980,7 +980,7 @@ export default function AdminPage() {
     }
   }
 
-  function useAsTemplate(h: BroadcastHistory) {
+  function applyAsTemplate(h: BroadcastHistory) {
     setBroadcastText(h.text);
     setBroadcastFilters({
       category: String(h.filters.category || ""),
@@ -2120,7 +2120,7 @@ export default function AdminPage() {
                     )}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
-                        onClick={() => useAsTemplate(h)}
+                        onClick={() => applyAsTemplate(h)}
                         className="inline-flex items-center gap-1.5 rounded-2xl bg-ink-100 px-3 py-1.5 text-[12px] font-bold text-ink-700 tap hover:bg-ink-200"
                       >
                         <ClipboardList className="h-3.5 w-3.5" strokeWidth={2.6} />

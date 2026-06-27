@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_owned_business
-from app.models import Booking, BookingStatus, Business, Client, ClientBlock
+from app.models import Booking, BookingStatus, Business, Client, ClientBlock, Service
 from app.services.notification_service import send_telegram_message_async
 from app.utils.htmlsafe import h
 
@@ -60,6 +60,27 @@ def list_clients(
         .order_by(func.max(Booking.date).desc())
         .all()
     )
+    # Favourite service per client = the service they've booked most often here.
+    fav_rows = (
+        db.query(
+            Booking.client_id,
+            Service.name,
+            func.count(Booking.id).label("n"),
+        )
+        .join(Service, Service.id == Booking.service_id)
+        .filter(Booking.business_id == business.id)
+        .group_by(Booking.client_id, Service.name)
+        .all()
+    )
+    favorite: dict = {}
+    for cid, sname, n in fav_rows:
+        cur = favorite.get(cid)
+        if cur is None or n > cur[1]:
+            favorite[cid] = (sname, n)
+
+    # VIP = 5+ visits here; "new" = first-ever (or single) visit. Both were
+    # referenced by the dashboard filters but never sent by the API.
+    VIP_VISIT_THRESHOLD = 5
     return [
         {
             "id": str(r.id),
@@ -70,6 +91,9 @@ def list_clients(
             "visits": int(r.visits),
             "last_visit": r.last_visit.isoformat() if r.last_visit else None,
             "total_spent": int(r.total_spent or 0),
+            "favorite_service": favorite.get(r.id, (None,))[0],
+            "is_vip": int(r.visits) >= VIP_VISIT_THRESHOLD,
+            "is_new": int(r.visits) <= 1,
         }
         for r in rows
     ]
