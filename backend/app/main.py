@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -41,12 +42,15 @@ init_sentry(component="api")
 # Module-level refs so the /webhook/{token} endpoint can reach them.
 _bot: Bot | None = None
 _dp: Dispatcher | None = None
+# In-process periodic job runner (reminders, birthday, no-shows, …).
+_scheduler_task: "asyncio.Task | None" = None
+_scheduler_stop: "asyncio.Event | None" = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Start/stop the bot alongside FastAPI in webhook mode."""
-    global _bot, _dp
+    global _bot, _dp, _scheduler_task, _scheduler_stop
 
     if not settings.bot_token:
         logger.warning("BOT_TOKEN is empty — bot will not be started.")
@@ -86,9 +90,28 @@ async def lifespan(_: FastAPI):
     except Exception:
         logger.exception("Failed to set chat menu button")
 
+    # Periodic jobs (reminders, birthday greetings, no-show flagging,
+    # re-engagement, scheduled broadcasts). Runs here unless a dedicated
+    # Celery worker is deployed (INPROCESS_SCHEDULER=false).
+    if settings.inprocess_scheduler:
+        from app.scheduler import run_scheduler
+
+        _scheduler_stop = asyncio.Event()
+        _scheduler_task = asyncio.create_task(run_scheduler(_scheduler_stop))
+        logger.info("in-process scheduler enabled")
+
     try:
         yield
     finally:
+        if _scheduler_task is not None and _scheduler_stop is not None:
+            _scheduler_stop.set()
+            _scheduler_task.cancel()
+            try:
+                await _scheduler_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            _scheduler_task = None
+            _scheduler_stop = None
         global _frontend_client
         if _frontend_client is not None:
             try:

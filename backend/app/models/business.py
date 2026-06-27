@@ -51,6 +51,10 @@ class Business(Base):
     referral_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     referral_friend_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     referral_reward_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Owner's master switch for the per-booking Telegram alerts they get
+    # (Sozlamalar → Bildirishnomalar). Off = no new-booking pings; the
+    # client-facing flow (confirmations, reminders) is unaffected.
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
