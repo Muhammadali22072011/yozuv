@@ -301,7 +301,8 @@ o'zgarmaydi» — сильный сигнал доверия). Новые — п
 
 **Фаза 1 — тарифы. ✅ РЕАЛИЗОВАНО (2026-06-28).**
 6. ✅ `tier` (SOLO/SALON/BIZNES) в `Subscription` + `PaymentTransaction`; цены
-   per-tier + founder в `PlatformSettings`; миграция `036_subscription_tiers`.
+   per-tier + founder в `PlatformSettings`; миграция `037_subscription_tiers`
+   (была 036, перенумерована при мёрдже origin/main).
    `enums.SubscriptionTier`, `payment_service.TIER_MONTHLY_DEFAULT` (99/199/399k).
 7. ✅ Гейт по seats (SOLO 1 / SALON 5 / BIZNES ∞; trial = ∞) на создание Staff
    [`staff.py`](backend/app/routers/staff.py); `subscription_service.seat_limit`.
