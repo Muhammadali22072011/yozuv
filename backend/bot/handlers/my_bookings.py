@@ -12,6 +12,7 @@ from app.models import Booking, BookingStatus, Business, Client, Review, Service
 from app.utils.clock import local_today
 from app.utils.htmlsafe import h
 from app.utils.slots import get_available_slots, next_working_dates
+from bot import fun
 from bot.keyboards.inline import back_to_menu_kb
 from bot.utils import safe_edit_text
 
@@ -259,10 +260,15 @@ async def receive_rating(cb: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "rev_skip", ReviewStates.waiting_for_comment)
 async def skip_comment(cb: CallbackQuery, state: FSMContext):
-    saved = _save_review_from_state(await state.get_data(), cb.from_user.id, "")
+    data = await state.get_data()
+    rating = int(data.get("rating") or 0)
+    saved = _save_review_from_state(data, cb.from_user.id, "")
     await state.clear()
     if saved:
-        await cb.message.edit_text("Rahmat, bahoyingiz qabul qilindi! ✅")
+        # Rating-aware thanks: celebrate a high score, own a low one.
+        await cb.message.edit_text(fun.review_thanks(rating))
+        if rating >= 5:
+            await fun.celebrate(cb.message, "🎯")
     else:
         await cb.message.edit_text("Bahoni saqlab bo'lmadi.")
     await cb.answer()
@@ -270,11 +276,19 @@ async def skip_comment(cb: CallbackQuery, state: FSMContext):
 
 @router.message(ReviewStates.waiting_for_comment)
 async def receive_comment(message: Message, state: FSMContext):
+    data = await state.get_data()
+    rating = int(data.get("rating") or 0)
     comment = (message.text or "").strip()[:2000]
-    saved = _save_review_from_state(await state.get_data(), message.from_user.id, comment)
+    saved = _save_review_from_state(data, message.from_user.id, comment)
     await state.clear()
     if saved:
-        await message.answer("Rahmat, bahoyingiz qabul qilindi! ✅")
+        await message.answer(fun.review_thanks(rating))
+        # React on the user's own comment + a darts roll for a perfect score.
+        if rating >= 4:
+            # Bare U+2764 (no VS-16) — Telegram's reaction set rejects "❤️".
+            await fun.react(message.bot, message.chat.id, message.message_id, "❤")
+        if rating >= 5:
+            await fun.celebrate(message, "🎯")
     else:
         await message.answer("Bahoni saqlab bo'lmadi.")
 
@@ -372,7 +386,7 @@ async def cancel_booking(cb: CallbackQuery):
 
         _cancel_service(db, b.id, b.business_id, reason="", by_client=True)
         db.commit()
-        await cb.message.edit_text("Yozilish bekor qilindi.")
+        await cb.message.edit_text(fun.pick(fun.CANCEL_DONE))
     finally:
         db.close()
     await cb.answer()
@@ -468,7 +482,9 @@ async def reschedule_apply(cb: CallbackQuery):
             db.rollback()
             await cb.answer("Bu vaqt band yoki o'zgartirib bo'lmaydi", show_alert=True)
             return
-        await cb.message.edit_text(f"✅ Yozilish ko'chirildi: {d_iso} {t_str}")
+        await cb.message.edit_text(
+            fun.pick(fun.RESCHEDULE_DONE).format(when=f"{d_iso} {t_str}")
+        )
     finally:
         db.close()
     await cb.answer()

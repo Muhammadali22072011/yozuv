@@ -8,6 +8,7 @@ from app.database import SessionLocal
 from app.models import Booking, BookingStatus, Business, Client, Service, User
 from app.services import booking_service
 from app.services.notification_service import send_telegram_message
+from bot import fun
 from bot.keyboards.inline import reject_reasons_kb
 
 router = Router()
@@ -70,7 +71,7 @@ async def owner_confirm(cb: CallbackQuery):
 
     if client_tg_id:
         text = (
-            f"✅ Yozilishingiz tasdiqlandi!\n\n"
+            f"{fun.pick(fun.CLIENT_CONFIRMED)}\n\n"
             + (f"📋 {svc_name}\n" if svc_name else "")
             + f"📅 {booking_date.isoformat()} · {booking_time.strftime('%H:%M')}"
         )
