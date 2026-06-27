@@ -6,6 +6,7 @@ no-op so the default confirmation is unchanged.
 """
 from datetime import date
 
+from bot import fun
 from bot.handlers.booking import _success_text
 
 
@@ -25,15 +26,22 @@ D = date(2026, 4, 16)
 
 def test_confirmed_receipt_basics():
     out = _success_text(_info(), D, "10:00")
-    assert "✅ Yozildingiz!" in out
+    # Status line is now drawn from a rotating copy pool; assert membership
+    # rather than one exact string. A confirmed receipt also carries a
+    # reminder line.
+    assert any(line in out for line in fun.SUCCESS_CONFIRMED)
+    assert any(line in out for line in fun.REMINDER_LINE)
     assert "Soch olish" in out
     assert "Barber X" in out
 
 
 def test_pending_status_line():
     out = _success_text(_info(status="BookingStatus.PENDING"), D, "10:00")
-    assert "So'rov yuborildi" in out
-    assert "✅ Yozildingiz!" not in out
+    # Pending uses the pending pool, never the confirmed copy, and gets no
+    # "we'll remind you" line (nothing is booked yet).
+    assert any(line in out for line in fun.SUCCESS_PENDING)
+    assert not any(line in out for line in fun.SUCCESS_CONFIRMED)
+    assert not any(line in out for line in fun.REMINDER_LINE)
 
 
 def test_after_booking_text_appended():
@@ -43,7 +51,9 @@ def test_after_booking_text_appended():
 
 def test_after_booking_text_blank_is_noop():
     out = _success_text(_info(after_booking_text=""), D, "10:00")
-    assert out.rstrip().endswith("eslatma yuboramiz")
+    # With no owner text, the receipt ends on the (confirmed) reminder line —
+    # nothing extra is appended.
+    assert out.rstrip().split("\n")[-1] in fun.REMINDER_LINE
 
 
 def test_after_booking_text_is_html_escaped():
