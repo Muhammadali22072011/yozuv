@@ -30,6 +30,7 @@ export interface BusinessMe {
   reminder_text: string;
   confirmation_mode: string;
   language: string;
+  notifications_enabled?: boolean;
   is_active: boolean;
   created_at: string;
   viloyat?: string;

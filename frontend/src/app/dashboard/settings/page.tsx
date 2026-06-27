@@ -165,20 +165,32 @@ export default function SettingsPage() {
     window.location.href = "/auth/login";
   }
 
+  // Owner's new-booking alerts. Persisted server-side on the business
+  // (notifications_enabled) — the bot checks it before pinging the owner.
+  // Seeded from biz once it loads (see the effect below).
   const [notifOn, setNotifOn] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("yozuv_notif_on");
-      if (saved !== null) setNotifOn(saved === "1");
-    }
-  }, []);
-  function toggleNotif() {
-    setNotifOn((v) => {
-      const next = !v;
-      if (typeof window !== "undefined") localStorage.setItem("yozuv_notif_on", next ? "1" : "0");
+    if (biz) setNotifOn(biz.notifications_enabled ?? true);
+  }, [biz]);
+  async function toggleNotif() {
+    if (notifSaving) return;
+    const next = !notifOn;
+    setNotifOn(next); // optimistic
+    setNotifSaving(true);
+    try {
+      await apiFetch("/api/business/me", {
+        method: "PUT",
+        body: JSON.stringify({ notifications_enabled: next }),
+      });
+      setBiz((b) => (b ? { ...b, notifications_enabled: next } : b));
       toast(next ? "Bildirishnomalar yoqildi" : "Bildirishnomalar o'chirildi");
-      return next;
-    });
+    } catch {
+      setNotifOn(!next); // revert on failure
+      toast("Saqlashda xatolik");
+    } finally {
+      setNotifSaving(false);
+    }
   }
 
   function replayTours() {

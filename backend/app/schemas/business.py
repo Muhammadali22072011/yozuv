@@ -44,6 +44,7 @@ class BusinessUpdate(BaseModel):
     reminder_text: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
     confirmation_mode: ConfirmationMode | None = None
     language: LanguageCode | None = None
+    notifications_enabled: bool | None = None
     viloyat: str | None = Field(default=None, max_length=64)
     tuman: str | None = Field(default=None, max_length=128)
     latitude: float | None = None
@@ -89,6 +90,7 @@ class BusinessMe(BaseModel):
     reminder_text: str
     confirmation_mode: ConfirmationMode
     language: LanguageCode
+    notifications_enabled: bool = True
     is_active: bool
     created_at: datetime
     viloyat: str = ""

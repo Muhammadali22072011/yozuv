@@ -23,6 +23,7 @@ from app.schemas.booking import BookingCreatePublic
 from app.services import booking_service, waitlist_service
 from app.services.notification_service import send_telegram_message
 from app.utils.clock import local_today
+from app.utils.htmlsafe import h
 from app.utils.slots import (
     get_available_slots,
     get_bookings_for_date,
@@ -754,6 +755,12 @@ def _create_booking_sync(
                 "status": str(booking.status),
                 "owner_telegram_id": owner_tg,
                 "referral_reward": referral_reward,
+                # Owner's custom post-booking message (Profil → Yozilishdan
+                # keyingi matn). Appended to the client's confirmation below.
+                "after_booking_text": (b.after_booking_text or "").strip(),
+                # Owner's master notification switch (Sozlamalar →
+                # Bildirishnomalar). False = skip the new-booking ping.
+                "owner_notifications_enabled": bool(b.notifications_enabled),
             },
             None,
         )
@@ -790,6 +797,9 @@ def _client_display_name(from_user) -> str:
 async def _notify_owner_of_booking(info: dict, d: date, t_str: str, from_user) -> None:
     owner_tg_id = info.get("owner_telegram_id")
     if not owner_tg_id:
+        return
+    # Owner muted new-booking alerts in settings — respect it.
+    if not info.get("owner_notifications_enabled", True):
         return
     is_confirmed = info["status"].endswith("CONFIRMED")
     suffix = "tasdiqlangan" if is_confirmed else "kutilmoqda (tasdiqlang)"
@@ -849,13 +859,19 @@ def _success_text(info: dict, d: date, t_str: str) -> str:
         if is_confirmed
         else "⏳ So'rov yuborildi — biznes egasi tasdiqlashini kuting."
     )
-    return (
+    text = (
         f"{status_line}\n\n"
         f"📋 {info['service_name']}\n"
         f"📅 {_format_uz_date(d)} soat {t_str} da\n"
         f"📍 {info['business_name']}\n\n"
         "🔔 1 soat oldin eslatma yuboramiz"
     )
+    # Owner's custom thank-you / directions, appended under the receipt.
+    # Free text → escape for HTML mode.
+    extra = (info.get("after_booking_text") or "").strip()
+    if extra:
+        text += f"\n\n{h(extra)}"
+    return text
 
 
 @router.callback_query(F.data.startswith("confirm:"))
