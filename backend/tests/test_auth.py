@@ -1,7 +1,7 @@
 """Auth integrity: case-insensitive username uniqueness + login lookup."""
 import uuid
 
-from app.models import User
+from app.models import AuthIdentity, AuthProvider, User
 from app.utils.auth import hash_password
 
 
@@ -183,6 +183,34 @@ def test_login_blank_ident_does_not_match_passwordless_default(client, db):
         "/api/auth/login",
         json={"login": "   ", "password": "secret123"},
     )
+    assert resp.status_code == 401
+
+
+def test_delete_account_removes_user_and_identities(client, db, owner_user, auth_headers):
+    # A linked Google identity must go with the account.
+    db.add(
+        AuthIdentity(
+            user_id=owner_user.id,
+            provider=AuthProvider.GOOGLE.value,
+            subject="g-sub-delete-1",
+            email="x@example.com",
+            email_verified=True,
+            display_name="X",
+        )
+    )
+    db.flush()
+    uid = owner_user.id
+
+    resp = client.delete("/api/auth/account", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+    assert db.query(User).filter(User.id == uid).first() is None
+    assert db.query(AuthIdentity).filter(AuthIdentity.user_id == uid).count() == 0
+
+
+def test_delete_account_requires_auth(client):
+    resp = client.delete("/api/auth/account")
     assert resp.status_code == 401
 
 
