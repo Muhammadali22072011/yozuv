@@ -122,11 +122,16 @@ type Pending = {
 
 type CardInfo = { card_number: string; card_holder: string; payment_comment: string };
 
-type PlanPrices = {
+type TierPrice = {
+  tier: string;
+  override: number;
+  default_monthly: number;
   monthly: number;
   yearly: number;
-  monthly_override: number;
-  yearly_override: number;
+};
+type PlanPrices = {
+  tiers: TierPrice[];
+  founder_discount_percent: number;
 };
 
 type AdminPayment = {
@@ -311,10 +316,12 @@ export default function AdminPage() {
   const [exportingPayments, setExportingPayments] = useState(false);
   const [activity, setActivity] = useState<ActivityModalState | null>(null);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
-  const [prices, setPrices] = useState<{ monthly: string; yearly: string }>({
-    monthly: "",
-    yearly: "",
-  });
+  const [prices, setPrices] = useState<{
+    solo: string;
+    salon: string;
+    biznes: string;
+    founder: string;
+  }>({ solo: "", salon: "", biznes: "", founder: "" });
   const [savingPrices, setSavingPrices] = useState(false);
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [newAdminId, setNewAdminId] = useState("");
@@ -394,9 +401,13 @@ export default function AdminPage() {
   const loadPrices = useCallback(async () => {
     try {
       const p = await apiFetch<PlanPrices>("/api/admin/plan-prices");
+      const ov = (t: string) =>
+        String(p.tiers.find((x) => x.tier === t)?.override || "") || "";
       setPrices({
-        monthly: p.monthly_override ? String(p.monthly_override) : "",
-        yearly: p.yearly_override ? String(p.yearly_override) : "",
+        solo: ov("SOLO") === "0" ? "" : ov("SOLO"),
+        salon: ov("SALON") === "0" ? "" : ov("SALON"),
+        biznes: ov("BIZNES") === "0" ? "" : ov("BIZNES"),
+        founder: p.founder_discount_percent ? String(p.founder_discount_percent) : "",
       });
     } catch {
       // prices fall back to code defaults if unreadable
@@ -815,17 +826,24 @@ export default function AdminPage() {
   }
 
   async function savePrices() {
-    const monthly = Number(prices.monthly.replace(/\D/g, "")) || 0;
-    const yearly = Number(prices.yearly.replace(/\D/g, "")) || 0;
+    const num = (s: string) => Number(s.replace(/\D/g, "")) || 0;
     setSavingPrices(true);
     try {
       const r = await apiFetch<PlanPrices>("/api/admin/plan-prices", {
         method: "PUT",
-        body: JSON.stringify({ monthly_price: monthly, yearly_price: yearly }),
+        body: JSON.stringify({
+          solo_price: num(prices.solo),
+          salon_price: num(prices.salon),
+          biznes_price: num(prices.biznes),
+          founder_discount_percent: Math.min(100, num(prices.founder)),
+        }),
       });
+      const ov = (t: string) => r.tiers.find((x) => x.tier === t)?.override || 0;
       setPrices({
-        monthly: r.monthly_override ? String(r.monthly_override) : "",
-        yearly: r.yearly_override ? String(r.yearly_override) : "",
+        solo: ov("SOLO") ? String(ov("SOLO")) : "",
+        salon: ov("SALON") ? String(ov("SALON")) : "",
+        biznes: ov("BIZNES") ? String(ov("BIZNES")) : "",
+        founder: r.founder_discount_percent ? String(r.founder_discount_percent) : "",
       });
       toast("Narxlar saqlandi");
     } catch (e) {
@@ -2275,42 +2293,74 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-extrabold text-ink-900">
-                    Obuna narxlari
+                    Obuna narxlari (tariflar)
                   </h3>
                   <p className="mt-1 text-xs text-ink-500">
-                    Bo‘sh qoldirilsa — standart narx ishlatiladi.
+                    Oylik narx, so‘mda. Bo‘sh — standart narx (99k / 199k / 399k).
+                    Yillik = oylik × 10 (2 oy bepul).
                   </p>
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <label className="block text-xs font-semibold text-ink-500">
-                    Oylik (so‘m)
+                    Yakka (1 usta)
                   </label>
                   <input
                     inputMode="numeric"
-                    value={prices.monthly}
+                    value={prices.solo}
                     onChange={(e) =>
-                      setPrices({ ...prices, monthly: e.target.value.replace(/\D/g, "") })
+                      setPrices({ ...prices, solo: e.target.value.replace(/\D/g, "") })
                     }
-                    placeholder="187500"
+                    placeholder="99000"
                     className="yz-input mt-1 font-mono"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-ink-500">
-                    Yillik (so‘m)
+                    Salon (5 usta)
                   </label>
                   <input
                     inputMode="numeric"
-                    value={prices.yearly}
+                    value={prices.salon}
                     onChange={(e) =>
-                      setPrices({ ...prices, yearly: e.target.value.replace(/\D/g, "") })
+                      setPrices({ ...prices, salon: e.target.value.replace(/\D/g, "") })
                     }
-                    placeholder="1875000"
+                    placeholder="199000"
                     className="yz-input mt-1 font-mono"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-500">
+                    Biznes (cheksiz)
+                  </label>
+                  <input
+                    inputMode="numeric"
+                    value={prices.biznes}
+                    onChange={(e) =>
+                      setPrices({ ...prices, biznes: e.target.value.replace(/\D/g, "") })
+                    }
+                    placeholder="399000"
+                    className="yz-input mt-1 font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-ink-500">
+                  Founder chegirma (%) — «narx oshmaydi» bizneslarga
+                </label>
+                <input
+                  inputMode="numeric"
+                  value={prices.founder}
+                  onChange={(e) =>
+                    setPrices({
+                      ...prices,
+                      founder: e.target.value.replace(/\D/g, "").slice(0, 3),
+                    })
+                  }
+                  placeholder="0"
+                  className="yz-input mt-1 max-w-[140px] font-mono"
+                />
               </div>
               <button
                 onClick={savePrices}

@@ -1644,34 +1644,47 @@ def _get_or_create_platform_settings(db: Session) -> "PlatformSettings":
     return ps
 
 
-@router.get("/plan-prices")
-def get_plan_prices(db: Session = Depends(get_db), _=Depends(get_admin_user)):
-    """Current subscription prices (resolved) plus the raw overrides.
-
-    ``monthly``/``yearly`` are the effective prices used at checkout;
-    ``monthly_override``/``yearly_override`` are the stored values where
-    0 means "use the code default".
-    """
-    from app.models import PlatformSettings
-    from app.services.payment_service import MONTHLY_AMOUNT_UZS, YEARLY_AMOUNT_UZS
+def _plan_prices_payload(db: Session) -> dict:
+    """Per-tier prices for the admin editor: each tier's raw override (0 =
+    use code default), the effective monthly/yearly used at checkout, and the
+    founder discount percent. Yearly = monthly ×10 (2 months free)."""
+    from app.models import PlatformSettings, SubscriptionPlan, SubscriptionTier
+    from app.services.payment_service import TIER_MONTHLY_DEFAULT, get_plan_amount
 
     ps = db.query(PlatformSettings).filter(PlatformSettings.id == 1).first()
-    monthly_override = int(ps.monthly_price) if ps else 0
-    yearly_override = int(ps.yearly_price) if ps else 0
+    cols = {
+        SubscriptionTier.SOLO: "solo_price",
+        SubscriptionTier.SALON: "salon_price",
+        SubscriptionTier.BIZNES: "biznes_price",
+    }
+    tiers = []
+    for t in (SubscriptionTier.SOLO, SubscriptionTier.SALON, SubscriptionTier.BIZNES):
+        tiers.append(
+            {
+                "tier": t.value,
+                "override": int(getattr(ps, cols[t], 0) or 0) if ps else 0,
+                "default_monthly": TIER_MONTHLY_DEFAULT[t],
+                "monthly": get_plan_amount(db, SubscriptionPlan.MONTHLY, t),
+                "yearly": get_plan_amount(db, SubscriptionPlan.YEARLY, t),
+            }
+        )
     return {
-        "monthly": monthly_override or MONTHLY_AMOUNT_UZS,
-        "yearly": yearly_override or YEARLY_AMOUNT_UZS,
-        "monthly_override": monthly_override,
-        "yearly_override": yearly_override,
-        "default_monthly": MONTHLY_AMOUNT_UZS,
-        "default_yearly": YEARLY_AMOUNT_UZS,
+        "tiers": tiers,
+        "founder_discount_percent": int(ps.founder_discount_percent) if ps else 0,
     }
 
 
+@router.get("/plan-prices")
+def get_plan_prices(db: Session = Depends(get_db), _=Depends(get_admin_user)):
+    return _plan_prices_payload(db)
+
+
 class PlanPricesBody(BaseModel):
-    # 0 (or null) resets to the code default.
-    monthly_price: int = Field(0, ge=0, le=1_000_000_000)
-    yearly_price: int = Field(0, ge=0, le=1_000_000_000)
+    # Per-tier MONTHLY price in UZS. 0 = use the code default for that tier.
+    solo_price: int = Field(0, ge=0, le=1_000_000_000)
+    salon_price: int = Field(0, ge=0, le=1_000_000_000)
+    biznes_price: int = Field(0, ge=0, le=1_000_000_000)
+    founder_discount_percent: int = Field(0, ge=0, le=100)
 
 
 @router.put("/plan-prices")
@@ -1680,26 +1693,30 @@ def set_plan_prices(
     db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user),
 ):
-    from app.services.payment_service import MONTHLY_AMOUNT_UZS, YEARLY_AMOUNT_UZS
-
     ps = _get_or_create_platform_settings(db)
-    ps.monthly_price = int(body.monthly_price)
-    ps.yearly_price = int(body.yearly_price)
+    ps.solo_price = int(body.solo_price)
+    ps.salon_price = int(body.salon_price)
+    ps.biznes_price = int(body.biznes_price)
+    ps.founder_discount_percent = int(body.founder_discount_percent)
+    # Tiers supersede the legacy single-price fields; clear them so a stale
+    # monthly_price can't shadow the SALON tier (blank SALON → code default).
+    ps.monthly_price = 0
+    ps.yearly_price = 0
     log_admin_action(
         db,
         admin,
         "settings.prices",
         "PlatformSettings",
         None,
-        {"monthly_price": ps.monthly_price, "yearly_price": ps.yearly_price},
+        {
+            "solo": ps.solo_price,
+            "salon": ps.salon_price,
+            "biznes": ps.biznes_price,
+            "founder_pct": ps.founder_discount_percent,
+        },
     )
     db.commit()
-    return {
-        "monthly": ps.monthly_price or MONTHLY_AMOUNT_UZS,
-        "yearly": ps.yearly_price or YEARLY_AMOUNT_UZS,
-        "monthly_override": ps.monthly_price,
-        "yearly_override": ps.yearly_price,
-    }
+    return _plan_prices_payload(db)
 
 
 @router.get("/admins")
