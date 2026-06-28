@@ -91,7 +91,16 @@ export default function QrPage() {
   }, [router]);
 
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
-  const telegramLink = biz ? `https://t.me/${botUsername}?start=${biz.slug}` : "";
+  // Mini-app deep link (startapp) — opens the booking flow inside Telegram.
+  // If the business has a B2B partner_code, carry it as `ref_<CODE>` so the
+  // printed QR / brochure closes the offline→referral loop: a new owner who
+  // scans lands in the mini-app and the code is captured (see lib/referral.ts,
+  // which reads start_param "ref_<CODE>"). Otherwise route straight to booking
+  // via the slug.
+  const startParam = biz?.partner_code
+    ? `ref_${biz.partner_code.trim().toUpperCase().slice(0, 16)}`
+    : biz?.slug || "";
+  const telegramLink = biz ? `https://t.me/${botUsername}?startapp=${startParam}` : "";
 
   async function downloadBrochure() {
     if (!biz) return;

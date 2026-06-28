@@ -287,7 +287,7 @@ export default function BrochureTrifold3D({
   const [flipping, setFlipping] = useState(false);
   const [flipScale, setFlipScale] = useState(1);
 
-  const handle = `t.me/${botUsername}?start=${slug || ""}`;
+  const handle = `t.me/${botUsername}?startapp=${slug || ""}`;
   const bizName = name || "Yozuv";
   const logoSrc = logoUrl || "/logo.png";
   const scheduleText = useMemo(() => formatSchedule(schedule), [schedule]);

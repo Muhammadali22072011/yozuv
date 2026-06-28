@@ -73,7 +73,7 @@ export function TimelineBlock({
   const dur = durationMin(b.start_time, b.end_time);
   const isPending = b.status === "PENDING";
   const bg = isPending
-    ? "linear-gradient(135deg,#FFF3DA,#FFE5B0)"
+    ? "linear-gradient(135deg,#FFF4DD,#FFE5B0)"
     : "linear-gradient(135deg,#EEF0FF,#E0E4FF)";
   const border = isPending ? "#D97706" : "#4853F5";
 

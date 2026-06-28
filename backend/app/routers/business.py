@@ -20,6 +20,7 @@ from app.models import (
     BookingStatus,
     Business,
     Client,
+    HolidayDate,
     PromoCode,
     Review,
     Schedule,
@@ -29,7 +30,7 @@ from app.models import (
 )
 from app.models.enums import BusinessCategory
 from app.schemas.business import BusinessCreate, BusinessMe, BusinessPublic, BusinessUpdate
-from app.utils.clock import local_today
+from app.utils.clock import local_now, local_today
 
 router = APIRouter(prefix="/business", tags=["business"])
 
@@ -684,3 +685,73 @@ def public_services(slug: str, db: Session = Depends(get_db)):
         }
         for s in services
     ]
+
+
+@router.get("/{slug}/hours")
+def public_hours(slug: str, db: Session = Depends(get_db)):
+    """Public weekly schedule + an `open_now` flag for the storefront
+    'Hozir ochiq / Yopiq' badge. Times are read in the business timezone
+    (Asia/Tashkent via local_now); a HolidayDate for today forces closed.
+    day_of_week is 0=Monday..6=Sunday, matching Python's weekday()."""
+    b = (
+        db.query(Business)
+        .filter(Business.slug == slug, Business.is_active.is_(True))
+        .first()
+    )
+    if not b:
+        raise HTTPException(404, "Not found")
+
+    rows = db.query(Schedule).filter(Schedule.business_id == b.id).all()
+    by_day = {r.day_of_week: r for r in rows}
+
+    now = local_now()
+    today_dow = now.weekday()
+    is_holiday = (
+        db.query(HolidayDate)
+        .filter(HolidayDate.business_id == b.id, HolidayDate.date == now.date())
+        .first()
+        is not None
+    )
+
+    def hhmm(t):
+        return t.strftime("%H:%M") if t else None
+
+    days = []
+    for dow in range(7):
+        r = by_day.get(dow)
+        working = bool(r and r.is_working)
+        days.append(
+            {
+                "day_of_week": dow,
+                "is_working": working,
+                "start_time": hhmm(r.start_time) if working else None,
+                "end_time": hhmm(r.end_time) if working else None,
+                "break_start": hhmm(r.break_start) if working else None,
+                "break_end": hhmm(r.break_end) if working else None,
+            }
+        )
+
+    open_now = False
+    today = by_day.get(today_dow)
+    if (
+        not is_holiday
+        and today
+        and today.is_working
+        and today.start_time
+        and today.end_time
+    ):
+        cur = now.time()
+        within = today.start_time <= cur <= today.end_time
+        in_break = bool(
+            today.break_start
+            and today.break_end
+            and today.break_start <= cur < today.break_end
+        )
+        open_now = within and not in_break
+
+    return {
+        "open_now": open_now,
+        "is_holiday": is_holiday,
+        "today": today_dow,
+        "days": days,
+    }

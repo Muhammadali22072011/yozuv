@@ -2,9 +2,9 @@ import type { BookingStatus } from "@/types";
 import { cn } from "@/lib/utils";
 
 const MAP: Record<BookingStatus, { bg: string; fg: string; label: string }> = {
-  CONFIRMED: { bg: "bg-[#E6FAF3]", fg: "text-[#0E9577]", label: "Tasdiqlangan" },
-  PENDING: { bg: "bg-[#FFF3DA]", fg: "text-[#A8751A]", label: "Kutilmoqda" },
-  CANCELLED: { bg: "bg-[#FFE7E3]", fg: "text-[#C93A2A]", label: "Bekor" },
+  CONFIRMED: { bg: "bg-success-bg", fg: "text-success", label: "Tasdiqlangan" },
+  PENDING: { bg: "bg-warn-bg", fg: "text-warn", label: "Kutilmoqda" },
+  CANCELLED: { bg: "bg-danger-bg", fg: "text-danger", label: "Bekor" },
   COMPLETED: { bg: "bg-ink-100", fg: "text-ink-500", label: "Yakunlangan" },
 };
 

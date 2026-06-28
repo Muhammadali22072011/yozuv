@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Categories } from "@/components/landing/Categories";
 import { FAQ } from "@/components/landing/FAQ";
@@ -6,7 +5,8 @@ import { Features } from "@/components/landing/Features";
 import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Pricing } from "@/components/landing/Pricing";
-import { StickyCTA } from "@/components/landing/StickyCTA";
+import { SocialProof } from "@/components/landing/SocialProof";
+import { CtaLink, StickyCTA } from "@/components/landing/StickyCTA";
 import { YzLogo } from "@/components/yz/Logo";
 
 export default function HomePage() {
@@ -15,6 +15,8 @@ export default function HomePage() {
       <Hero />
       <Features />
       <HowItWorks />
+      {/* Real catalog-backed proof. Self-removes when the catalog is empty. */}
+      <SocialProof />
       <Categories />
       <Pricing />
       <FAQ />
@@ -34,19 +36,19 @@ export default function HomePage() {
             <div>
               <div className="eyebrow text-white/55">Yozuv</div>
               <h2 className="mt-2.5 font-display text-3xl font-extrabold tracking-tighter text-white md:text-[42px] md:leading-[1.05]">
-                Bugun boshlang
+                Bugun mijozlaringizni Telegramga ulang
               </h2>
               <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/75 md:text-base">
                 Yozuv bilan navbatlarni tartibga soling. 14 kun bepul — karta talab
                 qilinmaydi.
               </p>
             </div>
-            <Link
-              href="/auth/login"
+            <CtaLink
+              where="final"
               className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-8 py-4 font-display text-[15px] font-bold text-indigo-700 shadow-[0_14px_34px_-10px_rgba(0,0,0,0.5)] tap"
             >
-              Kirish <ArrowRight className="h-4 w-4" strokeWidth={2.4} />
-            </Link>
+              Bepul boshlash — 14 kun <ArrowRight className="h-4 w-4" strokeWidth={2.4} />
+            </CtaLink>
           </div>
         </div>
       </section>

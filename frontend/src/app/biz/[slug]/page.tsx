@@ -103,6 +103,42 @@ async function fetchReviews(slug: string): Promise<PublicReview[]> {
   return (await res.json()) as PublicReview[];
 }
 
+type DayHours = {
+  day_of_week: number;
+  is_working: boolean;
+  start_time: string | null;
+  end_time: string | null;
+  break_start: string | null;
+  break_end: string | null;
+};
+type Hours = {
+  open_now: boolean;
+  is_holiday: boolean;
+  today: number;
+  days: DayHours[];
+};
+
+// Weekly hours + a server-computed open-now flag (business timezone) for the
+// "Hozir ochiq / Yopiq" badge. 0=Monday..6=Sunday.
+async function fetchHours(slug: string): Promise<Hours | null> {
+  const res = await fetch(
+    `${API}/api/business/${encodeURIComponent(slug)}/hours`,
+    { next: { revalidate: 60 } },
+  );
+  if (!res.ok) return null;
+  return (await res.json()) as Hours;
+}
+
+const WEEKDAYS_UZ = [
+  "Dushanba",
+  "Seshanba",
+  "Chorshanba",
+  "Payshanba",
+  "Juma",
+  "Shanba",
+  "Yakshanba",
+];
+
 export async function generateMetadata(
   { params }: { params: { slug: string } },
 ): Promise<Metadata> {
@@ -157,14 +193,18 @@ export default async function BusinessPage({
   const biz = await fetchBusiness(params.slug);
   if (!biz) notFound();
 
-  const [services, summary, reviews] = await Promise.all([
+  const [services, summary, reviews, hours] = await Promise.all([
     fetchServices(params.slug),
     fetchSummary(params.slug),
     fetchReviews(params.slug),
+    fetchHours(params.slug),
   ]);
+  const hasHours = !!(hours && hours.days.some((d) => d.is_working));
 
   const cat = CATEGORY_LABEL[biz.category] || "Biznes";
-  const botLink = `https://t.me/${BOT}?start=${encodeURIComponent(biz.slug)}`;
+  // Mini-app deep link (startapp) — opens the client booking flow inside
+  // Telegram instead of the bot chat. Keeps the offline→online loop tight.
+  const botLink = `https://t.me/${BOT}?startapp=${encodeURIComponent(biz.slug)}`;
   const logo = biz.logo_url ? `${API}${biz.logo_url}` : null;
 
   // LocalBusiness JSON-LD — the local-SEO centerpiece. The page already has
@@ -249,12 +289,30 @@ export default async function BusinessPage({
                 <h1 className="mt-1 truncate font-display text-[26px] font-extrabold tracking-tighter text-ink-900 sm:text-3xl">
                   {biz.name}
                 </h1>
-                {summary.count > 0 && (
-                  <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-warn-bg px-2.5 py-1 text-xs font-bold text-warn">
-                    <Star className="h-3 w-3 fill-lemon text-lemon" />
-                    <span className="tnum">{summary.average_rating.toFixed(1)}</span> · {summary.count} ta sharh
-                  </div>
-                )}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {summary.count > 0 && (
+                    <div className="inline-flex items-center gap-1 rounded-full bg-warn-bg px-2.5 py-1 text-xs font-bold text-warn">
+                      <Star className="h-3 w-3 fill-lemon text-lemon" />
+                      <span className="tnum">{summary.average_rating.toFixed(1)}</span> · {summary.count} ta sharh
+                    </div>
+                  )}
+                  {hours && hasHours && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                        hours.open_now
+                          ? "bg-success-bg text-success"
+                          : "bg-ink-100 text-ink-500"
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          hours.open_now ? "bg-success" : "bg-ink-400"
+                        }`}
+                      />
+                      {hours.open_now ? "Hozir ochiq" : "Hozir yopiq"}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -273,7 +331,7 @@ export default async function BusinessPage({
                   boxShadow: "0 16px 32px -16px rgba(72,83,245,0.6)",
                 }}
               >
-                Yozilish <ArrowRight className="h-4 w-4" />
+                Telegram orqali band qilish <ArrowRight className="h-4 w-4" />
               </Link>
               {biz.phone && (
                 <a
@@ -301,6 +359,50 @@ export default async function BusinessPage({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Ish vaqti — weekly hours with today highlighted + open/closed */}
+          {hours && hasHours && (
+            <div className="card-soft mt-3 p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="font-display text-sm font-bold tracking-tight text-ink-900">
+                    Ish vaqti
+                  </div>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                      hours.open_now
+                        ? "bg-success-bg text-success"
+                        : "bg-ink-100 text-ink-500"
+                    }`}
+                  >
+                    {hours.open_now ? "Ochiq" : "Yopiq"}
+                  </span>
+                </div>
+              </div>
+              <ul className="mt-3 space-y-1">
+                {hours.days.map((d) => (
+                  <li
+                    key={d.day_of_week}
+                    className={`flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] ${
+                      d.day_of_week === hours.today
+                        ? "bg-indigo-50 font-bold text-ink-900"
+                        : "text-ink-600"
+                    }`}
+                  >
+                    <span>{WEEKDAYS_UZ[d.day_of_week]}</span>
+                    <span className="tnum">
+                      {d.is_working && d.start_time && d.end_time
+                        ? `${d.start_time}–${d.end_time}`
+                        : "Dam olish"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
@@ -347,7 +449,7 @@ export default async function BusinessPage({
               href={botLink}
               className="btn-primary tap w-full gap-2 text-[15px]"
             >
-              Botda yozilish <ArrowRight className="h-4 w-4" />
+              Telegram orqali band qilish <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 

@@ -18,7 +18,7 @@ const items = [
   },
   {
     icon: Bell,
-    title: "Neyavkalar kamayadi",
+    title: "Kelmay qolish kamayadi",
     desc: "Tashrifdan 1 soat oldin bot mijozga Telegramda eslatadi — «esimdan chiqibdi» deyilmaydi.",
     bg: "#FFF3DA",
     fg: "#A8751A",

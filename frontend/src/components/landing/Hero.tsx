@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Bell, CalendarDays, Sparkles } from "lucide-react";
+import { ArrowRight, Bell, BellRing, CalendarDays, CreditCard, Send, Sparkles } from "lucide-react";
 import { YzLogo } from "@/components/yz/Logo";
+import { CtaLink } from "@/components/landing/StickyCTA";
 
 export function Hero() {
   return (
@@ -39,8 +40,8 @@ export function Hero() {
           </p>
 
           <div className="flex flex-wrap gap-3 pt-2">
-            <Link
-              href="/auth/login"
+            <CtaLink
+              where="hero"
               className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 font-display text-[15px] font-bold text-white tap"
               style={{
                 background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
@@ -48,7 +49,7 @@ export function Hero() {
               }}
             >
               Bepul boshlash — 14 kun <ArrowRight className="h-4 w-4" />
-            </Link>
+            </CtaLink>
             <Link
               href="#pricing"
               className="inline-flex items-center justify-center rounded-2xl border border-ink-200 bg-white px-6 py-3.5 font-display text-[15px] font-bold text-ink-900 shadow-soft-sm tap"
@@ -59,10 +60,19 @@ export function Hero() {
           <p className="text-[13px] font-medium text-ink-500">
             Karta kerak emas · Payme/Click orqali to&apos;lov
           </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-[13px] font-semibold text-ink-600">
-            <span>📱 Telegram ichida</span>
-            <span>💳 Payme va Click</span>
-            <span>🔔 Avtomatik eslatmalar</span>
+          <div className="flex flex-wrap gap-x-5 gap-y-3 pt-1 text-[13px] font-semibold text-ink-600">
+            {[
+              { Icon: Send, label: "Telegram ichida", tile: "tile-indigo", color: "text-indigo-700" },
+              { Icon: CreditCard, label: "Payme va Click", tile: "tile-mint", color: "text-success" },
+              { Icon: BellRing, label: "Avtomatik eslatmalar", tile: "tile-lemon", color: "text-iris" },
+            ].map(({ Icon, label, tile, color }) => (
+              <span key={label} className="inline-flex items-center gap-2">
+                <span className={`${tile} grid h-8 w-8 shrink-0 place-items-center rounded-xl`}>
+                  <Icon className={`h-4 w-4 ${color}`} strokeWidth={2.2} />
+                </span>
+                {label}
+              </span>
+            ))}
           </div>
         </div>
 
@@ -72,7 +82,7 @@ export function Hero() {
               <div className="flex items-center gap-2">
                 <YzLogo size={28} />
                 <div>
-                  <div className="eyebrow">YOZUV · PRO</div>
+                  <div className="eyebrow">YOZUV · Salon</div>
                   <div className="font-display text-sm font-bold tracking-tight text-ink-900">
                     Stil Studio
                   </div>

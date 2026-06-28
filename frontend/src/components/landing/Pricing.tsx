@@ -1,17 +1,28 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { track } from "@/lib/analytics";
 
 // Tier pricing mirrors the backend value metric (active masters / seats).
-// Yearly = ×10 months → 2 months free. Prices in UZS; daily framing anchors
-// to "cheaper than one client".
+// Monthly prices in UZS; daily framing anchors to "cheaper than one client".
+// Yearly model per SUBSCRIPTION-PLAN.md: "pay for 10, get 12" → 2 months free
+// (−17%). So yearly = monthly × 10 (990k / 1 990k / 3 990k) — matches the plan,
+// not an arbitrary discount.
+const formatSom = (value: number) => `${value.toLocaleString("ru-RU").replace(/,/g, " ")} so‘m`;
+
+const yearlyFromMonthly = (monthly: number) => monthly * 10;
+
 const tiers = [
   {
+    id: "yakka",
     name: "Yakka",
-    price: "99 000 so‘m",
-    note: "oyiga · 1 usta",
-    sub: "kuniga ~3 300 so‘m — bitta choynak choy puli",
+    monthly: 99000,
+    note: "1 usta",
+    monthlySub: "kuniga ~3 300 so‘m — bitta choynak choy puli",
+    yearlySub: "yiliga · 2 oy sovg‘a",
     cta: "Yakka tarifni tanlash",
-    href: "/auth/login",
     perks: [
       "Cheksiz yozilishlar",
       "Eslatma, shaxsiy sahifa, QR",
@@ -21,12 +32,13 @@ const tiers = [
     badge: "",
   },
   {
+    id: "salon",
     name: "Salon",
-    price: "199 000 so‘m",
-    note: "oyiga · 5 ustagacha",
-    sub: "1 mijozdan arzon — yiliga 1 990 000 (2 oy sovg‘a)",
+    monthly: 199000,
+    note: "5 ustagacha",
+    monthlySub: "1 mijozdan arzon — har kuni o‘zini qoplaydi",
+    yearlySub: "yiliga · 2 oy sovg‘a",
     cta: "Salon tarifni tanlash",
-    href: "/dashboard/settings",
     perks: [
       "Hammasi Yakka tarifdan",
       "Analitika va hisobotlar",
@@ -36,12 +48,13 @@ const tiers = [
     badge: "MASHHUR",
   },
   {
+    id: "biznes",
     name: "Biznes",
-    price: "399 000 so‘m",
-    note: "oyiga · cheksiz usta",
-    sub: "sex va klinikalar uchun — yiliga 3 990 000",
+    monthly: 399000,
+    note: "cheksiz usta",
+    monthlySub: "tarmoq va klinikalar uchun",
+    yearlySub: "yiliga · 2 oy sovg‘a",
     cta: "Biznes tarifni tanlash",
-    href: "/dashboard/settings",
     perks: [
       "Hammasi Salon tarifdan",
       "Bir nechta filial",
@@ -53,6 +66,8 @@ const tiers = [
 ];
 
 export function Pricing() {
+  const [yearly, setYearly] = useState(false);
+
   return (
     <section id="pricing" className="bg-ink-50">
       <div className="mx-auto max-w-6xl px-6 py-20">
@@ -65,9 +80,47 @@ export function Pricing() {
           yechilmaydi. To&apos;lov Payme, Click yoki karta orqali — sumda.
         </p>
 
-        <div className="mt-10 grid gap-5 md:grid-cols-3 md:items-start">
-          {tiers.map((t) =>
-            t.featured ? (
+        {/* Oylik / Yillik toggle — yearly unlocks the 2-month gift. */}
+        <div className="mt-6 inline-flex items-center gap-1 rounded-full bg-white p-1 shadow-soft-sm">
+          <button
+            type="button"
+            onClick={() => setYearly(false)}
+            aria-pressed={!yearly}
+            className={`rounded-full px-4 py-1.5 font-display text-[13px] font-bold transition-colors tap ${
+              yearly ? "text-ink-500" : "bg-indigo-600 text-white shadow-soft-sm"
+            }`}
+          >
+            Oylik
+          </button>
+          <button
+            type="button"
+            onClick={() => setYearly(true)}
+            aria-pressed={yearly}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 font-display text-[13px] font-bold transition-colors tap ${
+              yearly ? "bg-indigo-600 text-white shadow-soft-sm" : "text-ink-500"
+            }`}
+          >
+            Yillik
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide ${
+                yearly ? "bg-white/20 text-white" : "bg-success-bg text-success"
+              }`}
+            >
+              −17%
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-8 grid gap-5 md:grid-cols-3 md:items-start">
+          {tiers.map((t) => {
+            const price = yearly
+              ? formatSom(yearlyFromMonthly(t.monthly))
+              : formatSom(t.monthly);
+            const note = yearly ? `yiliga · ${t.note}` : `oyiga · ${t.note}`;
+            const sub = yearly ? t.yearlySub : t.monthlySub;
+            const href = `/auth/login?plan=${t.id}`;
+
+            return t.featured ? (
               <div
                 key={t.name}
                 className="relative overflow-hidden rounded-4xl p-7 text-white md:-mt-2 tap"
@@ -86,10 +139,10 @@ export function Pricing() {
                     {t.name}
                   </h3>
                   <p className="mt-5 flex items-baseline gap-1 font-display text-5xl font-extrabold tracking-tightest text-white tnum">
-                    {t.price}
+                    {price}
                   </p>
-                  <p className="mt-1.5 text-sm text-white/75 tnum">{t.note}</p>
-                  <p className="mt-1 text-[13px] font-medium text-lemon">{t.sub}</p>
+                  <p className="mt-1.5 text-sm text-white/75 tnum">{note}</p>
+                  <p className="mt-1 text-[13px] font-medium text-lemon">{sub}</p>
 
                   <ul className="mt-6 space-y-2.5">
                     {t.perks.map((p) => (
@@ -106,7 +159,8 @@ export function Pricing() {
                   </ul>
 
                   <Link
-                    href={t.href}
+                    href={href}
+                    onClick={() => track("plan_select", { plan: t.id, billing: yearly ? "yearly" : "monthly" })}
                     className="mt-7 inline-flex w-full items-center justify-center rounded-2xl bg-white px-6 py-3.5 font-display text-[15px] font-bold text-indigo-700 shadow-soft-sm transition-transform active:scale-[0.97] tap"
                   >
                     {t.cta}
@@ -114,20 +168,23 @@ export function Pricing() {
                 </div>
               </div>
             ) : (
-              <div key={t.name} className="card-lg p-7 tap">
+              <div
+                key={t.name}
+                className="card-lg p-7 tap ring-1 ring-indigo-100"
+              >
                 <h3 className="font-display text-xl font-extrabold tracking-tight text-ink-900">
                   {t.name}
                 </h3>
                 {t.badge && (
-                  <span className="mt-2 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-emerald-700">
+                  <span className="mt-2 inline-block rounded-full bg-success-bg px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-success">
                     {t.badge}
                   </span>
                 )}
                 <p className="mt-5 flex items-baseline gap-1 font-display text-5xl font-extrabold tracking-tightest text-ink-900 tnum">
-                  {t.price}
+                  {price}
                 </p>
-                <p className="mt-1.5 text-sm text-ink-500 tnum">{t.note}</p>
-                <p className="mt-1 text-[13px] font-medium text-indigo-600">{t.sub}</p>
+                <p className="mt-1.5 text-sm text-ink-500 tnum">{note}</p>
+                <p className="mt-1 text-[13px] font-medium text-indigo-600">{sub}</p>
 
                 <ul className="mt-6 space-y-2.5">
                   {t.perks.map((p) => (
@@ -143,24 +200,28 @@ export function Pricing() {
                   ))}
                 </ul>
 
-                <Link href={t.href} className="btn-soft mt-7 w-full justify-center">
+                <Link
+                  href={href}
+                  onClick={() => track("plan_select", { plan: t.id, billing: yearly ? "yearly" : "monthly" })}
+                  className="btn-soft mt-7 w-full justify-center"
+                >
                   {t.cta}
                 </Link>
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
 
         {/* ROI + trust row — cheaper than one prevented no-show, paid in soum. */}
         <p className="mt-8 text-sm text-ink-600">
           1 ta &laquo;kelmadi&raquo; — bu yo&apos;qolgan mijoz. Yozuv oyiga bitta
-          neyavkani to&apos;xtatsa — o&apos;zini qoplaydi.
+          kelmay qolishni to&apos;xtatsa — o&apos;zini qoplaydi.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-ink-500">
           <span>Payme</span>
           <span>Click</span>
           <span>Uzcard / Humo</span>
-          <span className="text-emerald-700">14 kun bepul · karta kerak emas</span>
+          <span className="text-success">14 kun bepul · karta kerak emas</span>
           <span>Avtomatik yechmaymiz</span>
         </div>
       </div>

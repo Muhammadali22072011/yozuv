@@ -79,7 +79,9 @@ def _render_qr(url: str) -> Image.Image:
 
 @lru_cache(maxsize=512)
 def _generate_qr_cached(business_slug: str, bot_username: str) -> bytes:
-    url = f"https://t.me/{bot_username}?start={business_slug}"
+    # Mini App deep link (?startapp=) so scanning opens the in-Telegram booking
+    # app, matching the storefront/brochure CTAs — not the plain ?start= bot.
+    url = f"https://t.me/{bot_username}?startapp={business_slug}"
     img = _render_qr(url)
     buffer = BytesIO()
     img.save(buffer, format="PNG", optimize=True)

@@ -7,8 +7,12 @@ import { YzLogo } from "@/components/yz/Logo";
 import { apiBase } from "@/lib/api";
 import { isNativeApp, isTelegramMiniApp } from "@/lib/platform";
 import { captureReferral } from "@/lib/referral";
+import { track } from "@/lib/analytics";
 
 const BOT = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
+// Browser guests cannot self-register in-page (sign-up happens inside the
+// Telegram bot), so we hand them a working start link into the bot.
+const REGISTER_LINK = `https://t.me/${BOT}?start=register`;
 
 declare global {
   interface Window {
@@ -159,8 +163,13 @@ export default function LoginPage() {
     const tg = isTelegramMiniApp();
     setInTelegram(tg);
     setNativeApp(isNativeApp());
+    track("login_view");
+    const params = new URLSearchParams(window.location.search);
+    // Technical diagnostics dump is only shown when the owner explicitly opens
+    // ?debug=1 — a non-technical owner should never see a raw error dump.
+    if (params.get("debug") === "1") setDebug(true);
     // Surface a failed Google round-trip (backend bounced us here with ?e=).
-    const e = new URLSearchParams(window.location.search).get("e");
+    const e = params.get("e");
     if (e === "google_unverified") {
       setErr("Google pochta manzili tasdiqlanmagan.");
     } else if (e === "google") {
@@ -225,6 +234,51 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {/* New-guest start path — a browser visitor with no account cannot
+              self-register in-page (sign-up lives inside the bot). Make the
+              start explicit and prominent. Shown only to plain-browser guests
+              (the Mini App auto-logs in; the APK uses password). */}
+          {!nativeApp && !inTelegram && (
+            <div className="card-lg mt-7 border border-indigo-100 bg-indigo-50/60 p-6 animate-card-in">
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-100 text-indigo-600">
+                  <Sparkles className="h-6 w-6" strokeWidth={2.2} />
+                </div>
+                <div>
+                  <div className="font-display text-[15px] font-extrabold tracking-tight text-ink-900">
+                    Hali hisobingiz yo‘qmi?
+                  </div>
+                  <div className="text-xs text-ink-500">
+                    Telegram orqali boshlang — 1 daqiqada
+                  </div>
+                </div>
+              </div>
+
+              <a
+                href={REGISTER_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => track("login_bot_open", { source: "register_start" })}
+                className="btn-primary mt-5 w-full justify-center"
+              >
+                Telegram orqali boshlash
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+
+              {/* Desktop: let the owner open the bot from a phone by scanning. */}
+              <div className="mt-5 hidden items-center gap-3 sm:flex">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white text-indigo-600 shadow-soft-sm">
+                  <Send className="h-4 w-4" strokeWidth={2.4} />
+                </div>
+                <p className="text-xs leading-relaxed text-ink-500">
+                  Kompyuterdan? Telefoningizda{" "}
+                  <span className="font-semibold text-ink-700">@{BOT}</span> botini
+                  oching va «Boshlash» tugmasini bosing.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Telegram block — hidden in the native APK (no initData there,
               and embedded-WebView OAuth is blocked); password is the path. */}
           {!nativeApp && (
@@ -261,6 +315,7 @@ export default function LoginPage() {
                 href={`https://t.me/${BOT}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => track("login_bot_open", { source: "login_signin" })}
                 className="btn-soft mt-5 w-full justify-center text-indigo-600"
               >
                 Telegramda ochish
@@ -384,19 +439,13 @@ export default function LoginPage() {
             </div>
           )}
 
-          {info.length > 0 && (
+          {/* Diagnostics dump is gated behind ?debug=1 so a non-technical
+              owner never sees a raw technical dump on a login failure. */}
+          {debug && info.length > 0 && (
             <div className="mt-3 text-center">
-              <button
-                onClick={() => setDebug((v) => !v)}
-                className="text-xs font-semibold text-ink-400 tap"
-              >
-                {debug ? "Diagnostikani yashirish" : "Diagnostikani ko‘rsatish"}
-              </button>
-              {debug && (
-                <pre className="mt-2 overflow-auto rounded-2xl bg-ink-100 p-3 text-left text-[10px] text-ink-500">
-                  {info.join("\n")}
-                </pre>
-              )}
+              <pre className="mt-2 overflow-auto rounded-2xl bg-ink-100 p-3 text-left text-[10px] text-ink-500">
+                {info.join("\n")}
+              </pre>
             </div>
           )}
 
