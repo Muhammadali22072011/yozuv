@@ -41,7 +41,7 @@ import type { ClientLite, NotificationItem, ServiceLite, TourStep } from "@/comp
 import { StatusBadge } from "@/components/yz/StatusBadge";
 import { ReferralCard } from "@/components/dashboard/ReferralCard";
 import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
-import { startOnboarding } from "@/lib/onboarding";
+import { persistOnboardingSeen, startOnboarding } from "@/lib/onboarding";
 import { track } from "@/lib/analytics";
 
 const DASHBOARD_TOUR_ID = "dashboard_v1";
@@ -124,6 +124,9 @@ export default function DashboardHome() {
   async function load() {
     const data = await apiFetch<DashboardBundle>("/api/business/me/dashboard");
     setBiz(data.business);
+    // Server is the source of truth for "intro already seen" — so a returning
+    // owner isn't re-onboarded on a new device. Seed the local flag from it.
+    if (data.business.onboarding_seen) markTourSeen(DASHBOARD_TOUR_ID);
     setMe(data.user);
     setSummary({
       bookings: data.summary.today.bookings_count,
@@ -171,6 +174,7 @@ export default function DashboardHome() {
     // User clicked "O'zim ko'raman" — they don't want the guided tour
     // at all. Mark seen and bail; no onboarding chain, no nag again.
     markTourSeen(DASHBOARD_TOUR_ID);
+    void persistOnboardingSeen();
     setWelcomeOpen(false);
     setTourOpen(false);
   }
@@ -182,6 +186,7 @@ export default function DashboardHome() {
     // layer at a time. Instead surface a soft, dismissible offer and let
     // the user opt in to the full walkthrough if they want it.
     markTourSeen(DASHBOARD_TOUR_ID);
+    void persistOnboardingSeen();
     setTourOpen(false);
     setShowOnboardingOffer(true);
   }
@@ -205,6 +210,7 @@ export default function DashboardHome() {
     // They opted out of the guided path, so just mark seen and close —
     // no forced onboarding chain (mirrors skipWelcome).
     markTourSeen(DASHBOARD_TOUR_ID);
+    void persistOnboardingSeen();
     setTourOpen(false);
   }
 

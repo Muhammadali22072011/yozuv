@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from jose import jwt
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -43,10 +43,25 @@ from app.utils.google_oauth import (
     random_state,
 )
 from app.utils.ratelimit import rate_limit
+from app.services.qr_service import generate_url_qr
 from app.utils.telegram_webapp import parse_user_from_init, validate_telegram_init_data
 
 router = APIRouter()
 settings = get_settings()
+
+
+@router.get("/register-qr")
+def register_qr() -> Response:
+    """Public QR pointing at the bot's register deep link — rendered on the web
+    login page so a desktop visitor can start signup from their phone, closing
+    the 'lending promises a start, web has no register' funnel gap."""
+    bot = settings.next_public_bot_username or "Yozuv_cl_bot"
+    png = generate_url_qr(f"https://t.me/{bot}?start=register")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 # 30 attempts/min per IP — enough for a legit user retrying, blocks brute-force.
 _auth_rate = rate_limit("auth_tg", limit=30, window_seconds=60)

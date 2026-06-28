@@ -17,8 +17,24 @@
 //   onboarding tracks "user is actively in a guided sequence right
 //   now and tours should fire regardless of seen state."
 
+import { apiFetch } from "@/lib/api";
+
 const ACTIVE_KEY = "yozuv_onboarding_active";
 const STEP_KEY = "yozuv_onboarding_step";
+
+/**
+ * Persist server-side that this owner has been through the intro/onboarding,
+ * so the dashboard won't replay the WelcomeModal + tour on another device or
+ * after a Mini App WebView reset. Best-effort: failures are swallowed (the
+ * per-device localStorage tour-seen flag still gates locally).
+ */
+export async function persistOnboardingSeen(): Promise<void> {
+  try {
+    await apiFetch("/api/business/me/onboarding-seen", { method: "PUT" });
+  } catch {
+    /* best-effort — local tour-seen flag still applies */
+  }
+}
 
 export type OnboardingStep = {
   /** Tour id this step pairs with (matches the usePageTour() id). */

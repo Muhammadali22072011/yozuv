@@ -29,6 +29,8 @@
  * Closed set of funnel event names. Keep this union authoritative so call
  * sites stay type-checked and the analytics dashboard has a stable schema.
  */
+import { apiBase } from "@/lib/api";
+
 export type AnalyticsEvent =
   | "cta_click"
   | "landing_to_bot"
@@ -57,11 +59,44 @@ interface AnalyticsWindow {
  * @param event - One of the typed {@link AnalyticsEvent} names.
  * @param props - Optional metadata (e.g. `{ plan: "pro", step: 2 }`).
  */
+/**
+ * Always-on first-party sink: POST the event to our own backend so the funnel
+ * is measurable from server logs even when no third-party provider is wired
+ * up. sendBeacon survives the navigation a CTA click triggers; fetch+keepalive
+ * is the fallback. Fully fail-safe.
+ */
+function beaconToBackend(event: string, props: AnalyticsProps): void {
+  try {
+    const url = `${apiBase()}/api/events`;
+    const payload = JSON.stringify({
+      event,
+      props,
+      path: window.location.pathname,
+    });
+    // text/plain is CORS-safelisted, so sendBeacon delivers cross-origin
+    // (frontend → API host) without a preflight. The backend reads the raw
+    // body and JSON-parses it, so the wire content type doesn't matter.
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      navigator.sendBeacon(url, new Blob([payload], { type: "text/plain" }));
+    } else {
+      void fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: payload,
+        keepalive: true,
+      });
+    }
+  } catch {
+    /* analytics must never break the UI */
+  }
+}
+
 export function track(event: AnalyticsEvent, props?: AnalyticsProps): void {
   if (typeof window === "undefined") return;
 
   try {
     const w = window as unknown as AnalyticsWindow;
+    beaconToBackend(event, props ?? {});
     let delivered = false;
 
     if (typeof w.gtag === "function") {

@@ -90,3 +90,14 @@ def _generate_qr_cached(business_slug: str, bot_username: str) -> bytes:
 
 def generate_qr(business_slug: str, bot_username: str | None = None) -> bytes:
     return _generate_qr_cached(business_slug, bot_username or "Yozuv_cl_bot")
+
+
+@lru_cache(maxsize=64)
+def generate_url_qr(url: str) -> bytes:
+    """QR PNG for an arbitrary URL — e.g. the bot register deep link shown to
+    a guest on the web login page so a desktop visitor can start from their
+    phone. Cached per-URL (callers pass stable links)."""
+    img = _render_qr(url)
+    buffer = BytesIO()
+    img.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()

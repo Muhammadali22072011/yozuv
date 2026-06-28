@@ -265,6 +265,22 @@ export default function LoginPage() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </a>
 
+              {/* Desktop guests: scan to open the bot on a phone — closes the
+                  "no web register" gap for someone browsing on a laptop. */}
+              <div className="mt-4 hidden flex-col items-center gap-2 sm:flex">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`${apiBase()}/api/auth/register-qr`}
+                  alt="Telegram bot QR"
+                  width={132}
+                  height={132}
+                  className="rounded-2xl border border-ink-100 bg-white p-2 shadow-soft-sm"
+                />
+                <div className="text-xs text-ink-500">
+                  Telefoningiz kamerasi bilan skanerlang
+                </div>
+              </div>
+
               {/* Desktop: let the owner open the bot from a phone by scanning. */}
               <div className="mt-5 hidden items-center gap-3 sm:flex">
                 <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white text-indigo-600 shadow-soft-sm">

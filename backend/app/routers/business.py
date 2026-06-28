@@ -544,6 +544,20 @@ async def notifications_stream(
     )
 
 
+@router.put("/me/onboarding-seen")
+def mark_onboarding_seen(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_active_business),
+):
+    """Persist that this owner has been through the intro/tour, so the
+    dashboard doesn't replay onboarding on another device or after a Mini App
+    WebView reset (localStorage is per-device)."""
+    if not business.onboarding_seen:
+        business.onboarding_seen = True
+        db.commit()
+    return {"ok": True}
+
+
 @router.put("/me", response_model=BusinessMe)
 def update_business(
     body: BusinessUpdate,

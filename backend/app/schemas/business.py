@@ -104,6 +104,9 @@ class BusinessMe(BaseModel):
     # B2B referral share code ("owner brings owner"). Blank for businesses
     # created before the feature shipped.
     partner_code: str = ""
+    # Server-persisted "intro/tour already seen" flag — lets the dashboard
+    # skip re-onboarding a returning owner even on a fresh device.
+    onboarding_seen: bool = False
 
     class Config:
         from_attributes = True

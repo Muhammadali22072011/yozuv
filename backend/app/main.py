@@ -20,6 +20,7 @@ from app.routers import (
     bookings,
     business,
     clients,
+    events,
     files,
     geo,
     payments,
@@ -168,6 +169,7 @@ app.include_router(staff.owner_router, prefix="/api")
 app.include_router(staff.public_router, prefix="/api")
 app.include_router(bookings.me_router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
+app.include_router(events.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(files.router, prefix="/api")
 app.include_router(files.public_router, prefix="/api")
