@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Check, Clock, MapPin, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, Check, Clock, MapPin, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 import { YzLoader } from "@/components/yz/Loader";
 import { YzLogo } from "@/components/yz/Logo";
 import { MapPicker } from "@/components/yz/MapPicker";
 import { apiFetch, setActiveBusinessId } from "@/lib/api";
+import { track } from "@/lib/analytics";
 
 const STEP_META: { label: string; title: string; sub: string }[] = [
   {
@@ -83,6 +84,10 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
+  // After the data wizard saves, instead of bouncing straight to the
+  // dashboard we land the owner on a "first value = a booking" screen
+  // and remember the slug so we can build their own bot deep-link.
+  const [doneSlug, setDoneSlug] = useState<string | null>(null);
 
   const [biz, setBiz] = useState({
     name: "",
@@ -131,6 +136,7 @@ export default function OnboardingPage() {
         return;
       }
       setStep(2);
+      track("onboarding_step", { step: 2 });
       return;
     }
     if (step === 2) {
@@ -140,6 +146,7 @@ export default function OnboardingPage() {
         return;
       }
       setStep(3);
+      track("onboarding_step", { step: 3 });
       return;
     }
   }
@@ -232,7 +239,12 @@ export default function OnboardingPage() {
         }),
       });
 
-      router.replace("/dashboard");
+      track("onboarding_completed");
+      // Don't bounce to the dashboard yet — show the "try your first
+      // booking" screen so the owner experiences the core value (a real
+      // booking flowing through their own bot) before anything else.
+      setDoneSlug(biz.slug.trim());
+      setSubmitting(false);
     } catch (e) {
       setErr((e as Error).message || "Xatolik. Qayta urinib ko‘ring.");
       setSubmitting(false);
@@ -241,6 +253,93 @@ export default function OnboardingPage() {
 
   if (loading) {
     return <YzLoader fullscreen />;
+  }
+
+  if (doneSlug) {
+    // Bot deep-link built the same way the dashboard does, but using the
+    // mini-app entry point (?startapp=) instead of ?start= so the owner
+    // (and their clients) land in the in-Telegram booking app.
+    const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
+    const botLink = `https://t.me/${botUsername}?startapp=${doneSlug}`;
+    return (
+      <main
+        className="min-h-screen bg-ink-50"
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        <header className="px-4 pt-5">
+          <div className="mx-auto flex w-full max-w-xl items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <YzLogo size={36} />
+              <div className="font-display text-[17px] font-extrabold tracking-tighter text-ink-900">
+                Yozuv
+              </div>
+            </div>
+            <span className="tnum rounded-full bg-white px-3 py-1 text-[11px] font-extrabold text-success shadow-soft-sm">
+              Tayyor ✓
+            </span>
+          </div>
+        </header>
+
+        <div className="px-4 pb-24 pt-5">
+          <div className="mx-auto max-w-xl space-y-5">
+            <div
+              className="relative overflow-hidden rounded-4xl p-5 text-white"
+              style={{
+                background: "linear-gradient(135deg,#7C5CFF 0%,#4853F5 100%)",
+                boxShadow: "0 18px 36px -18px rgba(72,83,245,0.6)",
+              }}
+            >
+              <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+              <div className="relative flex items-center gap-2">
+                <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white/15 backdrop-blur">
+                  <Sparkles className="h-4.5 w-4.5 text-white" strokeWidth={2.2} />
+                </span>
+                <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/75">
+                  Birinchi qadam
+                </div>
+              </div>
+              <h1 className="relative mt-3.5 font-display text-[28px] font-extrabold leading-tight tracking-tightest text-white">
+                Birinchi yozuvni sinab ko‘ring
+              </h1>
+              <p className="relative mt-2 max-w-md text-sm text-white/80">
+                Botingizni oching va o‘zingizga sinov uchun bitta yozuv qoldiring —
+                mijozlaringiz buni qanday ko‘rishini va hammasi qanday ishlashini
+                shu zahoti his qilasiz.
+              </p>
+            </div>
+
+            <div className="card space-y-4 p-5 md:p-6">
+              <a
+                href={botLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  track("first_booking_try", { slug: doneSlug });
+                  track("landing_to_bot");
+                }}
+                className="btn-primary w-full justify-center tap"
+              >
+                <Send className="mr-2 h-4.5 w-4.5" /> Botni ochib, sinab ko‘rish
+              </a>
+              <p className="text-center text-xs text-ink-400">
+                Bot yangi oynada ochiladi. Sinov yozuvini qoldirib, kabinetga
+                qayting.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.replace("/dashboard")}
+                className="btn-soft w-full justify-center tap"
+              >
+                Keyinroq
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const meta = STEP_META[step - 1];
@@ -460,7 +559,7 @@ function Step1({
           className="yz-input mt-1.5 font-mono"
         />
         <div className="mt-2 rounded-2xl bg-ink-50 px-3 py-2 font-mono text-xs text-ink-500">
-          t.me/Yozuv_cl_bot?start={biz.slug || "sizning-slug"}
+          t.me/Yozuv_cl_bot?startapp={biz.slug || "sizning-slug"}
         </div>
       </div>
 

@@ -41,7 +41,8 @@ import type { ClientLite, NotificationItem, ServiceLite, TourStep } from "@/comp
 import { StatusBadge } from "@/components/yz/StatusBadge";
 import { ReferralCard } from "@/components/dashboard/ReferralCard";
 import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
-import { startOnboarding } from "@/lib/onboarding";
+import { persistOnboardingSeen, startOnboarding } from "@/lib/onboarding";
+import { track } from "@/lib/analytics";
 
 const DASHBOARD_TOUR_ID = "dashboard_v1";
 
@@ -100,6 +101,11 @@ export default function DashboardHome() {
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Opt-in offer for the full page-by-page walkthrough. We no longer
+  // auto-launch the 7-page onboarding cascade after the dashboard tour
+  // (too much at once — only one teaching layer at a time). Instead a
+  // gentle banner asks first; the chain starts only on consent.
+  const [showOnboardingOffer, setShowOnboardingOffer] = useState(false);
 
   type DashboardBundle = {
     business: BusinessMe;
@@ -118,6 +124,9 @@ export default function DashboardHome() {
   async function load() {
     const data = await apiFetch<DashboardBundle>("/api/business/me/dashboard");
     setBiz(data.business);
+    // Server is the source of truth for "intro already seen" — so a returning
+    // owner isn't re-onboarded on a new device. Seed the local flag from it.
+    if (data.business.onboarding_seen) markTourSeen(DASHBOARD_TOUR_ID);
     setMe(data.user);
     setSummary({
       bookings: data.summary.today.bookings_count,
@@ -165,20 +174,35 @@ export default function DashboardHome() {
     // User clicked "O'zim ko'raman" — they don't want the guided tour
     // at all. Mark seen and bail; no onboarding chain, no nag again.
     markTourSeen(DASHBOARD_TOUR_ID);
+    void persistOnboardingSeen();
     setWelcomeOpen(false);
     setTourOpen(false);
   }
 
   function finishDashboardTour() {
     // The user reached the natural end of the dashboard's own 5-step
-    // tour (last step's "Tayyor"). Mark seen, and — since they chose
-    // the guided path and saw it through — kick off the multi-page
-    // onboarding chain. They can still skip individual pages from there.
+    // tour (last step's "Tayyor"). Mark seen. We deliberately do NOT
+    // auto-launch the multi-page onboarding cascade here — one teaching
+    // layer at a time. Instead surface a soft, dismissible offer and let
+    // the user opt in to the full walkthrough if they want it.
     markTourSeen(DASHBOARD_TOUR_ID);
+    void persistOnboardingSeen();
     setTourOpen(false);
+    setShowOnboardingOffer(true);
+  }
+
+  function acceptOnboardingOffer() {
+    // User tapped "Hammasini ko'rsataymi?" — now (and only now) kick off
+    // the guided page-by-page chain.
+    setShowOnboardingOffer(false);
+    track("onboarding_step", { step: "guided_chain_start" });
     setTimeout(() => {
       startOnboarding((p) => router.push(p));
     }, 250);
+  }
+
+  function declineOnboardingOffer() {
+    setShowOnboardingOffer(false);
   }
 
   function dismissDashboardTour() {
@@ -186,6 +210,7 @@ export default function DashboardHome() {
     // They opted out of the guided path, so just mark seen and close —
     // no forced onboarding chain (mirrors skipWelcome).
     markTourSeen(DASHBOARD_TOUR_ID);
+    void persistOnboardingSeen();
     setTourOpen(false);
   }
 
@@ -286,7 +311,9 @@ export default function DashboardHome() {
 
   const ownerFirst = (me?.first_name || biz.name.split(" ")[0] || "").trim() || "Yozuv";
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
-  const botLink = `t.me/${botUsername}?start=${biz.slug}`;
+  // Mini-app deep link (?startapp=) so the client lands inside the
+  // in-Telegram booking app rather than a plain bot chat (?start=).
+  const botLink = `t.me/${botUsername}?startapp=${biz.slug}`;
   const plan = sub?.plan || "FREE";
   const next = bookings.find((b) => b.status !== "CANCELLED") || bookings[0];
 
@@ -395,6 +422,40 @@ export default function DashboardHome() {
           </div>
         </div>
       </div>
+
+      {/* Opt-in walkthrough offer — shown once, after the dashboard tour
+          finishes. Replaces the old auto-cascade so only one teaching
+          layer runs at a time. */}
+      {showOnboardingOffer && (
+        <div className="mt-5 px-4 md:px-0">
+          <div className="flex flex-col gap-3 rounded-[22px] border-[1.5px] border-indigo-100 bg-indigo-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="font-display text-[15px] font-bold tracking-tight text-indigo-700">
+                Hammasini ko‘rsataymi?
+              </div>
+              <div className="mt-0.5 text-[13px] text-ink-500">
+                Barcha bo‘limlar bo‘ylab qisqa sayohat — bir necha daqiqada.
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={declineOnboardingOffer}
+                className="btn-soft justify-center tap"
+              >
+                Keyinroq
+              </button>
+              <button
+                type="button"
+                onClick={acceptOnboardingOffer}
+                className="btn-primary justify-center tap"
+              >
+                Ko‘rsating
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Working area — desktop: two columns (bookings left, quick
           actions + share-link right). Mobile/Telegram: single stack. */}
@@ -518,6 +579,7 @@ export default function DashboardHome() {
           onClick={() => {
             navigator.clipboard?.writeText(`https://${botLink}`);
             toast("Havola nusxalandi");
+            track("landing_to_bot", { source: "dashboard_share" });
           }}
           className="relative flex w-full items-center gap-3.5 overflow-hidden rounded-[22px] p-4 text-left tap"
           style={{ background: "linear-gradient(135deg,#0B0F1F 0%,#1E2270 100%)" }}
@@ -533,7 +595,7 @@ export default function DashboardHome() {
             <div className="mt-0.5 truncate font-mono text-xs text-white/70">{botLink}</div>
           </div>
           <div className="relative flex items-center gap-1.5 rounded-xl bg-white/14 px-3 py-2 text-xs font-bold text-white">
-            <Copy className="h-3.5 w-3.5" /> Nusxa
+            <Copy className="h-3.5 w-3.5" /> Telegram orqali
           </div>
         </button>
       </div>

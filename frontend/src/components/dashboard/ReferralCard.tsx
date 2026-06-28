@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/yz";
+import { track } from "@/lib/analytics";
 
 type Invitee = { name: string; joined_at: string | null; subscribed: boolean };
 type Summary = {
@@ -39,6 +40,7 @@ export function ReferralCard() {
 
   function share() {
     if (!data?.code) return;
+    track("referral_share", { kind: "partner" });
     const bot = process.env.NEXT_PUBLIC_BOT_USERNAME || "Yozuv_cl_bot";
     const link = `https://t.me/${bot}?startapp=ref_${data.code}`;
     const text = "Yozuv'ga qo‘shiling — ikkalamizga +30 kun bepul";
@@ -78,18 +80,24 @@ export function ReferralCard() {
       >
         <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/15 blur-2xl" />
         <div className="relative flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/80">
-          <Gift className="h-4 w-4" /> Do‘stni taklif qiling
+          <Gift className="h-4 w-4" /> Hamkor dasturi · +30 kun
         </div>
         <div className="relative mt-2 font-display text-[17px] font-extrabold leading-snug">
           Usta yoki salon egasini taklif qiling —{" "}
           <span className="text-white">ikkalangizga +30 kun bepul</span>
         </div>
-        <button
-          onClick={share}
-          className="relative mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 font-display text-[15px] font-bold text-indigo-600 tap"
-        >
-          <Share2 className="h-4 w-4" /> Ulashish
-        </button>
+        {data?.code ? (
+          <button
+            onClick={share}
+            className="relative mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 font-display text-[15px] font-bold text-indigo-600 tap"
+          >
+            <Share2 className="h-4 w-4" /> Ulashish
+          </button>
+        ) : (
+          <div className="relative mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 py-3 font-display text-[13px] font-semibold text-white/80">
+            Hamkorlik havolasi tayyorlanmoqda…
+          </div>
+        )}
       </div>
 
       {/* Live proof — counts */}

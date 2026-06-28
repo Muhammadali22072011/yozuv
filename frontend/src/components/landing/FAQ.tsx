@@ -1,3 +1,5 @@
+import { Plus } from "lucide-react";
+
 const FAQS = [
   {
     q: "Sayt yoki domen kerakmi?",
@@ -41,8 +43,8 @@ export function FAQ() {
               <span className="font-display text-[15px] font-bold tracking-tight text-ink-900">
                 {f.q}
               </span>
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-indigo-50 text-lg font-bold leading-none text-indigo-600 transition-transform group-open:rotate-45">
-                +
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-indigo-50 text-indigo-600 transition-transform group-open:rotate-45">
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
               </span>
             </summary>
             <p className="px-5 pb-5 text-sm leading-relaxed text-ink-500">{f.a}</p>

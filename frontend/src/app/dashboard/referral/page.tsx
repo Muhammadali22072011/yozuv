@@ -71,7 +71,7 @@ export default function ReferralPage() {
   return (
     <div>
       <ScreenHeader
-        title="Do'st taklif qilish"
+        title="Mijoz tavsiyasi"
         subtitle="Mijozlaringiz yangi mijoz olib keladi"
       />
 

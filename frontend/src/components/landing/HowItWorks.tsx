@@ -22,7 +22,7 @@ const steps = [
     title: "Yozuvlarni qabul qiling",
     desc: "Tasdiqni o‘zingiz tanlaysiz: avto, qo‘lda yoki oldindan to‘lov bilan.",
     tile: "tile-mint",
-    accent: "#16A37B",
+    accent: "var(--success)",
     icon: CalendarClock,
   },
   {

@@ -4,28 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3,
   CalendarDays,
   ChevronRight,
-  ClipboardList,
-  Gift,
   Home,
   LayoutGrid,
   LifeBuoy,
   LucideIcon,
   Plus,
-  QrCode,
-  Scissors,
   Settings,
   Shield,
-  Star,
-  Tag,
-  User,
-  UserCircle2,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
+import { NAV_FLAT, type NavItem } from "@/components/dashboard/Sidebar";
 import { SheetBody, SheetContent, SheetHeader, SheetRoot } from "./Sheet";
 
 const SUPPORT_TG =
@@ -37,37 +29,25 @@ type Tab = {
   icon: LucideIcon;
 };
 
+// Primary thumb-reach tabs == the "Kunlik ish" cluster from the canonical
+// nav. Short labels are intentional for the bottom bar; the hrefs/order
+// stay aligned with NAV_FLAT so nothing drifts between surfaces.
 const tabs: Tab[] = [
   { href: "/dashboard", label: "Asosiy", icon: Home },
   { href: "/dashboard/bookings", label: "Jadval", icon: CalendarDays },
   { href: "/dashboard/clients", label: "Mijozlar", icon: Users },
 ];
 
-type MoreLink = { href: string; label: string; icon: LucideIcon; tone?: "indigo" | "mint" | "lemon" | "coral" | "lilac" | "sky" };
+const PRIMARY_HREFS = new Set(tabs.map((t) => t.href));
 
+type MoreLink = NavItem;
+
+// Everything that isn't a primary tab, in canonical order, plus Sozlamalar
+// (which lives in the desktop sidebar footer, not in NAV_FLAT).
 const moreLinks: MoreLink[] = [
-  { href: "/dashboard/analytics", label: "Analitika", icon: BarChart3, tone: "sky" },
-  { href: "/dashboard/services", label: "Xizmatlar", icon: Scissors, tone: "indigo" },
-  // Multi-staff CRUD (PR #43/#49). Visible even when no staff yet so
-  // the owner can find the page and onboard their first master.
-  { href: "/dashboard/staff", label: "Mutaxassislar", icon: UserCircle2, tone: "lilac" },
-  { href: "/dashboard/schedule", label: "Ish vaqti", icon: ClipboardList, tone: "mint" },
-  { href: "/dashboard/promo", label: "Promo-kodlar", icon: Tag, tone: "mint" },
-  { href: "/dashboard/referral", label: "Do'st taklif", icon: Gift, tone: "lilac" },
-  { href: "/dashboard/reviews", label: "Baholar", icon: Star, tone: "lemon" },
-  { href: "/dashboard/qr", label: "QR / Broshyura", icon: QrCode, tone: "lemon" },
-  { href: "/dashboard/profile", label: "Profil", icon: User, tone: "lilac" },
-  { href: "/dashboard/settings", label: "Sozlamalar", icon: Settings, tone: "coral" },
+  ...NAV_FLAT.filter((l) => !PRIMARY_HREFS.has(l.href)),
+  { href: "/dashboard/settings", label: "Sozlamalar", icon: Settings },
 ];
-
-const toneStyles: Record<NonNullable<MoreLink["tone"]>, string> = {
-  indigo: "bg-indigo-50 text-indigo-600",
-  mint: "bg-[#E6FAF3] text-[#0E9577]",
-  lemon: "bg-[#FFF3DA] text-[#A8751A]",
-  coral: "bg-[#FFE7E3] text-[#C93A2A]",
-  lilac: "bg-[#F0EBFF] text-[#6B4FE0]",
-  sky: "bg-[#E5F4FF] text-[#2A7DC2]",
-};
 
 export function TabBar({ onAdd }: { onAdd?: () => void }) {
   const pathname = usePathname() || "";
@@ -88,7 +68,7 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
   const moreActive = moreLinks.some((l) => isActive(l.href));
 
   const allMore: MoreLink[] = isAdmin
-    ? [...moreLinks, { href: "/dashboard/admin", label: "Admin", icon: Shield, tone: "coral" }]
+    ? [...moreLinks, { href: "/dashboard/admin", label: "Admin", icon: Shield }]
     : moreLinks;
 
   return (
@@ -143,7 +123,6 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
             <div className="grid grid-cols-2 gap-2.5">
               {allMore.map((l) => {
                 const Icon = l.icon;
-                const tone = l.tone ?? "indigo";
                 const active = isActive(l.href);
                 return (
                   <Link
@@ -155,7 +134,12 @@ export function TabBar({ onAdd }: { onAdd?: () => void }) {
                       active ? "border-indigo-200 ring-2 ring-indigo-200/60" : "border-ink-100"
                     )}
                   >
-                    <span className={cn("grid h-10 w-10 place-items-center rounded-2xl", toneStyles[tone])}>
+                    <span
+                      className={cn(
+                        "grid h-10 w-10 place-items-center rounded-2xl transition-colors",
+                        active ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-600"
+                      )}
+                    >
                       <Icon className="h-5 w-5" strokeWidth={2.2} />
                     </span>
                     <span className="min-w-0 flex-1 font-display text-sm font-extrabold tracking-tight text-ink-900">

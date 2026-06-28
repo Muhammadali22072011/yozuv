@@ -38,4 +38,5 @@ export interface BusinessMe {
   latitude?: number | null;
   longitude?: number | null;
   partner_code?: string;
+  onboarding_seen?: boolean;
 }

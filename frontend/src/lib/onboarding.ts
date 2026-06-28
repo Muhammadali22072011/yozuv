@@ -17,8 +17,24 @@
 //   onboarding tracks "user is actively in a guided sequence right
 //   now and tours should fire regardless of seen state."
 
+import { apiFetch } from "@/lib/api";
+
 const ACTIVE_KEY = "yozuv_onboarding_active";
 const STEP_KEY = "yozuv_onboarding_step";
+
+/**
+ * Persist server-side that this owner has been through the intro/onboarding,
+ * so the dashboard won't replay the WelcomeModal + tour on another device or
+ * after a Mini App WebView reset. Best-effort: failures are swallowed (the
+ * per-device localStorage tour-seen flag still gates locally).
+ */
+export async function persistOnboardingSeen(): Promise<void> {
+  try {
+    await apiFetch("/api/business/me/onboarding-seen", { method: "PUT" });
+  } catch {
+    /* best-effort — local tour-seen flag still applies */
+  }
+}
 
 export type OnboardingStep = {
   /** Tour id this step pairs with (matches the usePageTour() id). */
@@ -31,14 +47,25 @@ export type OnboardingStep = {
 
 // Order matters: profile first (set up the business identity), then
 // services + staff + promo (the things customers actually book), then
-// QR (how customers find you), then clients + bookings (read-only
-// pages the owner will use day-to-day).
+// QR (how customers find you).
+//
+// We deliberately stop at QR. The clients_v1 / bookings_v1 tours used to
+// trail the chain, but on a fresh account those screens are empty, so the
+// tour walked the owner through a blank table — noise, not guidance. They
+// live in OPTIONAL_ONBOARDING_STEPS so a caller can opt back in (e.g. once
+// the account actually has data) without re-ordering the core sequence.
 export const ONBOARDING_SEQUENCE: OnboardingStep[] = [
   { tourId: "profile_v1", path: "/dashboard/profile", label: "Profil" },
   { tourId: "services_v1", path: "/dashboard/services", label: "Xizmatlar" },
   { tourId: "staff_v1", path: "/dashboard/staff", label: "Mutaxassislar" },
   { tourId: "promo_v1", path: "/dashboard/promo", label: "Promo-kodlar" },
   { tourId: "qr_v1", path: "/dashboard/qr", label: "QR" },
+];
+
+// Opt-in steps that tour read-only, data-dependent screens. Skipped by
+// default because they are empty on a brand-new account; the main flow can
+// append these to ONBOARDING_SEQUENCE when it knows the data exists.
+export const OPTIONAL_ONBOARDING_STEPS: OnboardingStep[] = [
   { tourId: "clients_v1", path: "/dashboard/clients", label: "Mijozlar" },
   { tourId: "bookings_v1", path: "/dashboard/bookings", label: "Yozilishlar" },
 ];

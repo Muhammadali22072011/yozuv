@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Megaphone, Search, Send, UserPlus, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Megaphone, RefreshCw, Search, Send, UserPlus, Users } from "lucide-react";
 import {
   Avatar,
   ClientSheet,
@@ -20,7 +21,7 @@ import {
   SheetRoot,
 } from "@/components/yz/Sheet";
 import { Chip } from "@/components/yz/Chip";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { usePageTour } from "@/lib/use-page-tour";
 
 const CLIENTS_TOUR: TourStep[] = [
@@ -55,10 +56,12 @@ type Row = {
 };
 
 export default function ClientsPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<Row[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "vip" | "new">("all");
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState("");
   const [active, setActive] = useState<ClientDetail | null>(null);
   const [newBookingFor, setNewBookingFor] = useState<string | null>(null);
   const [bcOpen, setBcOpen] = useState(false);
@@ -86,13 +89,34 @@ export default function ClientsPage() {
     }
   }
 
+  async function load() {
+    setLoading(true);
+    setLoadErr("");
+    try {
+      setRows(await apiFetch<Row[]>("/api/business/me/clients"));
+    } catch (e) {
+      const status = e instanceof ApiError ? e.status : 0;
+      const msg = (e as Error).message || "";
+      // Not onboarded yet → send to onboarding, don't show a scary error.
+      if (status === 404 || /business not found/i.test(msg)) {
+        router.replace("/dashboard/onboarding");
+        return;
+      }
+      // Session gone → back to login (apiFetch already redirects on hard 401,
+      // this covers the message-based cases).
+      if (status === 401 || /not authenticated|invalid user|session expired/i.test(msg)) {
+        router.replace("/auth/login");
+        return;
+      }
+      // Network / server error → surface it with a retry, NOT a fake empty list.
+      setLoadErr(msg || "Mijozlarni yuklab bo‘lmadi");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    apiFetch<Row[]>("/api/business/me/clients")
-      .then((data) => {
-        setRows(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    load();
   }, []);
 
   const filtered = useMemo(() => {
@@ -160,7 +184,21 @@ export default function ClientsPage() {
       </div>
 
       <div data-tour="clients-list" className="mt-4 grid gap-2.5 px-4 md:px-0 lg:grid-cols-2 2xl:grid-cols-3">
-        {loading ? (
+        {loadErr ? (
+          <div className="card-soft col-span-full flex flex-col items-center gap-3 p-8 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-3xl bg-danger-bg text-danger">
+              <RefreshCw className="h-6 w-6" strokeWidth={2} />
+            </span>
+            <div className="text-sm font-medium text-ink-500">{loadErr}</div>
+            <button
+              onClick={load}
+              className="btn-primary tap gap-2 px-5"
+            >
+              <RefreshCw className="h-4 w-4" strokeWidth={2.4} />
+              Qayta urinish
+            </button>
+          </div>
+        ) : loading ? (
           <div className="card-soft col-span-full p-6 text-center text-sm text-ink-400">
             Yuklanmoqda…
           </div>

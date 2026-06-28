@@ -423,6 +423,7 @@ export default function SettingsPage() {
           )}
         </Section>
 
+        <div id="obuna" className="scroll-mt-20" />
         <Section title="Obuna">
           {sub && (
             <div className="flex items-start gap-3 px-2 py-3">

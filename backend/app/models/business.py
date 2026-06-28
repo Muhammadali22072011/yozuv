@@ -71,6 +71,10 @@ class Business(Base):
         UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="SET NULL"), nullable=True
     )
     partner_reward_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Server-side intro/onboarding flag so a returning owner isn't re-walked
+    # through the WelcomeModal + tour on a new device (localStorage is
+    # per-device, so it can't carry this across devices/WebView resets).
+    onboarding_seen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
